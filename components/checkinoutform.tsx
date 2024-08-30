@@ -20,14 +20,13 @@ export default function CheckInOutForm() {
     const user = data.users.find((u) => u.barcode === barcode);
     if (!user) {
       toast.error("User not found", {
-        position: "top-center",
+        duration: 3000,
         style: {
           borderRadius: "10px",
           background: "#333",
           color: "#fff",
         },
       });
-      setBarcode("");
       return;
     }
 
@@ -35,20 +34,19 @@ export default function CheckInOutForm() {
     const isCheckIn = !lastPunch || lastPunch.type === "checkout";
 
     try {
+      const newPunchId = id();
       await db.transact([
-        tx.punches[id()].update({
+        tx.punches[newPunchId].update({
           type: isCheckIn ? "checkin" : "checkout",
           timestamp: Date.now(),
-          user: user.id,
         }),
+        tx.users[user.id].link({ punches: newPunchId }),
       ]);
 
       toast.success(
-        `${user.name}\n Successfully ${
-          isCheckIn ? "checked in" : "checked out"
-        }`,
+        `${user.name}: ${isCheckIn ? "checked in" : "checked out"}`,
         {
-          position: "top-center",
+          duration: 3000,
           style: {
             borderRadius: "10px",
             background: "#333",
@@ -59,13 +57,14 @@ export default function CheckInOutForm() {
       );
     } catch (error) {
       toast.error("An error occurred. Please try again.", {
-        position: "top-center",
+        duration: 3000,
         style: {
           borderRadius: "10px",
           background: "#333",
           color: "#fff",
         },
       });
+      console.error("Check-in/out error:", error);
     }
 
     setBarcode("");
