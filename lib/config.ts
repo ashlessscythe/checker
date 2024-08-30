@@ -1,2 +1,8 @@
 // lib/config.ts
-export const INSTANT_APP_ID = "b9a54fed-8d71-46b3-aa0f-045d7b411655";
+if (!process.env.NEXT_PUBLIC_INSTANT_APP_ID) {
+  throw new Error(
+    "NEXT_PUBLIC_INSTANT_APP_ID is not set in environment variables"
+  );
+}
+
+export const INSTANT_APP_ID = process.env.NEXT_PUBLIC_INSTANT_APP_ID;
