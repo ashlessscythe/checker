@@ -72,7 +72,7 @@ export default function CheckInOutForm() {
   };
 
   return (
-    <div className="flex flex-col items-center space-y-4">
+    <div className="flex flex-col items-center">
       <div className="h-16">
         {}
         <Toaster
