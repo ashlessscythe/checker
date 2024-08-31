@@ -1,23 +1,45 @@
 // components/CheckInOutForm.tsx
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { tx, id } from "@instantdb/react";
 import { db } from "../lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
+import { useAutoFocus } from "../hooks/useAutoFocus";
+import { useAutoNavigate } from "../hooks/useAutoNavigate";
 
 export default function CheckInOutForm() {
   const [barcode, setBarcode] = useState("");
-  const formRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch users with their punches
   const { isLoading, error, data } = db.useQuery({
-    users: {},
-    punches: { $: { order: { serverCreatedAt: "desc" }, limit: 1 } },
+    users: {
+      punches: {
+        $: {
+          order: { serverCreatedAt: 'desc' },
+        }
+      },
+    }
   });
 
-  const handleCheckInOut = async () => {
-    if (isLoading || !barcode) return;
+  useAutoFocus(inputRef, 5000);
+  useAutoNavigate("/", 60000); // Navigate to home after 1 minute of inactivity
 
-    const user = data.users.find((u) => u.barcode === barcode);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (barcode) {
+        setBarcode("");
+      }
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [barcode]);
+
+  const handleCheckInOut = async () => {
+    if (isLoading || !barcode || !data) return;
+
+    const user = data.users.find(u => u.barcode === barcode);
     if (!user) {
       toast.error("User not found", {
         duration: 3000,
@@ -27,10 +49,12 @@ export default function CheckInOutForm() {
           color: "#fff",
         },
       });
+      setBarcode('');
       return;
     }
 
-    const lastPunch = data.punches[0];
+    // Get the last punch for this user
+    const lastPunch = user.punches[0]; // The punches are already ordered by serverCreatedAt desc
     const isCheckIn = !lastPunch || lastPunch.type === "checkout";
 
     try {
@@ -70,10 +94,17 @@ export default function CheckInOutForm() {
     setBarcode("");
   };
 
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error.message}</div>;
+  }
+
   return (
     <div className="flex flex-col items-center">
       <div className="h-16">
-        {}
         <Toaster
           containerStyle={{
             top: 0,
@@ -88,13 +119,13 @@ export default function CheckInOutForm() {
           Check In / Check Out
         </h1>
         <input
+          ref={inputRef}
           type="password"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           onKeyPress={(e) => e.key === "Enter" && handleCheckInOut()}
           placeholder="Scan barcode..."
           className="w-full p-2 mb-4 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-          autoFocus
         />
         <button
           onClick={handleCheckInOut}
