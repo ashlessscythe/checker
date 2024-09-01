@@ -7,10 +7,12 @@ import { db } from "../lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
 import { useAutoFocus } from "../hooks/useAutoFocus";
 import { useAutoNavigate } from "../hooks/useAutoNavigate";
+import Link from 'next/link';
 
-export default function CheckInOutForm() {
+export default function CheckInOutForm({ isAuthModalOpen, isAuth }) {
   const [barcode, setBarcode] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const [shouldFocus, setShouldFocus] = useState(!isAuthModalOpen);
 
   // Fetch users with their punches
   const { isLoading, error, data } = db.useQuery({
@@ -23,8 +25,13 @@ export default function CheckInOutForm() {
     }
   });
 
-  useAutoFocus(inputRef, 5000);
-  useAutoNavigate("/", 60000); // Navigate to home after 1 minute of inactivity
+  useEffect(() => {
+    setShouldFocus(!isAuthModalOpen)
+  }, [isAuthModalOpen])
+
+  // Always call hooks, but control their effect based on isAuthModalOpen
+  useAutoFocus(inputRef, shouldFocus ? 5000: null);
+  useAutoNavigate("/", shouldFocus ? 60000 : null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -133,6 +140,22 @@ export default function CheckInOutForm() {
         >
           Check In / Out
         </button>
+        {isAuth && (
+          <div className="flex mt-3 space-x-2 w-full max-w-md">
+            <Link
+              href="/check-ins"
+              className="flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-center"
+            >
+              View Last 24 Hours Swipes
+            </Link>
+            <Link
+              href="/checklist"
+              className="flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-center"
+            >
+              Checklist
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );
