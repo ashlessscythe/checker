@@ -102,8 +102,10 @@ export default function CheckList() {
     );
 
     try {
+      const newDrillRecordId = id(); // Generate a new ID for the fire drill record
       await db.transact([
-        tx.firedrills[drillId].update({
+        tx.firedrills[newDrillRecordId].update({
+          drillId: drillId,
           completedAt: Date.now(),
           totalChecked: checkedUsers.size,
           totalPresent: checkedInUsers.length,
