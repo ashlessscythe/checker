@@ -6,8 +6,11 @@ const graph = i.graph(
   {
     users: i.entity({
       name: i.string(),
+      email: i.string(),
       barcode: i.string(),
       isAdmin: i.boolean(),
+      isAuth: i.boolean(),
+      lastLoginAt: i.number(),
     }),
     punches: i.entity({
       type: i.string(),

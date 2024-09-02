@@ -3,6 +3,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { db } from '../lib/instantdb';
 import { tx, id } from '@instantdb/react';
 import { useAutoFocus } from '../hooks/useAutoFocus'
+import { useAuth } from '../hooks/authContext';
 
 export function AuthModal({ isOpen, onClose }) {
   const [email, setEmail] = useState('');
@@ -10,6 +11,7 @@ export function AuthModal({ isOpen, onClose }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [sentEmail, setSentEmail] = useState(false);
   const [timeLeft, setTimeLeft] = useState(15);
+  const { setAuthState } = useAuth();
 
   useEffect(() => {
     let timer;
@@ -31,42 +33,60 @@ export function AuthModal({ isOpen, onClose }) {
     };
   }, [isOpen, onClose]);
 
-  // Query for existing user
-  const { data, isLoading, error } = db.useQuery({
+ // Query for existing user
+  const { data: userData, isLoading: userLoading, error: userError } = db.useQuery({
     users: {
       $: { where: { email: email } }
     }
   });
 
-  async function logUserToDatabase(email: string, existingUsers: any[] | undefined) {
+  async function logUserToDatabase(email: string, existingUser: any | undefined) {
     try {
-      if (!existingUsers || existingUsers.length === 0) {
+      let userId: string;
+      let userDetails: any;
 
-      // User doesn't exist, create a new user
-      const userId = id();
-      await db.transact([
-        tx.users[userId].update({
+      if (!existingUser) {
+        // User doesn't exist, create a new user with sane defaults
+        userId = id();
+        userDetails = {
+          id: userId,
           email,
           name: email.split('@')[0], // Default name is the part before @
           isAdmin: false,
+          isAuth: false, // default
           createdAt: Date.now()
-        })
-      ]);
-      console.log('New user created:', email);
-    } else {
-      // User exists, you can update last login time if you want
-      await db.transact([
-        tx.users[data.users[0].id].update({
+        };
+        await db.transact([
+          tx.users[userId].update(userDetails)
+        ]);
+        console.log('New user created:', email);
+      } else {
+        // User exists, update last login time
+        userId = existingUser.id;
+        userDetails = {
+          ...existingUser,
           lastLoginAt: Date.now()
-        })
-      ]);
-      console.log('Existing user logged in:', email);
+        };
+        await db.transact([
+          tx.users[userId].update({ lastLoginAt: Date.now() })
+        ]);
+        console.log('Existing user logged in:', email);
+      }
+
+      // Update auth state with the user details
+      setAuthState({
+        isLoading: false,
+        isAuthenticated: true,
+        isAdmin: userDetails.isAdmin || false,
+        isAuthorized: userDetails.isAuth || false,
+        user: userDetails,
+        error: null,
+      });
+    } catch (error) {
+      console.error('Error logging user to database:', error);
+      throw error;
     }
-  } catch (error) {
-    console.error('Error logging user to database:', error);
-    throw error; // Re-throw the error to be handled by the caller
   }
-}
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +106,8 @@ export function AuthModal({ isOpen, onClose }) {
     e.preventDefault();
     try {
       await db.auth.signInWithMagicCode({ email, code });
-      await logUserToDatabase(email, data?.users);
+      const existingUser = userData?.users?.[0];
+      await logUserToDatabase(email, existingUser);
       onClose();
     } catch (err) {
       console.error(err);

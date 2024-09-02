@@ -1,27 +1,27 @@
 #!/bin/bash
 
 # Update and install necessary packages
-sudo apt-get update
-sudo apt-get install -y tmux ranger tig cargo mycli postgresql-client postgresql-client-common libpq-dev
+# sudo apt-get update
+# sudo apt-get install -y tmux ranger tig cargo mycli postgresql-client postgresql-client-common libpq-dev
 
-# install lazygit
-LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
-curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
-tar xf lazygit.tar.gz lazygit
-sudo install lazygit /usr/local/bin
-rm lazygit.tar.gz
-rm -rf lazygit
+# # install lazygit
+# LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+# curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
+# tar xf lazygit.tar.gz lazygit
+# sudo install lazygit /usr/local/bin
+# rm lazygit.tar.gz
+# rm -rf lazygit
 
-# Remove pgcli if installed via apt
-sudo apt-get remove -y pgcli
+# # Remove pgcli if installed via apt
+# sudo apt-get remove -y pgcli
 
-# Ensure Python pip is installed
-sudo apt-get install -y python3-pip
+# # Ensure Python pip is installed
+# sudo apt-get install -y python3-pip
 
-# Install pgcli via pip
-pip3 install pgcli
-# Install litecli for sqlite3
-pip3 install litecli
+# # Install pgcli via pip
+# pip3 install pgcli
+# # Install litecli for sqlite3
+# pip3 install litecli
 
 # Clone the GitHub repository into a directory named "tmux" if it doesn't already exist
 if [ ! -d "$HOME/tmux" ]; then

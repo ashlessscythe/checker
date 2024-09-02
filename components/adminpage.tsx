@@ -5,15 +5,24 @@ import { tx } from "@instantdb/react";
 import { db } from "../lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
 import { useAutoNavigate } from "../hooks/useAutoNavigate";
+import { useAuth } from '../hooks/authContext';
 
 export default function AdminPage() {
+  const [userId, setUserId] = useState(null);
   const { data, isLoading, error } = db.useQuery({ users: {} });
   const [editingUser, setEditingUser] = useState(null);
+  const [isClient, setIsClient] = useState(false);
+  const { user, isAdmin } = useAuth();
+
+  console.log(`user: ${user}, isAdmin: ${isAdmin}`)
+  if (!isAdmin) {
+    return null;
+  }
 
   useAutoNavigate("/", 300000); // Navigate to home after 5 minutes of inactivity
 
-  if (isLoading) return <div className="text-center p-4">Loading users...</div>;
-  if (error) return <div className="text-center p-4 text-red-500">Error: {error.message}</div>;
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
 
   const handleNameChange = async (userId, newName) => {
     try {

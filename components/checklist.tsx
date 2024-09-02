@@ -9,6 +9,7 @@ import { useAutoNavigate } from "../hooks/useAutoNavigate";
 export default function CheckList() {
   const [checkedUsers, setCheckedUsers] = useState<Set<string>>(new Set());
   const [drillId, setDrillId] = useState<string>('');
+  const [isClient, setIsClient] = useState(false);
 
   const generateNewDrillId = useCallback(() => {
     const today = new Date();
@@ -19,6 +20,7 @@ export default function CheckList() {
   }, []);
 
   useEffect(() => {
+    setIsClient(true);
     generateNewDrillId();
   }, [generateNewDrillId]);
 
