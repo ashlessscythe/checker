@@ -1,6 +1,6 @@
 // contexts/AuthContext.tsx
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import { db } from '../lib/instantdb';
+import React, { createContext, useState, useContext, useEffect } from "react";
+import { db } from "../lib/instantdb";
 
 interface AuthState {
   isLoading: boolean;
@@ -25,22 +25,28 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [authState, setAuthState] = useState<AuthState>({
     isLoading: true,
     isAuthenticated: false,
     isAdmin: false,
     isAuthorized: false,
     user: null,
-    error: null, 
+    error: null,
   });
 
   // Helper function to check for boolean false and string 'false'
   function isTruthy(value: any): boolean {
-    return value !== false && value !== 'false' && Boolean(value);
+    return value !== false && value !== "false" && Boolean(value);
   }
 
-  const { isLoading: authLoading, user: authUser, error: authError } = db.useAuth();
+  const {
+    isLoading: authLoading,
+    user: authUser,
+    error: authError,
+  } = db.useAuth();
   const { data: userData, isLoading: userDataLoading } = db.useQuery({
     users: {
       $: {
@@ -48,18 +54,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: authUser?.email,
         },
         limit: 1,
-      }
+      },
     },
   });
 
-  console.log(`current user email is ${authUser?.email}`);
-  console.log(`current user data is`, userData?.users[0]);
+  // console.log(`current user email is ${authUser?.email}`);
+  // console.log(`current user data is`, userData?.users[0]);
   const currentUser = userData?.users?.[0];
 
   useEffect(() => {
     const updateAuthState = async () => {
       if (authLoading || userDataLoading) {
-        setAuthState(prev => ({ ...prev, isLoading: true }));
+        setAuthState((prev) => ({ ...prev, isLoading: true }));
         return;
       }
 
@@ -141,7 +147,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

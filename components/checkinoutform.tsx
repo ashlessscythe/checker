@@ -10,9 +10,13 @@ import { useAutoNavigate } from "../hooks/useAutoNavigate";
 
 interface CheckInOutFormProps {
   isAuthModalOpen: boolean;
+  // isAuthorizedUser: boolean;
 }
 
-export default function CheckInOutForm({ isAuthModalOpen }: CheckInOutFormProps) {
+export default function CheckInOutForm({
+  isAuthModalOpen,
+}: // isAuthorizedUser,
+CheckInOutFormProps) {
   const [barcode, setBarcode] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [shouldFocus, setShouldFocus] = useState(!isAuthModalOpen);
@@ -22,19 +26,20 @@ export default function CheckInOutForm({ isAuthModalOpen }: CheckInOutFormProps)
     users: {
       punches: {
         $: {
-          order: { serverCreatedAt: 'desc' },
-        }
+          order: { serverCreatedAt: "desc" },
+        },
       },
-    }
+    },
   });
 
   useEffect(() => {
-    setShouldFocus(!isAuthModalOpen)
-  }, [isAuthModalOpen])
+    setShouldFocus(!isAuthModalOpen);
+  }, [isAuthModalOpen]);
 
   // Always call hooks, but control their effect based on isAuthModalOpen
-  useAutoFocus(inputRef, shouldFocus ? 5000: null);
-  useAutoNavigate("/", shouldFocus ? 60000 : null);
+  console.log(`checkinform, shouldfocus is ${shouldFocus}`);
+  useAutoFocus(inputRef, 5000, shouldFocus);
+  useAutoNavigate("/", 60000);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -49,7 +54,7 @@ export default function CheckInOutForm({ isAuthModalOpen }: CheckInOutFormProps)
   const handleCheckInOut = async () => {
     if (isLoading || !barcode || !data) return;
 
-    const user = data.users.find(u => u.barcode === barcode);
+    const user = data.users.find((u) => u.barcode === barcode);
     if (!user) {
       toast.error("User not found", {
         duration: 3000,
@@ -59,7 +64,7 @@ export default function CheckInOutForm({ isAuthModalOpen }: CheckInOutFormProps)
           color: "#fff",
         },
       });
-      setBarcode('');
+      setBarcode("");
       return;
     }
 

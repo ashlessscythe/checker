@@ -11,10 +11,17 @@ const graph = i.graph(
       isAdmin: i.boolean(),
       isAuth: i.boolean(),
       lastLoginAt: i.number(),
+      createdAt: i.number(), // Adding createdAt field
+      deptId: i.string(), // Adding deptId field for department association
     }),
     punches: i.entity({
       type: i.string(),
       timestamp: i.number(),
+    }),
+    departments: i.entity({
+      // Adding departments entity
+      name: i.string(),
+      departmentId: i.string(), // This corresponds to the deptId in users
     }),
   },
   {
@@ -28,6 +35,19 @@ const graph = i.graph(
         on: "punches",
         has: "one",
         label: "user",
+      },
+    },
+    userDepartment: {
+      // Adding relationship between users and departments
+      forward: {
+        on: "users",
+        has: "one",
+        label: "department",
+      },
+      reverse: {
+        on: "departments",
+        has: "many",
+        label: "users",
       },
     },
   }

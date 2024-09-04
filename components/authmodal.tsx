@@ -1,13 +1,13 @@
 // AuthModal.tsx
-import React, { useRef, useEffect, useState } from 'react';
-import { db } from '../lib/instantdb';
-import { tx, id } from '@instantdb/react';
-import { useAutoFocus } from '../hooks/useAutoFocus'
-import { useAuth } from '../hooks/authContext';
+import React, { useRef, useEffect, useState } from "react";
+import { db } from "../lib/instantdb";
+import { tx, id } from "@instantdb/react";
+import { useAutoFocus } from "../hooks/useAutoFocus";
+import { useAuth } from "../hooks/authContext";
 
 export function AuthModal({ isOpen, onClose }) {
-  const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [sentEmail, setSentEmail] = useState(false);
   const [timeLeft, setTimeLeft] = useState(15);
@@ -33,14 +33,21 @@ export function AuthModal({ isOpen, onClose }) {
     };
   }, [isOpen, onClose]);
 
- // Query for existing user
-  const { data: userData, isLoading: userLoading, error: userError } = db.useQuery({
+  // Query for existing user
+  const {
+    data: userData,
+    isLoading: userLoading,
+    error: userError,
+  } = db.useQuery({
     users: {
-      $: { where: { email: email } }
-    }
+      $: { where: { email: email } },
+    },
   });
 
-  async function logUserToDatabase(email: string, existingUser: any | undefined) {
+  async function logUserToDatabase(
+    email: string,
+    existingUser: any | undefined
+  ) {
     try {
       let userId: string;
       let userDetails: any;
@@ -51,26 +58,24 @@ export function AuthModal({ isOpen, onClose }) {
         userDetails = {
           id: userId,
           email,
-          name: email.split('@')[0], // Default name is the part before @
+          name: email.split("@")[0], // Default name is the part before @
           isAdmin: false,
           isAuth: false, // default
-          createdAt: Date.now()
+          createdAt: Date.now(),
         };
-        await db.transact([
-          tx.users[userId].update(userDetails)
-        ]);
-        console.log('New user created:', email);
+        await db.transact([tx.users[userId].update(userDetails)]);
+        console.log("New user created:", email);
       } else {
         // User exists, update last login time
         userId = existingUser.id;
         userDetails = {
           ...existingUser,
-          lastLoginAt: Date.now()
+          lastLoginAt: Date.now(),
         };
         await db.transact([
-          tx.users[userId].update({ lastLoginAt: Date.now() })
+          tx.users[userId].update({ lastLoginAt: Date.now() }),
         ]);
-        console.log('Existing user logged in:', email);
+        console.log("Existing user logged in:", email);
       }
 
       // Update auth state with the user details
@@ -83,7 +88,7 @@ export function AuthModal({ isOpen, onClose }) {
         error: null,
       });
     } catch (error) {
-      console.error('Error logging user to database:', error);
+      console.error("Error logging user to database:", error);
       throw error;
     }
   }
@@ -96,11 +101,11 @@ export function AuthModal({ isOpen, onClose }) {
       setTimeLeft(120); // Reset timer after sending code
     } catch (err) {
       console.error(err);
-      alert('Error sending code. Please try again.');
+      alert("Error sending code. Please try again.");
     }
   };
 
-  useAutoFocus(inputRef, isOpen ? 1000 : null);
+  useAutoFocus(inputRef, 1000, isOpen);
 
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +116,7 @@ export function AuthModal({ isOpen, onClose }) {
       onClose();
     } catch (err) {
       console.error(err);
-      alert('Error verifying code. Please try again.');
+      alert("Error verifying code. Please try again.");
     }
   };
 
@@ -131,7 +136,10 @@ export function AuthModal({ isOpen, onClose }) {
               placeholder="Enter your email"
               className="border p-2 mb-2 w-full"
             />
-            <button type="submit" className="bg-blue-500 text-white p-2 rounded">
+            <button
+              type="submit"
+              className="bg-blue-500 text-white p-2 rounded"
+            >
               Send Code
             </button>
           </form>
@@ -144,7 +152,10 @@ export function AuthModal({ isOpen, onClose }) {
               placeholder="Enter verification code"
               className="border p-2 mb-2 w-full"
             />
-            <button type="submit" className="bg-green-500 text-white p-2 rounded">
+            <button
+              type="submit"
+              className="bg-green-500 text-white p-2 rounded"
+            >
               Verify Code
             </button>
           </form>

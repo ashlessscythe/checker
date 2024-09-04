@@ -1,17 +1,17 @@
 // app/page.tsx
 "use client";
-import { useState } from 'react';
-import CheckInOutForm from '../components/checkinoutform';
-import { AuthModal } from '../components/authmodal';
-import { useAuth, AuthProvider } from '../hooks/authContext';
-import Header from '../components/header';
-import Checklist from '../components/checklist';
-import AdminPage from '../components/adminpage';
+import { useState } from "react";
+import CheckInOutForm from "../components/checkinoutform";
+import { AuthModal } from "../components/authmodal";
+import { useAuth, AuthProvider } from "../hooks/authContext";
+import Header from "../components/header";
+import Checklist from "../components/checklist";
+import AdminPage from "../components/adminpage";
 
 function HomeContent() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const { isAuthenticated, isAdmin, isAuthorized } = useAuth();
-  console.log(`isAuthenticated: ${isAuthenticated}, isAdmin: ${isAdmin}, isAuthorized: ${isAuthorized}`)
+  // console.log(`isAuthenticated: ${isAuthenticated}, isAdmin: ${isAdmin}, isAuthorized: ${isAuthorized}`)
 
   return (
     <div className="container mx-auto p-4">
@@ -37,9 +37,9 @@ export default function Home() {
 
   return (
     <>
-    <AuthProvider>
-      <HomeContent />
-    </AuthProvider>
+      <AuthProvider>
+        <HomeContent />
+      </AuthProvider>
     </>
   );
 }
