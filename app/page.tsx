@@ -24,8 +24,8 @@ function HomeContent() {
         <CheckInOutForm shouldFocus={shouldFocusCheckInOut} />
       </div>
 
-      {isAuthenticated && isAdmin && <AdminPage />}
       {isAuthenticated && (isAuthorized || isAdmin) && <Checklist />}
+      {isAuthenticated && isAdmin && <AdminPage />}
 
       <AuthModal
         isOpen={isAuthModalOpen}
