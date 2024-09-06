@@ -1,36 +1,27 @@
 // hooks/useAutoFocus.ts
-import { useEffect, useRef, RefObject } from "react";
+import { useEffect, useRef } from "react";
 
 export function useAutoFocus(
-  ref: RefObject<HTMLElement>,
-  delay: number | null,
-  condition: boolean = true // backwards compatibility
-) {
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  shouldFocus: boolean,
+  delay: number = 5000
+): React.RefObject<HTMLInputElement> {
+  const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!condition) return; // exit early
+    let timeoutId: NodeJS.Timeout;
 
-    if (delay === null) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      return;
+    if (shouldFocus) {
+      timeoutId = setTimeout(() => {
+        ref.current?.focus();
+      }, delay);
     }
 
-    const focusElement = () => {
-      if (ref.current && document.activeElement !== ref.current) {
-        ref.current.focus();
-      }
-    };
-
-    timerRef.current = setInterval(focusElement, delay);
-
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
     };
-  }, [ref, delay]);
+  }, [shouldFocus, delay]);
+
+  return ref;
 }

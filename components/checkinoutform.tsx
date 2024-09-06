@@ -1,7 +1,7 @@
 // components/CheckInOutForm.tsx
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { tx, id } from "@instantdb/react";
 import { db } from "../lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
@@ -9,17 +9,12 @@ import { useAutoFocus } from "../hooks/useAutoFocus";
 import { useAutoNavigate } from "../hooks/useAutoNavigate";
 
 interface CheckInOutFormProps {
-  isAuthModalOpen: boolean;
-  // isAuthorizedUser: boolean;
+  shouldFocus: boolean;
 }
 
-export default function CheckInOutForm({
-  isAuthModalOpen,
-}: // isAuthorizedUser,
-CheckInOutFormProps) {
+export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
   const [barcode, setBarcode] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [shouldFocus, setShouldFocus] = useState(!isAuthModalOpen);
+  const inputRef = useAutoFocus(shouldFocus);
 
   // Fetch users with their punches
   const { isLoading, error, data } = db.useQuery({
@@ -32,13 +27,8 @@ CheckInOutFormProps) {
     },
   });
 
-  useEffect(() => {
-    setShouldFocus(!isAuthModalOpen);
-  }, [isAuthModalOpen]);
-
-  // Always call hooks, but control their effect based on isAuthModalOpen
+  // Always call hooks, but control their effect based on shouldFocus
   console.log(`checkinform, shouldfocus is ${shouldFocus}`);
-  useAutoFocus(inputRef, 5000, shouldFocus);
   useAutoNavigate("/", 60000);
 
   useEffect(() => {
@@ -51,10 +41,15 @@ CheckInOutFormProps) {
     return () => clearTimeout(timer);
   }, [barcode]);
 
-  const handleCheckInOut = async () => {
+  const findUser = useMemo(() => {
+    if (!data) return null;
+    return data.users.find((u) => u.barcode === barcode);
+  }, [data, barcode]);
+
+  const handleCheckInOut = useCallback(async () => {
     if (isLoading || !barcode || !data) return;
 
-    const user = data.users.find((u) => u.barcode === barcode);
+    const user = findUser;
     if (!user) {
       toast.error("User not found", {
         duration: 3000,
@@ -107,7 +102,7 @@ CheckInOutFormProps) {
     }
 
     setBarcode("");
-  };
+  }, [isLoading, barcode, data, findUser]);
 
   if (isLoading) {
     return <div>Loading...</div>;

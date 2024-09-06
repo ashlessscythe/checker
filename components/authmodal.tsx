@@ -5,10 +5,16 @@ import { tx, id } from "@instantdb/react";
 import { useAutoFocus } from "../hooks/useAutoFocus";
 import { useAuth } from "../hooks/authContext";
 
-export function AuthModal({ isOpen, onClose }) {
+interface AuthModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  shouldFocus: boolean;
+}
+
+export function AuthModal({ isOpen, onClose, shouldFocus }: AuthModalProps) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useAutoFocus(shouldFocus);
   const [sentEmail, setSentEmail] = useState(false);
   const [timeLeft, setTimeLeft] = useState(15);
   const { setAuthState } = useAuth();
@@ -104,8 +110,6 @@ export function AuthModal({ isOpen, onClose }) {
       alert("Error sending code. Please try again.");
     }
   };
-
-  useAutoFocus(inputRef, 1000, isOpen);
 
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
