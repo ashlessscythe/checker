@@ -8,6 +8,60 @@ import toast, { Toaster } from "react-hot-toast";
 import { useAutoFocus } from "../hooks/useAutoFocus";
 import { useAutoNavigate } from "../hooks/useAutoNavigate";
 
+// Add the extractUserId function
+function extractUserId(scannedId: string) {
+  // Check if the scannedId contains any alphabetic characters
+  if (/[a-zA-Z]/.test(scannedId)) {
+    console.log(
+      `Scanned ID contains alphabetic characters. Returning original: ${scannedId}`
+    );
+    return scannedId;
+  }
+
+  const patterns = [
+    { prefix: "100", length: 9 },
+    { prefix: "21", length: 8 },
+    { prefix: "20", length: 8 },
+    { prefix: "104", length: 9 },
+    { prefix: "600", length: 9 },
+  ];
+
+  let bestMatch = { match: "", startIndex: Infinity, length: 0 };
+
+  for (const pattern of patterns) {
+    let startIndex = scannedId.indexOf(pattern.prefix);
+    while (startIndex !== -1) {
+      if (startIndex + pattern.length <= scannedId.length) {
+        const possibleMatch = scannedId.substr(startIndex, pattern.length);
+
+        if (
+          startIndex < bestMatch.startIndex ||
+          (startIndex === bestMatch.startIndex &&
+            pattern.length > bestMatch.length)
+        ) {
+          bestMatch = {
+            match: possibleMatch,
+            startIndex: startIndex,
+            length: pattern.length,
+          };
+        }
+      }
+
+      startIndex = scannedId.indexOf(pattern.prefix, startIndex + 1);
+    }
+  }
+
+  if (bestMatch.match) {
+    console.log(`Extracted ID: ${bestMatch.match}`);
+    return bestMatch.match;
+  } else {
+    console.log(
+      `Nothing was extracted from scannedId: ${scannedId}. Returning the original scannedId.`
+    );
+    return scannedId;
+  }
+}
+
 interface CheckInOutFormProps {
   shouldFocus: boolean;
 }
@@ -43,7 +97,8 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
 
   const findUser = useMemo(() => {
     if (!data) return null;
-    return data.users.find((u) => u.barcode === barcode);
+    const extractedId = extractUserId(barcode);
+    return data.users.find((u) => u.barcode === extractedId);
   }, [data, barcode]);
 
   const handleCheckInOut = useCallback(async () => {
