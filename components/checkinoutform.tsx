@@ -2,11 +2,11 @@
 "use client";
 
 import { useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { tx, id } from "@instantdb/react";
 import { db } from "../lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
 import { useAutoFocus } from "../hooks/useAutoFocus";
 import { useAutoNavigate } from "../hooks/useAutoNavigate";
+import { performCheckinOut } from "../utils/checkInOut";
 
 // Add the extractUserId function
 function extractUserId(scannedId: string) {
@@ -118,44 +118,9 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
       return;
     }
 
-    // Get the last punch for this user
-    const lastPunch = user.punches[0]; // The punches are already ordered by serverCreatedAt desc
-    const isCheckIn = !lastPunch || lastPunch.type === "checkout";
+    console.log(`checkform performing checkinoutfor userid: ${user.id}`)
 
-    try {
-      const newPunchId = id();
-      await db.transact([
-        tx.punches[newPunchId].update({
-          type: isCheckIn ? "checkin" : "checkout",
-          timestamp: Date.now(),
-        }),
-        tx.users[user.id].link({ punches: newPunchId }),
-      ]);
-
-      toast.success(
-        `${user.name}: ${isCheckIn ? "checked in" : "checked out"}`,
-        {
-          duration: 3000,
-          style: {
-            borderRadius: "10px",
-            background: "#333",
-            color: "#fff",
-          },
-          icon: isCheckIn ? "✅" : "👋",
-        }
-      );
-    } catch (error) {
-      toast.error("An error occurred. Please try again.", {
-        duration: 3000,
-        style: {
-          borderRadius: "10px",
-          background: "#333",
-          color: "#fff",
-        },
-      });
-      console.error("Check-in/out error:", error);
-    }
-
+    await performCheckinOut(user);
     setBarcode("");
   }, [isLoading, barcode, data, findUser]);
 

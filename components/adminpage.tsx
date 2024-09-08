@@ -1,15 +1,15 @@
 // components/AdminPage.tsx
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { tx } from "@instantdb/react";
 import { db } from "../lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
 import { useAutoNavigate } from "../hooks/useAutoNavigate";
 import { useAuth } from "../hooks/authContext";
+import { performCheckinOut } from "../utils/checkInOut";
 
 export default function AdminPage() {
   const [userId, setUserId] = useState(null);
-  const { data, isLoading, error } = db.useQuery({ users: {} });
   const [editingUser, setEditingUser] = useState(null);
   const [isClient, setIsClient] = useState(false);
   const { user, isAdmin } = useAuth();
@@ -19,10 +19,12 @@ export default function AdminPage() {
     return null;
   }
 
-  useAutoNavigate("/", 300000); // Navigate to home after 5 minutes of inactivity
-
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
+  const { data, isLoading, error } = db.useQuery({
+    users: {
+      $: {},
+      punches: {},
+    }
+  });
 
   const handleNameChange = async (userId, newName) => {
     try {
@@ -47,6 +49,24 @@ export default function AdminPage() {
     }
   };
 
+  const forceCheckIn = useCallback(async (userId: string) => {
+    if (isLoading || !data) return;
+    const user = data.users.find(u => u.id === userId);
+    if (user) {
+      await performCheckinOut(user, 'checkin');
+    }
+  }, [data, isLoading]);
+
+  const forceCheckOut = useCallback(async (userId: string) => {
+    if (isLoading || !data) return;
+    const user = data.users.find(u => u.id === userId);
+    if (user) {
+      await performCheckinOut(user, 'checkout');
+    }
+  }, [data, isLoading]);
+
+  useAutoNavigate("/", 300000); // Navigate to home after 5 minutes of inactivity
+
   const makeAuth = async (userId, currentStatus) => {
     try {
       await db.transact([tx.users[userId].update({ isAuth: !currentStatus })]);
@@ -60,6 +80,9 @@ export default function AdminPage() {
       toast.error("Failed to update authorization status");
     }
   };
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
 
   return (
     <div className="container mx-auto p-4 sm:p-6 bg-gray-100 min-h-screen">
@@ -156,6 +179,12 @@ export default function AdminPage() {
                           className="text-blue-600 hover:text-blue-900"
                         >
                           {user.isAuth ? "Revoke Auth" : "Grant Auth"}
+                        </button>
+                        <button onClick={() => forceCheckIn(user.id)} className="text-yellow-600 hover:text-yellow-900 mr-2">
+                          Force Check-In
+                        </button>
+                        <button onClick={() => forceCheckOut(user.id)} className="text-red-600 hover:text-red-900">
+                          Force Check-Out
                         </button>
                       </div>
                     </td>
