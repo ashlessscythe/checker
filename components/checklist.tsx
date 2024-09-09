@@ -1,7 +1,7 @@
 // components/checklist.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useMemo, useEffect, useState, useCallback } from "react";
 import { id, tx } from "@instantdb/react";
 import { db } from "../lib/instantdb";
 import { useAutoNavigate } from "../hooks/useAutoNavigate";
@@ -10,6 +10,7 @@ export default function CheckList() {
   const [checkedUsers, setCheckedUsers] = useState<Set<string>>(new Set());
   const [drillId, setDrillId] = useState<string>("");
   const [isClient, setIsClient] = useState(false);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   const generateNewDrillId = useCallback(() => {
     const today = new Date();
@@ -24,6 +25,12 @@ export default function CheckList() {
     setIsClient(true);
     generateNewDrillId();
   }, [generateNewDrillId]);
+
+  // Update current time every minute
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const { data, isLoading, error } = db.useQuery({
     users: {
@@ -40,8 +47,6 @@ export default function CheckList() {
       },
     },
   });
-
-  useAutoNavigate("/", 300000); // Navigate to home after 5 minutes of inactivity
 
   useEffect(() => {
     if (data && data.fireDrillChecks) {
@@ -128,12 +133,36 @@ export default function CheckList() {
     }
   }, [data, drillId, checkedUsers, generateNewDrillId]);
 
+  const checkedInUsersWithHours = useMemo(() => {
+    if (!data || !data.users) return [];
+
+    return data.users
+      .filter((user) => user.punches[0]?.type === "checkin")
+      .map((user) => {
+        const checkInTime = new Date(user.punches[0].timestamp).getTime();
+        const diffInMinutes = Math.floor(
+          (currentTime - checkInTime) / (1000 * 60)
+        );
+
+        let timeAgoString: string;
+        if (diffInMinutes < 1) {
+          timeAgoString = "Just now";
+        } else if (diffInMinutes < 60) {
+          timeAgoString = `${diffInMinutes} minute${
+            diffInMinutes > 1 ? "s" : ""
+          } ago`;
+        } else {
+          const hours = Math.floor(diffInMinutes / 60);
+          timeAgoString = `${hours} hour${hours > 1 ? "s" : ""} ago`;
+        }
+
+        const name = user?.name;
+        return { ...user, timeAgoString, name };
+      });
+  }, [data, currentTime]);
+
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error.message}</div>;
-
-  const checkedInUsers = data.users.filter(
-    (user) => user.punches[0]?.type === "checkin"
-  );
 
   return (
     <div className="container mx-auto p-4">
@@ -151,10 +180,13 @@ export default function CheckList() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Status
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Checked In
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {checkedInUsers.map((user) => (
+              {checkedInUsersWithHours.map((user) => (
                 <tr
                   key={user.id}
                   className={
@@ -180,6 +212,11 @@ export default function CheckList() {
                       {checkedUsers.has(user.id) ? "Accounted" : "Missing"}
                     </button>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500 dark:text-gray-300">
+                      {user.timeAgoString}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -188,7 +225,7 @@ export default function CheckList() {
       </div>
       <div className="mt-4 flex flex-col sm:flex-row justify-between items-center">
         <span className="font-bold mb-2 sm:mb-0">
-          Accounted: {checkedUsers.size} / {checkedInUsers.length}
+          Accounted: {checkedUsers.size} / {checkedInUsersWithHours.length}
         </span>
         <button
           onClick={handleCompleteDrill}
