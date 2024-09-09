@@ -5,6 +5,37 @@ import toast, { Toaster } from "react-hot-toast";
 // from .env 14 by default
 const RESET_HOURS = parseInt(process.env.NEXT_PUBLIC_RESET_HOURS || "14", 10);
 
+// Define base toast style
+const baseToastStyle = {
+  style: {
+    padding: "16px",
+    borderRadius: "10px",
+    fontSize: "20px",
+    maxWidth: "500px",
+    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+  },
+  duration: 3000,
+};
+
+// Define color schemes with better contrast
+const checkInColors = {
+  background: "#d1fae5", // Very light green background
+  color: "#065f46", // Dark green text
+  border: "2px solid #059669", // Medium green border
+};
+
+const checkOutColors = {
+  background: "#fee2e2", // Very light red background
+  color: "#991b1b", // Dark red text
+  border: "2px solid #dc2626", // Medium red border
+};
+
+const errorColors = {
+  background: "#fef2f2", // Very light red background
+  color: "#7f1d1d", // Dark red text
+  border: "2px solid #b91c1c", // Medium red border
+};
+
 export async function performCheckinOut(
   user: any,
   force?: "checkin" | "checkout"
@@ -19,14 +50,15 @@ export async function performCheckinOut(
   let isCheckIn = force
     ? force === "checkin"
     : !lastPunch || lastPunch.type === "checkout";
+  const colors = isCheckIn ? checkInColors : checkOutColors;
 
   if (lastPunch) {
     const lastPunchTime = new Date(lastPunch.timestamp).getTime();
     const currentTime = Date.now();
     const hoursSinceLastPunch =
-      (currentTime - lastPunch.timestamp) / (1000 * 60 * 60);
+      (currentTime - lastPunchTime) / (1000 * 60 * 60);
     console.log(
-      `current time is ${currentTime} last punch: ${lastPunch.timestamp} hoursSinceLastPunch: ${hoursSinceLastPunch}`
+      `current time is ${currentTime} last punch: ${lastPunchTime} hoursSinceLastPunch: ${hoursSinceLastPunch}`
     );
 
     if (hoursSinceLastPunch >= RESET_HOURS) {
@@ -45,21 +77,22 @@ export async function performCheckinOut(
     ]);
 
     toast.success(`${user.name}: ${isCheckIn ? "checked in" : "checked out"}`, {
-      duration: 3000,
-      style: {
-        borderRadius: "10px",
-        background: "#333",
-        color: "#fff",
-      },
+      ...baseToastStyle,
       icon: isCheckIn ? "✅" : "👋",
+      style: {
+        ...baseToastStyle.style,
+        ...colors,
+        animation: "pop-up 0.5s ease-out",
+      },
     });
   } catch (error) {
     toast.error("An error occurred. Please try again.", {
-      duration: 3000,
+      ...baseToastStyle,
+      icon: "❌",
       style: {
-        borderRadius: "10px",
-        background: "#333",
-        color: "#fff",
+        ...baseToastStyle.style,
+        ...errorColors,
+        animation: "shake 0.5s ease-in-out",
       },
     });
     console.error("Check-in/out error:", error);
