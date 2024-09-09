@@ -58,8 +58,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     },
   });
 
-  // console.log(`current user email is ${authUser?.email}`);
-  // console.log(`current user data is`, userData?.users[0]);
   const currentUser = userData?.users?.[0];
 
   useEffect(() => {

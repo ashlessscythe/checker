@@ -12,9 +12,9 @@ import { performCheckinOut } from "../utils/checkInOut";
 function extractUserId(scannedId: string) {
   // Check if the scannedId contains any alphabetic characters
   if (/[a-zA-Z]/.test(scannedId)) {
-    console.log(
-      `Scanned ID contains alphabetic characters. Returning original: ${scannedId}`
-    );
+    // console.log(
+    //   `Scanned ID contains alphabetic characters. Returning original: ${scannedId}`
+    // );
     return scannedId;
   }
 
@@ -52,12 +52,12 @@ function extractUserId(scannedId: string) {
   }
 
   if (bestMatch.match) {
-    console.log(`Extracted ID: ${bestMatch.match}`);
+    // console.log(`Extracted ID: ${bestMatch.match}`);
     return bestMatch.match;
   } else {
-    console.log(
-      `Nothing was extracted from scannedId: ${scannedId}. Returning the original scannedId.`
-    );
+    // console.log(
+    //   `Nothing was extracted from scannedId: ${scannedId}. Returning the original scannedId.`
+    // );
     return scannedId;
   }
 }
@@ -82,7 +82,6 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
   });
 
   // Always call hooks, but control their effect based on shouldFocus
-  console.log(`checkinform, shouldfocus is ${shouldFocus}`);
   useAutoNavigate("/", 60000);
 
   useEffect(() => {
@@ -117,8 +116,6 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
       setBarcode("");
       return;
     }
-
-    console.log(`checkform performing checkinoutfor userid: ${user.id}`)
 
     await performCheckinOut(user);
     setBarcode("");
