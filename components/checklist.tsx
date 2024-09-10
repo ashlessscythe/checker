@@ -199,7 +199,7 @@ export default React.memo(function CheckList() {
     };
 
     const hoursAgo = parseTimeAgo(user.timeAgoString);
-    const isOld = hoursAgo >= 18;
+    const isOld = hoursAgo >= 12;
 
     return (
       <tr
