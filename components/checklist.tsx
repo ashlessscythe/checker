@@ -4,13 +4,17 @@
 import React, { useMemo, useEffect, useState, useCallback } from "react";
 import { id, tx } from "@instantdb/react";
 import { db } from "../lib/instantdb";
-import { useAutoNavigate } from "../hooks/useAutoNavigate";
+import { useAuth } from "../hooks/authContext";
 
-export default function CheckList() {
-  const [checkedUsers, setCheckedUsers] = useState<Set<string>>(new Set());
+export default React.memo(function CheckList() {
+  const [checkedUsers, setCheckedUsers] = useState<
+    Map<string, { status: boolean; accountedBy: string }>
+  >(new Map());
   const [drillId, setDrillId] = useState<string>("");
   const [isClient, setIsClient] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const { user } = useAuth();
+  const authUser = user;
 
   const generateNewDrillId = useCallback(() => {
     const today = new Date();
@@ -50,18 +54,24 @@ export default function CheckList() {
 
   useEffect(() => {
     if (data && data.fireDrillChecks) {
-      const checkedSet = new Set(
+      const checkedMap = new Map(
         data.fireDrillChecks
           .filter((check) => check.status === "checked")
-          .map((check) => check.userId)
+          .map((check) => [
+            check.userId,
+            { status: true, accountedBy: check.accountedBy || "Unknown User" },
+          ])
       );
-      setCheckedUsers(checkedSet);
+      setCheckedUsers(checkedMap);
     }
   }, [data]);
 
   const handleCheckUser = useCallback(
     async (userId: string) => {
-      const isCurrentlyChecked = checkedUsers.has(userId);
+      const user = authUser;
+      const accountedBy = user?.name || user?.email || "Unknown User";
+      const isCurrentlyChecked =
+        checkedUsers.has(userId) && checkedUsers.get(userId)!.status;
       const newStatus = isCurrentlyChecked ? "unchecked" : "checked";
 
       try {
@@ -70,41 +80,36 @@ export default function CheckList() {
           (check) => check.userId === userId
         );
 
-        if (existingCheck) {
-          // Update existing check
-          await db.transact([
-            tx.fireDrillChecks[existingCheck.id].update({
-              status: newStatus,
-              timestamp: Date.now(),
-            }),
-          ]);
-        } else {
-          // Create new check
-          await db.transact([
-            tx.fireDrillChecks[id()].update({
-              drillId: drillId,
-              userId: userId,
-              timestamp: Date.now(),
-              status: newStatus,
-            }),
-          ]);
-        }
+        await db.transact([
+          existingCheck
+            ? tx.fireDrillChecks[existingCheck.id].update({
+                status: newStatus,
+                timestamp: Date.now(),
+                accountedBy: accountedBy,
+              })
+            : tx.fireDrillChecks[id()].update({
+                drillId: drillId,
+                userId: userId,
+                timestamp: Date.now(),
+                status: newStatus,
+                accountedBy: accountedBy,
+              }),
+        ]);
 
-        // Update local state
         setCheckedUsers((prev) => {
-          const newSet = new Set(prev);
+          const newCheckedUsers = new Map(prev);
           if (isCurrentlyChecked) {
-            newSet.delete(userId);
+            newCheckedUsers.delete(userId);
           } else {
-            newSet.add(userId);
+            newCheckedUsers.set(userId, { status: true, accountedBy });
           }
-          return newSet;
+          return newCheckedUsers;
         });
       } catch (error) {
         console.error("Error saving fire drill check:", error);
       }
     },
-    [checkedUsers, drillId, data]
+    [authUser, checkedUsers, drillId, data]
   );
 
   const handleCompleteDrill = useCallback(async () => {
@@ -126,7 +131,7 @@ export default function CheckList() {
       ]);
       alert("Fire drill completed and saved!");
       generateNewDrillId(); // Generate a new drill ID for the next drill
-      setCheckedUsers(new Set()); // Reset checked users
+      setCheckedUsers(new Map()); // Reset checked users
     } catch (error) {
       console.error("Error completing fire drill:", error);
       alert("Error saving fire drill. Please try again.");
@@ -134,32 +139,100 @@ export default function CheckList() {
   }, [data, drillId, checkedUsers, generateNewDrillId]);
 
   const checkedInUsersWithHours = useMemo(() => {
-    if (!data || !data.users) return [];
+    if (!data?.users) return [];
 
     return data.users
       .filter((user) => user.punches[0]?.type === "checkin")
       .map((user) => {
         const checkInTime = new Date(user.punches[0].timestamp).getTime();
-        const diffInMinutes = Math.floor(
-          (currentTime - checkInTime) / (1000 * 60)
-        );
+        const diffInHours = (currentTime - checkInTime) / (1000 * 60 * 60);
+        const name = user.name;
 
         let timeAgoString: string;
-        if (diffInMinutes < 1) {
+        if (diffInHours < 1 / 60) {
           timeAgoString = "Just now";
-        } else if (diffInMinutes < 60) {
-          timeAgoString = `${diffInMinutes} minute${
-            diffInMinutes > 1 ? "s" : ""
-          } ago`;
+        } else if (diffInHours < 1) {
+          const minutes = Math.floor(diffInHours * 60);
+          timeAgoString = `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
+        } else if (diffInHours < 24) {
+          const hours = Math.floor(diffInHours);
+          timeAgoString = `${hours} hour${hours !== 1 ? "s" : ""} ago`;
         } else {
-          const hours = Math.floor(diffInMinutes / 60);
-          timeAgoString = `${hours} hour${hours > 1 ? "s" : ""} ago`;
+          const days = Math.floor(diffInHours / 24);
+          timeAgoString = `${days} day${days !== 1 ? "s" : ""} ago`;
         }
 
-        const name = user?.name;
-        return { ...user, timeAgoString, name };
+        return { ...user, timeAgoString, name, hoursAgo: diffInHours };
       });
-  }, [data, currentTime]);
+  }, [data?.users, currentTime]);
+
+  const CheckListRow: React.FC<{
+    user: {
+      timeAgoString: string;
+      name: string;
+      punches: any[];
+      id: string;
+    };
+    isChecked: boolean;
+    accountedBy: string | undefined;
+    onCheck: (userId: string) => Promise<void>;
+  }> = React.memo(({ user, isChecked, accountedBy, onCheck }) => {
+    // parse hours
+    // Parse the timeAgoString to get the number of hours
+    const parseTimeAgo = (timeAgoString: string): number => {
+      const [value, unit] = timeAgoString.split(" ");
+      const numValue = parseInt(value, 10);
+
+      switch (unit) {
+        case "day":
+        case "days":
+          return numValue * 24;
+        case "hour":
+        case "hours":
+          return numValue;
+        case "minute":
+        case "minutes":
+          return numValue / 60;
+        default:
+          return 0; // For "Just now" or unexpected formats
+      }
+    };
+
+    const hoursAgo = parseTimeAgo(user.timeAgoString);
+    const isOld = hoursAgo >= 18;
+
+    return (
+      <tr
+        className={`
+      ${isChecked ? "bg-green-100 dark:bg-green-700" : ""}
+      ${isOld ? "opacity-50" : ""}
+    `}
+      >
+        <td className="px-6 py-4 whitespace-nowrap">
+          <div className="text-sm font-medium text-gray-900 dark:text-white">
+            {user.name}
+          </div>
+        </td>
+        <td className="px-6 py-4 whitespace-nowrap">
+          <button
+            onClick={() => onCheck(user.id)}
+            className={`px-3 py-1 rounded-full text-sm font-semibold ${
+              isChecked
+                ? "bg-green-200 text-green-800 dark:bg-green-600 dark:text-green-100"
+                : "bg-red-200 text-red-800 dark:bg-red-600 dark:text-red-100"
+            }`}
+          >
+            {isChecked ? `Accounted by ${accountedBy}` : "Missing"}
+          </button>
+        </td>
+        <td className="px-6 py-4 whitespace-nowrap">
+          <div className="text-sm text-gray-500 dark:text-gray-300">
+            {user.timeAgoString}
+          </div>
+        </td>
+      </tr>
+    );
+  });
 
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error.message}</div>;
@@ -187,37 +260,16 @@ export default function CheckList() {
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {checkedInUsersWithHours.map((user) => (
-                <tr
+                <CheckListRow
                   key={user.id}
-                  className={
-                    checkedUsers.has(user.id)
-                      ? "bg-green-100 dark:bg-green-700"
-                      : ""
+                  user={user}
+                  isChecked={
+                    checkedUsers.has(user.id) &&
+                    checkedUsers.get(user.id)!.status
                   }
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                      {user.name}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => handleCheckUser(user.id)}
-                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                        checkedUsers.has(user.id)
-                          ? "bg-green-200 text-green-800 dark:bg-green-600 dark:text-green-100"
-                          : "bg-red-200 text-red-800 dark:bg-red-600 dark:text-red-100"
-                      }`}
-                    >
-                      {checkedUsers.has(user.id) ? "Accounted" : "Missing"}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500 dark:text-gray-300">
-                      {user.timeAgoString}
-                    </div>
-                  </td>
-                </tr>
+                  accountedBy={checkedUsers.get(user.id)?.accountedBy}
+                  onCheck={handleCheckUser}
+                />
               ))}
             </tbody>
           </table>
@@ -236,4 +288,4 @@ export default function CheckList() {
       </div>
     </div>
   );
-}
+});
