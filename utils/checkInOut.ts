@@ -47,11 +47,6 @@ export async function performCheckinOut(
 
   // Get the last punch for this user
   const lastPunch = user.punches[0]; // The punches are already ordered by serverCreatedAt desc
-  console.log(
-    `performcheckinout: last punch for user ${user.name} is ${JSON.stringify(
-      lastPunch
-    )}`
-  );
   let isCheckIn: boolean;
 
   if (force) {

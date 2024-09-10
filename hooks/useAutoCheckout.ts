@@ -1,9 +1,9 @@
 // hooks/useAutoCheckout.ts
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { performCheckinOut } from "../utils/checkInOut";
 
 const CHECKOUT_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
-const MAX_CHECKIN_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const MAX_CHECKIN_DURATION = 20 * 60 * 60 * 1000; // 20 hours in milliseconds
 
 export function useAutoCheckout({ data }) {
   const [userData, setUserData] = useState(data);
