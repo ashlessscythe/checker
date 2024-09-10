@@ -47,9 +47,24 @@ export async function performCheckinOut(
 
   // Get the last punch for this user
   const lastPunch = user.punches[0]; // The punches are already ordered by serverCreatedAt desc
-  let isCheckIn = force
-    ? force === "checkin"
-    : !lastPunch || lastPunch.type === "checkout";
+  console.log(
+    `performcheckinout: last punch for user ${user.name} is ${JSON.stringify(
+      lastPunch
+    )}`
+  );
+  let isCheckIn: boolean;
+
+  if (force) {
+    // If force is provided, use it regardless of lastPunch
+    isCheckIn = force === "checkin";
+  } else if (!lastPunch) {
+    // If no lastPunch and no force, default to check-in
+    isCheckIn = true;
+  } else {
+    // If lastPunch exists and no force, toggle based on last punch type
+    isCheckIn = lastPunch.type === "checkout";
+  }
+  console.log(`Determined action: ${isCheckIn ? "checkin" : "checkout"}`);
   const colors = isCheckIn ? checkInColors : checkOutColors;
 
   if (lastPunch) {
@@ -61,8 +76,11 @@ export async function performCheckinOut(
       `current time is ${currentTime} last punch: ${lastPunchTime} hoursSinceLastPunch: ${hoursSinceLastPunch}`
     );
 
-    if (hoursSinceLastPunch >= RESET_HOURS) {
-      isCheckIn = true;
+    if (!force) {
+      // ignore if force is provided
+      if (hoursSinceLastPunch >= RESET_HOURS) {
+        isCheckIn = true;
+      }
     }
   }
 
