@@ -83,7 +83,7 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
   });
 
   // Always call hooks, but control their effect based on shouldFocus
-  useAutoNavigate("/", 60000);
+  useAutoNavigate("/", 2 * 60 * 1000);
   useAutoCheckout({ data });
 
   useEffect(() => {

@@ -14,10 +14,10 @@ interface AuthModalProps {
 export function AuthModal({ isOpen, onClose, shouldFocus }: AuthModalProps) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const inputRef = useAutoFocus(shouldFocus);
   const [sentEmail, setSentEmail] = useState(false);
   const [timeLeft, setTimeLeft] = useState(15);
   const { setAuthState } = useAuth();
+  const inputRef = useAutoFocus(shouldFocus);
 
   useEffect(() => {
     let timer;

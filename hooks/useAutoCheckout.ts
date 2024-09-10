@@ -2,8 +2,8 @@
 import { useState, useEffect } from "react";
 import { performCheckinOut } from "../utils/checkInOut";
 
-const CHECKOUT_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
-const MAX_CHECKIN_DURATION = 20 * 60 * 60 * 1000; // 20 hours in milliseconds
+const CHECKOUT_INTERVAL = 20 * 60 * 1000; // 20 min in milliseconds
+const MAX_CHECKIN_DURATION = 18 * 60 * 60 * 1000; // 18 hours in milliseconds
 
 export function useAutoCheckout({ data }) {
   const [userData, setUserData] = useState(data);
