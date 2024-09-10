@@ -71,7 +71,7 @@ export default function AdminPage() {
     [data, isLoading]
   );
 
-  useAutoNavigate("/", 300000); // Navigate to home after 5 minutes of inactivity
+  useAutoNavigate("/"); // Navigate to home after 5 minutes of inactivity
 
   const makeAuth = async (userId, currentStatus) => {
     try {

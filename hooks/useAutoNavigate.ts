@@ -2,7 +2,8 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation"; // Updated import for App Router
 
-export function useAutoNavigate(path: string, delay: number = 60000) {
+// 5 min default
+export function useAutoNavigate(path: string, delay: number = 5 * 60 * 1000) {
   const router = useRouter();
 
   useEffect(() => {
