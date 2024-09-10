@@ -23,7 +23,7 @@ export default function AdminPage() {
     users: {
       $: {},
       punches: {},
-    }
+    },
   });
 
   const handleNameChange = async (userId, newName) => {
@@ -49,21 +49,27 @@ export default function AdminPage() {
     }
   };
 
-  const forceCheckIn = useCallback(async (userId: string) => {
-    if (isLoading || !data) return;
-    const user = data.users.find(u => u.id === userId);
-    if (user) {
-      await performCheckinOut(user, 'checkin');
-    }
-  }, [data, isLoading]);
+  const forceCheckIn = useCallback(
+    async (userId: string) => {
+      if (isLoading || !data) return;
+      const user = data.users.find((u) => u.id === userId);
+      if (user) {
+        await performCheckinOut(user, "checkin");
+      }
+    },
+    [data, isLoading]
+  );
 
-  const forceCheckOut = useCallback(async (userId: string) => {
-    if (isLoading || !data) return;
-    const user = data.users.find(u => u.id === userId);
-    if (user) {
-      await performCheckinOut(user, 'checkout');
-    }
-  }, [data, isLoading]);
+  const forceCheckOut = useCallback(
+    async (userId: string) => {
+      if (isLoading || !data) return;
+      const user = data.users.find((u) => u.id === userId);
+      if (user) {
+        await performCheckinOut(user, "checkout");
+      }
+    },
+    [data, isLoading]
+  );
 
   useAutoNavigate("/", 300000); // Navigate to home after 5 minutes of inactivity
 
@@ -180,10 +186,16 @@ export default function AdminPage() {
                         >
                           {user.isAuth ? "Revoke Auth" : "Grant Auth"}
                         </button>
-                        <button onClick={() => forceCheckIn(user.id)} className="text-yellow-600 hover:text-yellow-900 mr-2">
+                        <button
+                          onClick={() => forceCheckIn(user.id)}
+                          className="text-yellow-600 hover:text-yellow-900 mr-2"
+                        >
                           Force Check-In
                         </button>
-                        <button onClick={() => forceCheckOut(user.id)} className="text-red-600 hover:text-red-900">
+                        <button
+                          onClick={() => forceCheckOut(user.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
                           Force Check-Out
                         </button>
                       </div>

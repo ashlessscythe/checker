@@ -3,22 +3,24 @@ import { useEffect, useRef } from "react";
 
 export function useAutoFocus(
   shouldFocus: boolean,
-  delay: number = 5000
+  delay: number = 3000
 ): React.RefObject<HTMLInputElement> {
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let intervalId: NodeJS.Timeout;
 
     if (shouldFocus) {
-      timeoutId = setTimeout(() => {
-        ref.current?.focus();
+      intervalId = setInterval(() => {
+        if (ref.current && document.activeElement !== ref.current) {
+          ref.current.focus();
+        }
       }, delay);
     }
 
     return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
+      if (intervalId) {
+        clearInterval(intervalId);
       }
     };
   }, [shouldFocus, delay]);
