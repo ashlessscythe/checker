@@ -36,78 +36,154 @@ const errorColors = {
   border: "2px solid #b91c1c", // Medium red border
 };
 
-export async function performCheckinOut(
-  user: any,
-  force?: "checkin" | "checkout"
-) {
+// Define an enum for all possible action types
+export enum CheckActionType {
+  CheckIn = "checkin",
+  CheckOut = "checkout",
+  SystemCheckOut = "sys_checkout",
+  AdminCheckIn = "admin_checkin",
+  AdminCheckOut = "admin_checkout",
+}
+
+// Determine the action type
+export const checkInTypes = new Set([
+  CheckActionType.CheckIn,
+  CheckActionType.AdminCheckIn,
+]);
+export const checkOutTypes = new Set([
+  CheckActionType.CheckOut,
+  CheckActionType.AdminCheckOut,
+  CheckActionType.SystemCheckOut,
+]);
+
+// Define a type for the force parameter
+type ForceAction = CheckActionType | undefined;
+``;
+
+export async function performCheckinOut(user: any, force?: ForceAction) {
   if (!user) {
     toast.error("User not found");
     return;
   }
 
   // Get the last punch for this user
-  const lastPunch = user.punches[0]; // The punches are already ordered by serverCreatedAt desc
-  let isCheckIn: boolean;
+  const lastPunch = user.punches[0];
+  let actionType: CheckActionType;
+  let isSystemAction = false;
+  let isAdminAction = false;
 
   if (force) {
-    // If force is provided, use it regardless of lastPunch
-    isCheckIn = force === "checkin";
+    actionType = force;
+    isSystemAction = force === CheckActionType.SystemCheckOut;
+    isAdminAction =
+      force === CheckActionType.AdminCheckIn ||
+      force === CheckActionType.AdminCheckOut;
   } else if (!lastPunch) {
-    // If no lastPunch and no force, default to check-in
-    isCheckIn = true;
+    actionType = CheckActionType.CheckIn;
   } else {
-    // If lastPunch exists and no force, toggle based on last punch type
-    isCheckIn = lastPunch.type === "checkout";
+    // Check if the last punch was any type of check-out (including admin and system)
+    actionType = checkOutTypes.has(lastPunch.type)
+      ? CheckActionType.CheckIn
+      : CheckActionType.CheckOut;
   }
-  console.log(`Determined action: ${isCheckIn ? "checkin" : "checkout"}`);
-  const colors = isCheckIn ? checkInColors : checkOutColors;
 
-  if (lastPunch) {
+  if (
+    !force &&
+    lastPunch &&
+    (lastPunch.type === CheckActionType.AdminCheckOut ||
+      lastPunch.type === CheckActionType.SystemCheckOut)
+  ) {
+    console.log(
+      `User ${user.name} is checking in after an ${
+        lastPunch.type === CheckActionType.AdminCheckOut ? "admin" : "system"
+      } checkout`
+    );
+    // You might want to add a special notification here
+  }
+
+  // Handle auto-reset logic
+  if (lastPunch && !force) {
     const lastPunchTime = new Date(lastPunch.timestamp).getTime();
     const currentTime = Date.now();
     const hoursSinceLastPunch =
       (currentTime - lastPunchTime) / (1000 * 60 * 60);
-    console.log(
-      `current time is ${currentTime} last punch: ${lastPunchTime} hoursSinceLastPunch: ${hoursSinceLastPunch}`
-    );
-
-    if (!force) {
-      // ignore if force is provided
-      if (hoursSinceLastPunch >= RESET_HOURS) {
-        isCheckIn = true;
-      }
+    if (hoursSinceLastPunch >= RESET_HOURS) {
+      actionType = CheckActionType.CheckIn;
     }
   }
+
+  console.log(`Determined action: ${actionType}`);
 
   try {
     const newPunchId = id();
     await db.transact([
       tx.punches[newPunchId].update({
-        type: isCheckIn ? "checkin" : "checkout",
+        type: actionType,
         timestamp: Date.now(),
+        isSystemGenerated: isSystemAction,
+        isAdminGenerated: isAdminAction,
       }),
       tx.users[user.id].link({ punches: newPunchId }),
     ]);
 
-    toast.success(`${user.name}: ${isCheckIn ? "checked in" : "checked out"}`, {
-      ...baseToastStyle,
-      icon: isCheckIn ? "✅" : "👋",
-      style: {
-        ...baseToastStyle.style,
-        ...colors,
-        animation: "pop-up 0.5s ease-out",
-      },
-    });
+    // Handle notifications
+    switch (actionType) {
+      case CheckActionType.CheckIn:
+      case CheckActionType.CheckOut:
+        toast.success(
+          `${user.name}: ${
+            actionType === CheckActionType.CheckIn
+              ? "checked in"
+              : "checked out"
+          }`,
+          {
+            ...baseToastStyle,
+            style: {
+              ...baseToastStyle.style,
+              ...(actionType === CheckActionType.CheckIn
+                ? checkInColors
+                : checkOutColors),
+              animation: "pop-up 0.5s ease-out",
+            },
+          }
+        );
+        break;
+      case CheckActionType.AdminCheckIn:
+      case CheckActionType.AdminCheckOut:
+        toast.success(
+          `Admin ${
+            actionType === CheckActionType.AdminCheckIn
+              ? "checked in"
+              : "checked out"
+          } ${user.name}`,
+          {
+            ...baseToastStyle,
+            style: {
+              ...baseToastStyle.style,
+              ...(actionType === CheckActionType.AdminCheckIn
+                ? checkInColors
+                : checkOutColors),
+              animation: "pop-up 0.5s ease-out",
+            },
+          }
+        );
+        break;
+      case CheckActionType.SystemCheckOut:
+        console.log(`System checkout performed for user ${user.name}`);
+        break;
+    }
   } catch (error) {
-    toast.error("An error occurred. Please try again.", {
-      ...baseToastStyle,
-      icon: "❌",
-      style: {
-        ...baseToastStyle.style,
-        ...errorColors,
-        animation: "shake 0.5s ease-in-out",
-      },
-    });
+    if (!isSystemAction) {
+      toast.error("An error occurred. Please try again.", {
+        ...baseToastStyle,
+        icon: "❌",
+        style: {
+          ...baseToastStyle.style,
+          ...errorColors,
+          animation: "shake 0.5s ease-in-out",
+        },
+      });
+    }
     console.error("Check-in/out error:", error);
   }
 }

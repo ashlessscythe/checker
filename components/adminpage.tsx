@@ -6,7 +6,7 @@ import { db } from "../lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
 import { useAutoNavigate } from "../hooks/useAutoNavigate";
 import { useAuth } from "../hooks/authContext";
-import { performCheckinOut } from "../utils/checkInOut";
+import { CheckActionType, performCheckinOut } from "../utils/checkInOut";
 
 export default function AdminPage() {
   const [userId, setUserId] = useState(null);
@@ -54,7 +54,7 @@ export default function AdminPage() {
       if (isLoading || !data) return;
       const user = data.users.find((u) => u.id === userId);
       if (user) {
-        await performCheckinOut(user, "checkin");
+        await performCheckinOut(user, CheckActionType.AdminCheckIn);
       }
     },
     [data, isLoading]
@@ -65,7 +65,7 @@ export default function AdminPage() {
       if (isLoading || !data) return;
       const user = data.users.find((u) => u.id === userId);
       if (user) {
-        await performCheckinOut(user, "checkout");
+        await performCheckinOut(user, CheckActionType.AdminCheckOut);
       }
     },
     [data, isLoading]

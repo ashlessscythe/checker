@@ -5,6 +5,7 @@ import React, { useMemo, useEffect, useState, useCallback } from "react";
 import { id, tx } from "@instantdb/react";
 import { db } from "../lib/instantdb";
 import { useAuth } from "../hooks/authContext";
+import { CheckActionType } from "../utils/checkInOut";
 
 export default React.memo(function CheckList() {
   const [checkedUsers, setCheckedUsers] = useState<
@@ -143,11 +144,19 @@ export default React.memo(function CheckList() {
     }
   }, [data, drillId, checkedUsers, generateNewDrillId]);
 
+  function isUserCheckedIn(user: any): boolean {
+    const lastPunch = user.punches[0];
+    return lastPunch && (
+      lastPunch.type === CheckActionType.CheckIn || 
+      lastPunch.type === CheckActionType.AdminCheckIn
+    );
+  }
+
   const checkedInUsersWithHours = useMemo(() => {
     if (!data?.users) return [];
 
     return data.users
-      .filter((user) => user.punches[0]?.type === "checkin")
+      .filter(isUserCheckedIn)
       .map((user) => {
         const checkInTime = new Date(user.punches[0].timestamp).getTime();
         const diffInHours = (currentTime - checkInTime) / (1000 * 60 * 60);

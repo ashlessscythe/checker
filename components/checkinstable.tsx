@@ -8,7 +8,7 @@ import { useAutoNavigate } from "../hooks/useAutoNavigate";
 export default function CheckInsTable() {
   const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
 
-  useAutoNavigate('/', 20000) // 20 sec
+  useAutoNavigate("/", 5 * 60 * 1000); // 20 sec
 
   const { data, isLoading, error } = db.useQuery({
     punches: {
@@ -24,7 +24,7 @@ export default function CheckInsTable() {
   if (!data || !data.punches) {
     return <div>No data available</div>;
   }
-  const punches = data.punches
+  const punches = data.punches;
 
   return (
     <div>

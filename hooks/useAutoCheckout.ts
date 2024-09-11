@@ -1,6 +1,10 @@
 // hooks/useAutoCheckout.ts
 import { useState, useEffect } from "react";
-import { performCheckinOut } from "../utils/checkInOut";
+import {
+  checkInTypes,
+  CheckActionType,
+  performCheckinOut,
+} from "../utils/checkInOut";
 
 const CHECKOUT_INTERVAL = 10 * 60 * 1000; // 10 min in milliseconds
 const MAX_CHECKIN_DURATION = 16 * 60 * 60 * 1000; // 16 hours in milliseconds
@@ -17,25 +21,35 @@ export function useAutoCheckout({ data }) {
       const currentTime = Date.now();
 
       // Filter users first
-      const usersToCheckout = userData.users.filter(
-        (user) =>
-          user.punches[0] &&
-          user.punches[0].type === "checkin" &&
-          currentTime - new Date(user.punches[0].timestamp).getTime() >
-            MAX_CHECKIN_DURATION
-      );
+      const usersToCheckout = userData.users.filter((user) => {
+        const lastPunch = user.punches[0]; // Get the last punch
 
-      console.log(`found ${usersToCheckout.length} users`);
+        if (!lastPunch) return false; // No punches, skip this user
+
+        // Check if the last punch is a check-in (regular or admin)
+        const isCheckedIn = checkInTypes.has(lastPunch.type);
+
+        // Calculate time since last punch
+        const timeSinceLastPunch =
+          currentTime - new Date(lastPunch.timestamp).getTime();
+
+        // Return true if user is checked in and has exceeded MAX_CHECKIN_DURATION
+        return isCheckedIn && timeSinceLastPunch > MAX_CHECKIN_DURATION;
+      });
+
+      console.log(`Found ${usersToCheckout.length} users to auto-checkout`);
 
       // Process only the filtered users
       usersToCheckout.forEach((user) => {
         console.log(`Force checkout for user ${user.name}`);
-        performCheckinOut(user, "checkout");
+        performCheckinOut(user, CheckActionType.SystemCheckOut);
       });
     };
 
+    // Set up interval to run checkAndForceCheckout
     const intervalId = setInterval(checkAndForceCheckout, CHECKOUT_INTERVAL);
 
+    // Clean up interval on component unmount
     return () => clearInterval(intervalId);
-  }, [userData]);
+  }, [userData, performCheckinOut]); // Add any other dependencies as needed
 }

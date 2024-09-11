@@ -6,7 +6,7 @@ import { db } from "../lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
 import { useAutoFocus } from "../hooks/useAutoFocus";
 import { useAutoNavigate } from "../hooks/useAutoNavigate";
-import { performCheckinOut } from "../utils/checkInOut";
+import { CheckActionType, performCheckinOut } from "../utils/checkInOut";
 import { useAutoCheckout } from "../hooks/useAutoCheckout";
 
 // Add the extractUserId function
@@ -84,7 +84,7 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
 
   // Always call hooks, but control their effect based on shouldFocus
   useAutoNavigate("/", 2 * 60 * 1000);
-  useAutoCheckout({ data });
+  // useAutoCheckout({ data });
 
   useEffect(() => {
     const timer = setTimeout(() => {
