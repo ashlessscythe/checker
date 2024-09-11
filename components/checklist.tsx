@@ -382,27 +382,6 @@ export default React.memo(function CheckList() {
               ))}
             </tbody>
           </table>
-          <div className="mt-4 flex justify-between items-center">
-            <button
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
-            >
-              Previous
-            </button>
-            <span>
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-              }
-              disabled={currentPage === totalPages}
-              className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
-            >
-              Next
-            </button>
-          </div>
         </div>
       </div>
       <div className="mt-4 flex flex-col sm:flex-row justify-between items-center">
