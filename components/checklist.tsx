@@ -13,6 +13,11 @@ export default React.memo(function CheckList() {
   const [drillId, setDrillId] = useState<string>("");
   const [isClient, setIsClient] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [filters, setFilters] = useState({ name: '', status: 'all' });
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
   const { user } = useAuth();
   const authUser = user;
 
@@ -166,6 +171,46 @@ export default React.memo(function CheckList() {
       });
   }, [data?.users, currentTime]);
 
+  const filteredAndSortedUsers = useMemo(() => {
+    let result = checkedInUsersWithHours;
+  
+    // Apply filters
+    if (filters.name) {
+      result = result.filter(user => 
+        user.name.toLowerCase().includes(filters.name.toLowerCase())
+      );
+    }
+    if (filters.status !== 'all') {
+      result = result.filter(user => 
+        (filters.status === 'checked' && checkedUsers.has(user.id)) ||
+        (filters.status === 'unchecked' && !checkedUsers.has(user.id))
+      );
+    }
+  
+    // Apply sorting
+    if (sortConfig !== null) {
+      result.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+  
+    return result;
+  }, [checkedInUsersWithHours, filters, sortConfig, checkedUsers]);
+
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredAndSortedUsers.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredAndSortedUsers, currentPage]);
+
+  // Pagination controls
+  const totalPages = Math.ceil(filteredAndSortedUsers.length / itemsPerPage);
+
   const CheckListRow: React.FC<{
     user: {
       timeAgoString: string;
@@ -234,12 +279,39 @@ export default React.memo(function CheckList() {
     );
   });
 
+  // req sort from header
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error.message}</div>;
 
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Fire Drill Checklist</h1>
+      <div className="mb-4 flex space-x-4">
+        <input
+          type="text"
+          placeholder="Filter by name"
+          value={filters.name}
+          onChange={(e) => setFilters(prev => ({ ...prev, name: e.target.value }))}
+          className="px-2 py-1 border rounded"
+        />
+        <select
+          value={filters.status}
+          onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+          className="px-2 py-1 border rounded"
+        >
+          <option value="all">All</option>
+          <option value="checked">Checked</option>
+          <option value="unchecked">Unchecked</option>
+        </select>
+      </div>
       <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
         <div className="max-h-[600px] overflow-y-auto">
           {" "}
@@ -247,8 +319,11 @@ export default React.memo(function CheckList() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Name
+                <th 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort('name')}
+                >
+                  Name {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Status
@@ -259,20 +334,34 @@ export default React.memo(function CheckList() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {checkedInUsersWithHours.map((user) => (
+              {filteredAndSortedUsers.map((user) => (
                 <CheckListRow
                   key={user.id}
                   user={user}
-                  isChecked={
-                    checkedUsers.has(user.id) &&
-                    checkedUsers.get(user.id)!.status
-                  }
+                  isChecked={checkedUsers.has(user.id)}
                   accountedBy={checkedUsers.get(user.id)?.accountedBy}
                   onCheck={handleCheckUser}
                 />
               ))}
             </tbody>
           </table>
+          <div className="mt-4 flex justify-between items-center">
+            <button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
+            >
+              Previous
+            </button>
+            <span>Page {currentPage} of {totalPages}</span>
+            <button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
       <div className="mt-4 flex flex-col sm:flex-row justify-between items-center">
