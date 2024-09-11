@@ -5,7 +5,11 @@ import React, { useMemo, useEffect, useState, useCallback } from "react";
 import { id, tx } from "@instantdb/react";
 import { db } from "../lib/instantdb";
 import { useAuth } from "../hooks/authContext";
-import { CheckActionType } from "../utils/checkInOut";
+import {
+  CheckActionType,
+  checkInTypes,
+  checkOutTypes,
+} from "../utils/checkInOut";
 
 export default React.memo(function CheckList() {
   const [checkedUsers, setCheckedUsers] = useState<
@@ -14,9 +18,16 @@ export default React.memo(function CheckList() {
   const [drillId, setDrillId] = useState<string>("");
   const [isClient, setIsClient] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [filters, setFilters] = useState({ name: '', status: 'all' });
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [filters, setFilters] = useState({ name: "", status: "all" });
+  const [sortConfig, setSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
+  } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const IS_OLD_HOURS = parseInt(
+    process.env.NEXT_PUBLIC_THRESHOLD_HOURS || "14",
+    10
+  );
   const itemsPerPage = 20;
 
   const { user } = useAuth();
@@ -146,69 +157,72 @@ export default React.memo(function CheckList() {
 
   function isUserCheckedIn(user: any): boolean {
     const lastPunch = user.punches[0];
-    return lastPunch && (
-      lastPunch.type === CheckActionType.CheckIn || 
-      lastPunch.type === CheckActionType.AdminCheckIn
-    );
+    return lastPunch && checkInTypes.has(lastPunch.type);
   }
 
   const checkedInUsersWithHours = useMemo(() => {
     if (!data?.users) return [];
 
-    return data.users
-      .filter(isUserCheckedIn)
-      .map((user) => {
-        const checkInTime = new Date(user.punches[0].timestamp).getTime();
-        const diffInHours = (currentTime - checkInTime) / (1000 * 60 * 60);
-        const name = user.name;
+    return data.users.filter(isUserCheckedIn).map((user) => {
+      const checkInTime = new Date(user.punches[0].timestamp).getTime();
+      const diffInHours = (currentTime - checkInTime) / (1000 * 60 * 60);
+      const name = user.name;
 
-        let timeAgoString: string;
-        if (diffInHours < 1 / 60) {
-          timeAgoString = "Just now";
-        } else if (diffInHours < 1) {
-          const minutes = Math.floor(diffInHours * 60);
-          timeAgoString = `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
-        } else if (diffInHours < 24) {
-          const hours = Math.floor(diffInHours);
-          timeAgoString = `${hours} hour${hours !== 1 ? "s" : ""} ago`;
-        } else {
-          const days = Math.floor(diffInHours / 24);
-          timeAgoString = `${days} day${days !== 1 ? "s" : ""} ago`;
-        }
+      let timeAgoString: string;
+      if (diffInHours < 1 / 60) {
+        timeAgoString = "Just now";
+      } else if (diffInHours < 1) {
+        const minutes = Math.floor(diffInHours * 60);
+        timeAgoString = `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
+      } else if (diffInHours < 24) {
+        const hours = Math.floor(diffInHours);
+        timeAgoString = `${hours} hour${hours !== 1 ? "s" : ""} ago`;
+      } else {
+        const days = Math.floor(diffInHours / 24);
+        timeAgoString = `${days} day${days !== 1 ? "s" : ""} ago`;
+      }
 
-        return { ...user, timeAgoString, name, hoursAgo: diffInHours };
-      });
+      return { ...user, timeAgoString, name, hoursAgo: diffInHours };
+    });
   }, [data?.users, currentTime]);
 
   const filteredAndSortedUsers = useMemo(() => {
     let result = checkedInUsersWithHours;
-  
+
     // Apply filters
     if (filters.name) {
-      result = result.filter(user => 
+      result = result.filter((user) =>
         user.name.toLowerCase().includes(filters.name.toLowerCase())
       );
     }
-    if (filters.status !== 'all') {
-      result = result.filter(user => 
-        (filters.status === 'checked' && checkedUsers.has(user.id)) ||
-        (filters.status === 'unchecked' && !checkedUsers.has(user.id))
+    if (filters.status !== "all") {
+      result = result.filter(
+        (user) =>
+          (filters.status === "checked" && checkedUsers.has(user.id)) ||
+          (filters.status === "unchecked" && !checkedUsers.has(user.id))
       );
     }
-  
+
     // Apply sorting
     if (sortConfig !== null) {
       result.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
+        if (sortConfig.key === "hoursAgo") {
+          // Sort by hoursAgo (checked in time)
+          return sortConfig.direction === "asc"
+            ? a.hoursAgo - b.hoursAgo
+            : b.hoursAgo - a.hoursAgo;
+        } else {
+          if (a[sortConfig.key] < b[sortConfig.key]) {
+            return sortConfig.direction === "asc" ? -1 : 1;
+          }
+          if (a[sortConfig.key] > b[sortConfig.key]) {
+            return sortConfig.direction === "asc" ? 1 : -1;
+          }
+          return 0;
         }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
-        return 0;
       });
     }
-  
+
     return result;
   }, [checkedInUsersWithHours, filters, sortConfig, checkedUsers]);
 
@@ -253,7 +267,7 @@ export default React.memo(function CheckList() {
     };
 
     const hoursAgo = parseTimeAgo(user.timeAgoString);
-    const isOld = hoursAgo >= 12;
+    const isOld = hoursAgo >= IS_OLD_HOURS;
 
     return (
       <tr
@@ -281,18 +295,21 @@ export default React.memo(function CheckList() {
         </td>
         <td className="px-6 py-4 whitespace-nowrap">
           <div className="text-sm text-gray-500 dark:text-gray-300">
-            {user.timeAgoString}
+            {isOld ? `${user.timeAgoString} (old)` : user.timeAgoString}
           </div>
         </td>
       </tr>
     );
   });
 
-  // req sort from header
   const requestSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
+    let direction: "asc" | "desc" = "asc";
+    if (
+      sortConfig &&
+      sortConfig.key === key &&
+      sortConfig.direction === "asc"
+    ) {
+      direction = "desc";
     }
     setSortConfig({ key, direction });
   };
@@ -308,12 +325,16 @@ export default React.memo(function CheckList() {
           type="text"
           placeholder="Filter by name"
           value={filters.name}
-          onChange={(e) => setFilters(prev => ({ ...prev, name: e.target.value }))}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, name: e.target.value }))
+          }
           className="px-2 py-1 border rounded"
         />
         <select
           value={filters.status}
-          onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, status: e.target.value }))
+          }
           className="px-2 py-1 border rounded"
         >
           <option value="all">All</option>
@@ -328,17 +349,24 @@ export default React.memo(function CheckList() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
               <tr>
-                <th 
+                <th
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                  onClick={() => requestSort('name')}
+                  onClick={() => requestSort("name")}
                 >
-                  Name {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  Name{" "}
+                  {sortConfig?.key === "name" &&
+                    (sortConfig.direction === "asc" ? "↑" : "↓")}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Checked In
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort("hoursAgo")} // Sorting by checked-in time
+                >
+                  Checked In{" "}
+                  {sortConfig?.key === "hoursAgo" &&
+                    (sortConfig.direction === "asc" ? "↑" : "↓")}
                 </th>
               </tr>
             </thead>
@@ -355,16 +383,20 @@ export default React.memo(function CheckList() {
             </tbody>
           </table>
           <div className="mt-4 flex justify-between items-center">
-            <button 
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
               className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
             >
               Previous
             </button>
-            <span>Page {currentPage} of {totalPages}</span>
-            <button 
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
               disabled={currentPage === totalPages}
               className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
             >

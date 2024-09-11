@@ -41,6 +41,7 @@ export enum CheckActionType {
   CheckIn = "checkin",
   CheckOut = "checkout",
   SystemCheckOut = "sys_checkout",
+  SystemCheckIn = "sys_checkin",
   AdminCheckIn = "admin_checkin",
   AdminCheckOut = "admin_checkout",
 }
@@ -48,6 +49,7 @@ export enum CheckActionType {
 // Determine the action type
 export const checkInTypes = new Set([
   CheckActionType.CheckIn,
+  CheckActionType.SystemCheckIn,
   CheckActionType.AdminCheckIn,
 ]);
 export const checkOutTypes = new Set([

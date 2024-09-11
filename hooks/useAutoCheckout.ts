@@ -6,11 +6,19 @@ import {
   performCheckinOut,
 } from "../utils/checkInOut";
 
-const CHECKOUT_INTERVAL = 10 * 60 * 1000; // 10 min in milliseconds
-const MAX_CHECKIN_DURATION = 16 * 60 * 60 * 1000; // 16 hours in milliseconds
+const CHECKOUT_INTERVAL =
+  parseInt(process.env.NEXT_PUBLIC_CLEANUP_INTERVAL_MINUTES, 10) * 60 * 1000 ||
+  10 * 60 * 1000; // 10 min in milliseconds
+const MAX_CHECKIN_DURATION =
+  parseInt(process.env.NEXT_PUBLIC_CLEANUP_HOURS, 10) * 60 * 60 * 1000 ||
+  16 * 60 * 60 * 1000; // 16 hours in milliseconds
 
 export function useAutoCheckout({ data }) {
   const [userData, setUserData] = useState(data);
+
+  console.log(
+    `checkout interval is ${CHECKOUT_INTERVAL} ms, max checkin duration is ${MAX_CHECKIN_DURATION} milliseconds`
+  );
 
   useEffect(() => {
     setUserData(data);
