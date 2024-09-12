@@ -5,6 +5,7 @@ import React, { useMemo, useEffect, useState, useCallback } from "react";
 import { id, tx } from "@instantdb/react";
 import { db } from "../lib/instantdb";
 import { useAuth } from "../hooks/authContext";
+import { useAutoNavigate } from "../hooks/useAutoNavigate";
 import {
   CheckActionType,
   checkInTypes,
@@ -18,6 +19,7 @@ export default React.memo(function CheckList() {
   const [drillId, setDrillId] = useState<string>("");
   const [isClient, setIsClient] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [dateTime, setDateTime] = useState(new Date().toLocaleString());
   const [filters, setFilters] = useState({ name: "", status: "all" });
   const [sortConfig, setSortConfig] = useState<{
     key: string;
@@ -29,6 +31,8 @@ export default React.memo(function CheckList() {
     10
   );
   const itemsPerPage = 20;
+
+  useAutoNavigate('/', 60 * 1000, true)
 
   const { user } = useAuth();
   const authUser = user;
@@ -314,12 +318,20 @@ export default React.memo(function CheckList() {
     setSortConfig({ key, direction });
   };
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDateTime(new Date().toLocaleString());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error.message}</div>;
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Fire Drill Checklist</h1>
+      <h1 className="text-2xl font-bold mb-4">Fire Drill Checklist - {dateTime}</h1>
       <div className="mb-4 flex space-x-4">
         <input
           type="text"
