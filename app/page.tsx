@@ -27,18 +27,24 @@ function HomeContent() {
         <CheckInOutForm shouldFocus={shouldFocusCheckInOut} />
       </div>
 
-      {/* Switch Toggle for Regular vs Advanced Checklist */}
-      <div className="flex items-center space-x-2 mb-4">
-        <span className="font-semibold">Show Advanced Checklist</span>
-        <Switch isChecked={isAdvanced} onChange={setIsAdvanced} />
-      </div>
+      {/* Only render if the user is authenticated or is an admin */}
+      {isAuthenticated || isAdmin ? (
+        <>
+          {/* Switch Toggle for Regular vs Advanced Checklist */}
+          <div className="flex items-center space-x-2 mb-4">
+            <span className="font-semibold">Show Advanced Checklist</span>
+            <Switch isChecked={isAdvanced} onChange={setIsAdvanced} />
+          </div>
 
-      {/* Conditionally Render Checklist based on Toggle */}
-      {isAuthenticated &&
-        (isAuthorized || isAdmin) &&
-        (isAdvanced ? <AdvancedChecklist /> : <Checklist />)}
+          {/* Conditionally Render Checklist based on Toggle */}
+          {isAdvanced ? <AdvancedChecklist /> : <Checklist />}
 
-      {isAuthenticated && isAdmin && <AdminPage />}
+          {/* Render Admin Page only if the user is an admin */}
+          {isAdmin && <AdminPage />}
+        </>
+      ) : (
+        <></>
+      )}
 
       <AuthModal
         isOpen={isAuthModalOpen}
