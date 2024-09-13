@@ -12,7 +12,7 @@ import {
   checkOutTypes,
 } from "../utils/checkInOut";
 
-export default React.memo(function CheckList() {
+export default React.memo(function AdvancedChecklist() {
   const [checkedUsers, setCheckedUsers] = useState<
     Map<string, { status: boolean; accountedBy: string }>
   >(new Map());
@@ -20,7 +20,12 @@ export default React.memo(function CheckList() {
   const [isClient, setIsClient] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [dateTime, setDateTime] = useState(new Date().toLocaleString());
-  const [filters, setFilters] = useState({ name: "", status: "all" });
+  const [filters, setFilters] = useState({
+    name: "",
+    checkStatus: "all", // 'in', 'out', or 'all'
+    accountedStatus: "all", // 'accounted', 'unaccounted', or 'all'
+  });
+
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: "asc" | "desc";
@@ -32,7 +37,7 @@ export default React.memo(function CheckList() {
   );
   const itemsPerPage = 20;
 
-  useAutoNavigate("/", 60 * 1000, true);
+  useAutoNavigate("/", 5 * 60 * 1000, true); // every 5 min default
 
   const { user } = useAuth();
   const authUser = user;
@@ -164,12 +169,14 @@ export default React.memo(function CheckList() {
     return lastPunch && checkInTypes.has(lastPunch.type);
   }
 
-  const checkedInUsersWithHours = useMemo(() => {
+  const usersWithStatus = useMemo(() => {
     if (!data?.users) return [];
 
-    return data.users.filter(isUserCheckedIn).map((user) => {
-      const checkInTime = new Date(user.punches[0].timestamp).getTime();
-      const diffInHours = (currentTime - checkInTime) / (1000 * 60 * 60);
+    return data.users.map((user) => {
+      const lastPunch = user.punches[0];
+      const isCheckedIn = lastPunch && checkInTypes.has(lastPunch.type);
+      const timestamp = lastPunch ? new Date(lastPunch.timestamp).getTime() : 0;
+      const diffInHours = (currentTime - timestamp) / (1000 * 60 * 60);
       const name = user.name;
 
       let timeAgoString: string;
@@ -186,12 +193,19 @@ export default React.memo(function CheckList() {
         timeAgoString = `${days} day${days !== 1 ? "s" : ""} ago`;
       }
 
-      return { ...user, timeAgoString, name, hoursAgo: diffInHours };
+      return {
+        ...user,
+        isCheckedIn,
+        timeAgoString,
+        hoursAgo: diffInHours,
+        isOld: diffInHours >= IS_OLD_HOURS,
+        name,
+      };
     });
   }, [data?.users, currentTime]);
 
   const filteredAndSortedUsers = useMemo(() => {
-    let result = checkedInUsersWithHours;
+    let result = usersWithStatus;
 
     // Apply filters
     if (filters.name) {
@@ -199,11 +213,20 @@ export default React.memo(function CheckList() {
         user.name.toLowerCase().includes(filters.name.toLowerCase())
       );
     }
-    if (filters.status !== "all") {
+    if (filters.checkStatus !== "all") {
       result = result.filter(
         (user) =>
-          (filters.status === "checked" && checkedUsers.has(user.id)) ||
-          (filters.status === "unchecked" && !checkedUsers.has(user.id))
+          (filters.checkStatus === "in" && user.isCheckedIn) ||
+          (filters.checkStatus === "out" && !user.isCheckedIn)
+      );
+    }
+    if (filters.checkStatus === "in" && filters.accountedStatus !== "all") {
+      result = result.filter(
+        (user) =>
+          (filters.accountedStatus === "accounted" &&
+            checkedUsers.has(user.id)) ||
+          (filters.accountedStatus === "unaccounted" &&
+            !checkedUsers.has(user.id))
       );
     }
 
@@ -228,7 +251,7 @@ export default React.memo(function CheckList() {
     }
 
     return result;
-  }, [checkedInUsersWithHours, filters, sortConfig, checkedUsers]);
+  }, [usersWithStatus, filters, sortConfig, checkedUsers]);
 
   const paginatedUsers = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -244,42 +267,23 @@ export default React.memo(function CheckList() {
       name: string;
       punches: any[];
       id: string;
+      isCheckedIn: boolean;
+      isOld: boolean;
     };
     isChecked: boolean;
     accountedBy: string | undefined;
     onCheck: (userId: string) => Promise<void>;
   }> = React.memo(({ user, isChecked, accountedBy, onCheck }) => {
-    // parse hours
-    // Parse the timeAgoString to get the number of hours
-    const parseTimeAgo = (timeAgoString: string): number => {
-      const [value, unit] = timeAgoString.split(" ");
-      const numValue = parseInt(value, 10);
+    const statusClass = user.isCheckedIn
+      ? isChecked
+        ? "bg-green-100 dark:bg-green-700"
+        : "bg-yellow-100 dark:bg-yellow-700"
+      : "bg-gray-100 dark:bg-gray-600";
 
-      switch (unit) {
-        case "day":
-        case "days":
-          return numValue * 24;
-        case "hour":
-        case "hours":
-          return numValue;
-        case "minute":
-        case "minutes":
-          return numValue / 60;
-        default:
-          return 0; // For "Just now" or unexpected formats
-      }
-    };
-
-    const hoursAgo = parseTimeAgo(user.timeAgoString);
-    const isOld = hoursAgo >= IS_OLD_HOURS;
+    const opacityClass = user.isOld ? "opacity-50" : "";
 
     return (
-      <tr
-        className={`
-      ${isChecked ? "bg-green-100 dark:bg-green-700" : ""}
-      ${isOld ? "opacity-50" : ""}
-    `}
-      >
+      <tr className={`${statusClass} ${opacityClass}`}>
         <td className="px-6 py-4 whitespace-nowrap">
           <div className="text-sm font-medium text-gray-900 dark:text-white">
             {user.name}
@@ -289,17 +293,24 @@ export default React.memo(function CheckList() {
           <button
             onClick={() => onCheck(user.id)}
             className={`px-3 py-1 rounded-full text-sm font-semibold ${
-              isChecked
-                ? "bg-green-200 text-green-800 dark:bg-green-600 dark:text-green-100"
-                : "bg-red-200 text-red-800 dark:bg-red-600 dark:text-red-100"
+              user.isCheckedIn
+                ? isChecked
+                  ? "bg-green-200 text-green-800 dark:bg-green-600 dark:text-green-100"
+                  : "bg-red-200 text-red-800 dark:bg-red-600 dark:text-red-100"
+                : "bg-gray-200 text-gray-800 dark:bg-gray-500 dark:text-gray-100"
             }`}
           >
-            {isChecked ? `Accounted by ${accountedBy}` : "Missing"}
+            {user.isCheckedIn
+              ? isChecked
+                ? `Accounted by ${accountedBy}`
+                : "Unaccounted"
+              : "Checked Out"}
           </button>
         </td>
         <td className="px-6 py-4 whitespace-nowrap">
           <div className="text-sm text-gray-500 dark:text-gray-300">
-            {isOld ? `${user.timeAgoString} (old)` : user.timeAgoString}
+            {user.isOld ? `${user.timeAgoString} (old)` : user.timeAgoString}
+            {user.isCheckedIn ? " (In)" : " (Out)"}
           </div>
         </td>
       </tr>
@@ -332,9 +343,9 @@ export default React.memo(function CheckList() {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">
-        Fire Drill Checklist - {dateTime}
+        Advanced Checklist - {dateTime}
       </h1>
-      <div className="mb-4 flex space-x-4">
+      <div className="mb-4 flex flex-wrap space-x-4">
         <input
           type="text"
           placeholder="Filter by name"
@@ -342,19 +353,56 @@ export default React.memo(function CheckList() {
           onChange={(e) =>
             setFilters((prev) => ({ ...prev, name: e.target.value }))
           }
-          className="px-2 py-1 border rounded"
+          className="px-2 py-1 border rounded mb-2"
         />
-        <select
-          value={filters.status}
-          onChange={(e) =>
-            setFilters((prev) => ({ ...prev, status: e.target.value }))
-          }
-          className="px-2 py-1 border rounded"
-        >
-          <option value="all">All</option>
-          <option value="checked">Checked</option>
-          <option value="unchecked">Unchecked</option>
-        </select>
+
+        <div className="flex items-center space-x-4 mb-2">
+          <span className="font-semibold mr-2">Check Status:</span>
+          {[
+            { label: "All", value: "all" },
+            { label: "Checked In", value: "in" },
+            { label: "Checked Out", value: "out" },
+          ].map(({ label, value }) => (
+            <label key={value} className="flex items-center">
+              <input
+                type="radio"
+                value={value}
+                checked={filters.checkStatus === value}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    checkStatus: e.target.value,
+                  }))
+                }
+                className="form-radio h-4 w-4 text-blue-600"
+              />
+              <span className="ml-2 capitalize">{label}</span>
+            </label>
+          ))}
+        </div>
+
+        {filters.checkStatus === "in" && (
+          <div className="flex items-center space-x-4 mb-2">
+            <span className="font-semibold mr-2">Accounted Status:</span>
+            {["all", "accounted", "unaccounted"].map((status) => (
+              <label key={status} className="flex items-center">
+                <input
+                  type="radio"
+                  value={status}
+                  checked={filters.accountedStatus === status}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      accountedStatus: e.target.value,
+                    }))
+                  }
+                  className="form-radio h-4 w-4 text-blue-600"
+                />
+                <span className="ml-2 capitalize">{status}</span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
       <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
         <div className="max-h-[600px] overflow-y-auto">
@@ -376,9 +424,9 @@ export default React.memo(function CheckList() {
                 </th>
                 <th
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                  onClick={() => requestSort("hoursAgo")} // Sorting by checked-in time
+                  onClick={() => requestSort("hoursAgo")}
                 >
-                  Checked In{" "}
+                  Last Action{" "}
                   {sortConfig?.key === "hoursAgo" &&
                     (sortConfig.direction === "asc" ? "↑" : "↓")}
                 </th>
@@ -400,7 +448,9 @@ export default React.memo(function CheckList() {
       </div>
       <div className="mt-4 flex flex-col sm:flex-row justify-between items-center">
         <span className="font-bold mb-2 sm:mb-0">
-          Accounted: {checkedUsers.size} / {checkedInUsersWithHours.length}
+          Accounted: {checkedUsers.size} /{" "}
+          {filteredAndSortedUsers.filter((u) => u.isCheckedIn).length} (In) |
+          Total: {filteredAndSortedUsers.length}
         </span>
         <button
           onClick={handleCompleteDrill}
