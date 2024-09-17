@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { db, tx } from "../lib/instantdb";
-import { useAutoNavigate } from "../hooks/useAutoNavigate";
+import { db, tx } from "@/lib/instantdb";
+import { useAutoNavigate } from "@/hooks/useAutoNavigate";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
 import { Button } from "./ui/button";

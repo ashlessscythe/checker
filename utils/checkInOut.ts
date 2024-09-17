@@ -1,5 +1,5 @@
 import { tx, id } from "@instantdb/react";
-import { db } from "../lib/instantdb";
+import { db } from "@/lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
 
 // from .env 14 by default

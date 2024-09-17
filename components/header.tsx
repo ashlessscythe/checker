@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useAuth } from "../hooks/authContext";
+import { useAuth } from "@/hooks/authContext";
 
 interface HeaderProps {
   setIsAuthModalOpen: (isOpen: boolean) => void;

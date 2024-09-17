@@ -1,14 +1,17 @@
 // app/page.tsx
 "use client";
-import { useMemo, useState } from "react";
-import CheckInOutForm from "../components/checkinoutform";
-import { AuthModal } from "../components/authmodal";
-import { useAuth, AuthProvider } from "../hooks/authContext";
-import Header from "../components/header";
-import AdvancedChecklist from "../components/adv-checklist";
-import Checklist from "../components/checklist";
-import AdminPage from "../components/adminpage";
-import { Switch } from "../components/ui/Switch";
+import { useMemo, useState, lazy, Suspense } from "react";
+import CheckInOutForm from "@/components/checkinoutform";
+import { AuthModal } from "@/components/authmodal";
+import { useAuth, AuthProvider } from "@/hooks/authContext";
+import Header from "@/components/header";
+import { Switch } from "@/components/ui/Switch";
+import { lazyLoad } from "@/utils/lazyLoader";
+
+// Lazy load the components
+const AdvancedChecklist = lazyLoad('adv-checklist')
+const Checklist = lazyLoad('checklist')
+const AdminPage = lazyLoad('adminpage')
 
 function HomeContent() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -39,8 +42,12 @@ function HomeContent() {
           {/* Conditionally Render Checklist based on Toggle */}
           {isAdvanced ? <AdvancedChecklist /> : <Checklist />}
 
-          {/* Render Admin Page only if the user is an admin */}
-          {isAdmin && <AdminPage />}
+          {/* Render Admin Page only if the user is an admin, using Suspense */}
+          {isAdmin && (
+            <Suspense fallback={<div>Loading admin page...</div>}>
+              <AdminPage />
+            </Suspense>
+          )}
         </>
       ) : (
         <></>

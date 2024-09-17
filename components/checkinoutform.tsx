@@ -2,12 +2,12 @@
 "use client";
 
 import { useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { db } from "../lib/instantdb";
+import { db } from "@/lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
-import { useAutoFocus } from "../hooks/useAutoFocus";
-import { useAutoNavigate } from "../hooks/useAutoNavigate";
-import { CheckActionType, performCheckinOut } from "../utils/checkInOut";
-import { useAutoCheckout } from "../hooks/useAutoCheckout";
+import { useAutoFocus } from "@/hooks/useAutoFocus";
+import { useAutoNavigate } from "@/hooks/useAutoNavigate";
+import { CheckActionType, performCheckinOut } from "@/utils/checkInOut";
+import { useAutoCheckout } from "@/hooks/useAutoCheckout";
 
 const ENABLE_AUTO_CLEANUP =
   process.env.NEXT_PUBLIC_ENABLE_AUTO_CLEANUP === "true";

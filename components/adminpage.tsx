@@ -2,11 +2,11 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { tx } from "@instantdb/react";
-import { db } from "../lib/instantdb";
+import { db } from "@/lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
-import { useAutoNavigate } from "../hooks/useAutoNavigate";
-import { useAuth } from "../hooks/authContext";
-import { CheckActionType, performCheckinOut } from "../utils/checkInOut";
+import { useAutoNavigate } from "@/hooks/useAutoNavigate";
+import { useAuth } from "@/hooks/authContext";
+import { CheckActionType, performCheckinOut } from "@/utils/checkInOut";
 
 export default function AdminPage() {
   const [userId, setUserId] = useState(null);

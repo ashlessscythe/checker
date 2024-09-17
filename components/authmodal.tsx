@@ -1,9 +1,9 @@
 // AuthModal.tsx
 import React, { useRef, useEffect, useState } from "react";
-import { db } from "../lib/instantdb";
+import { db } from "@/lib/instantdb";
 import { tx, id } from "@instantdb/react";
-import { useAutoFocus } from "../hooks/useAutoFocus";
-import { useAuth } from "../hooks/authContext";
+import { useAutoFocus } from "@/hooks/useAutoFocus";
+import { useAuth } from "@/hooks/authContext";
 
 interface AuthModalProps {
   isOpen: boolean;
