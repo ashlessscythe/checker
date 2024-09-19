@@ -24,18 +24,24 @@ export default function CheckInsTable() {
     },
   });
 
- const filteredAndSortedPunches = useMemo(() => {
+  const filteredAndSortedPunches = useMemo(() => {
     if (!data || !data.punches) return [];
 
     return data.punches
       .filter((punch) => {
         const nameMatch = filterName
-          ? punch.users[0].name.toLowerCase().includes(filterName.toLowerCase())
+          ? punch.users[0]?.name
+              ?.toLowerCase()
+              .includes(filterName.toLowerCase()) ?? false
           : true;
         const typeMatch = filterType ? punch.type === filterType : true;
         const dateMatch =
-          (filterDateFrom ? punch.timestamp >= new Date(filterDateFrom).getTime() : true) &&
-          (filterDateTo ? punch.timestamp <= new Date(filterDateTo).getTime() : true);
+          (filterDateFrom
+            ? punch.timestamp >= new Date(filterDateFrom).getTime()
+            : true) &&
+          (filterDateTo
+            ? punch.timestamp <= new Date(filterDateTo).getTime()
+            : true);
         return nameMatch && typeMatch && dateMatch;
       })
       .sort((a, b) => {
@@ -53,11 +59,22 @@ export default function CheckInsTable() {
           ? a.timestamp - b.timestamp
           : b.timestamp - a.timestamp;
       });
-  }, [data, filterName, filterType, filterDateFrom, filterDateTo, sortField, sortOrder]);
+  }, [
+    data,
+    filterName,
+    filterType,
+    filterDateFrom,
+    filterDateTo,
+    sortField,
+    sortOrder,
+  ]);
 
   const paginatedPunches = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredAndSortedPunches.slice(startIndex, startIndex + itemsPerPage);
+    return filteredAndSortedPunches.slice(
+      startIndex,
+      startIndex + itemsPerPage
+    );
   }, [filteredAndSortedPunches, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(filteredAndSortedPunches.length / itemsPerPage);
@@ -87,12 +104,12 @@ export default function CheckInsTable() {
     setFilterDateFrom("");
     setFilterDateTo("");
     setCurrentPage(1);
-  }; 
+  };
 
   return (
     <div>
       <h2 className="text-2xl font-bold mb-4">Recent Swipes</h2>
-      
+
       {/* Filters */}
       <div className="mb-4 flex space-x-2">
         <Input
@@ -100,10 +117,7 @@ export default function CheckInsTable() {
           value={filterName}
           onChange={(e) => setFilterName(e.target.value)}
         />
-        <Select
-          value={filterType}
-          onValueChange={(e) => setFilterType(e)}
-        >
+        <Select value={filterType} onValueChange={(e) => setFilterType(e)}>
           <option value="">All Types</option>
           <option value="in">In</option>
           <option value="out">Out</option>
@@ -129,14 +143,28 @@ export default function CheckInsTable() {
           <table className="min-w-full bg-white">
             <thead>
               <tr>
-                <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort("users.name")}>
-                  Name {sortField === "users.name" && (sortOrder === "asc" ? "▲" : "▼")}
+                <th
+                  className="px-4 py-2 cursor-pointer"
+                  onClick={() => handleSort("users.name")}
+                >
+                  Name{" "}
+                  {sortField === "users.name" &&
+                    (sortOrder === "asc" ? "▲" : "▼")}
                 </th>
-                <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort("type")}>
-                  Type {sortField === "type" && (sortOrder === "asc" ? "▲" : "▼")}
+                <th
+                  className="px-4 py-2 cursor-pointer"
+                  onClick={() => handleSort("type")}
+                >
+                  Type{" "}
+                  {sortField === "type" && (sortOrder === "asc" ? "▲" : "▼")}
                 </th>
-                <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort("timestamp")}>
-                  Timestamp {sortField === "timestamp" && (sortOrder === "asc" ? "▲" : "▼")}
+                <th
+                  className="px-4 py-2 cursor-pointer"
+                  onClick={() => handleSort("timestamp")}
+                >
+                  Timestamp{" "}
+                  {sortField === "timestamp" &&
+                    (sortOrder === "asc" ? "▲" : "▼")}
                 </th>
               </tr>
             </thead>
