@@ -6,13 +6,16 @@ import { db } from "@/lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
 import { useAutoNavigate } from "@/hooks/useAutoNavigate";
 import { useAuth } from "@/hooks/authContext";
+import { Eye, EyeOff } from "lucide-react";
 import { CheckActionType, performCheckinOut } from "@/utils/checkInOut";
 
 export default function AdminPage() {
   const [userId, setUserId] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
+  const [editingBarcode, setEditingBarcode] = useState(null);
   const [isClient, setIsClient] = useState(false);
   const { user, isAdmin } = useAuth();
+  const [visibleBarcodes, setVisibleBarcodes] = useState({});
 
   // console.log(`user: ${user}, isAdmin: ${isAdmin}`)
   if (!isAdmin) {
@@ -25,6 +28,17 @@ export default function AdminPage() {
       punches: {},
     },
   });
+
+  const handleBarcodeChange = async (userId, newBarcode) => {
+    try {
+      await db.transact([tx.users[userId].update({ barcode: newBarcode })]);
+      setEditingBarcode(null);
+      toast.success("Barcode updated successfully");
+    } catch (error) {
+      console.error("Error updating barcode:", error);
+      toast.error("Failed to update barcode");
+    }
+  };
 
   const handleNameChange = async (userId, newName) => {
     try {
@@ -47,6 +61,27 @@ export default function AdminPage() {
       console.error("Error toggling admin status:", error);
       toast.error("Failed to update admin status");
     }
+  };
+
+  const makeAuth = async (userId, currentStatus) => {
+    try {
+      await db.transact([tx.users[userId].update({ isAuth: !currentStatus })]);
+      toast.success(
+        `User authorization ${
+          currentStatus ? "revoked" : "granted"
+        } successfully`
+      );
+    } catch (error) {
+      console.error("Error updating auth status:", error);
+      toast.error("Failed to update authorization status");
+    }
+  };
+
+  const toggleBarcodeVisibility = (userId) => {
+    setVisibleBarcodes((prev) => ({
+      ...prev,
+      [userId]: !prev[userId],
+    }));
   };
 
   const forceCheckIn = useCallback(
@@ -73,20 +108,6 @@ export default function AdminPage() {
 
   useAutoNavigate("/"); // Navigate to home after 5 minutes of inactivity
 
-  const makeAuth = async (userId, currentStatus) => {
-    try {
-      await db.transact([tx.users[userId].update({ isAuth: !currentStatus })]);
-      toast.success(
-        `User authorization ${
-          currentStatus ? "revoked" : "granted"
-        } successfully`
-      );
-    } catch (error) {
-      console.error("Error updating auth status:", error);
-      toast.error("Failed to update authorization status");
-    }
-  };
-
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error.message}</div>;
 
@@ -104,6 +125,9 @@ export default function AdminPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Barcode
+                  </th>
                   <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Email
                   </th>
@@ -124,6 +148,38 @@ export default function AdminPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {data.users.map((user) => (
                   <tr key={user.id}>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="flex items-center">
+                        {editingBarcode === user.id ? (
+                          <input
+                            className="border rounded px-2 py-1 w-full mr-2"
+                            defaultValue={user.barcode}
+                            onBlur={(e) =>
+                              handleBarcodeChange(user.id, e.target.value)
+                            }
+                          />
+                        ) : (
+                          <span
+                            className={`mr-2 cursor-pointer ${
+                              visibleBarcodes[user.id] ? "" : "filter blur-sm"
+                            }`}
+                            onClick={() => setEditingBarcode(user.id)}
+                          >
+                            {user.barcode}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => toggleBarcodeVisibility(user.id)}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          {visibleBarcodes[user.id] ? (
+                            <EyeOff size={16} />
+                          ) : (
+                            <Eye size={16} />
+                          )}
+                        </button>
+                      </div>
+                    </td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {user.email}
                     </td>
@@ -166,6 +222,12 @@ export default function AdminPage() {
                     </td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                        <button
+                          onClick={() => setEditingBarcode(user.id)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
+                          Edit Barcode
+                        </button>
                         <button
                           onClick={() => setEditingUser(user.id)}
                           className="text-indigo-600 hover:text-indigo-900"
