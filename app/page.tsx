@@ -1,6 +1,6 @@
 // app/page.tsx
 "use client";
-import { useMemo, useState, lazy, Suspense } from "react";
+import { useMemo, useState, Suspense } from "react";
 import CheckInOutForm from "@/components/checkinoutform";
 import { AuthModal } from "@/components/authmodal";
 import { useAuth, AuthProvider } from "@/hooks/authContext";
@@ -10,17 +10,19 @@ import ToggleSection from "@/components/toggle-section";
 import { lazyLoad } from "@/utils/lazyLoader";
 
 // Lazy load the components
-const AdvancedChecklist = lazyLoad('adv-checklist')
-const Checklist = lazyLoad('checklist')
-const AdminPage = lazyLoad('adminpage')
+const AdvancedChecklist = lazyLoad("adv-checklist");
+const Checklist = lazyLoad("checklist");
+const AdminPage = lazyLoad("adminpage");
+const CheckInsTable = lazyLoad("checkinstable");
 
 function HomeContent() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAdvanced, setIsAdvanced] = useState(false);
   const { isAuthenticated, isAdmin, isAuthorized } = useAuth();
 
-  const [showChecklist, setShowChecklist] = useState(false)
-  const [showAdminPage, setShowAdminPage] = useState(false)
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [showCheckins, setShowCheckins] = useState(false);
+  const [showAdminPage, setShowAdminPage] = useState(false);
 
   const shouldFocusCheckInOut = useMemo(() => {
     return !isAuthModalOpen && !isAuthenticated;
@@ -34,15 +36,15 @@ function HomeContent() {
         <CheckInOutForm shouldFocus={shouldFocusCheckInOut} />
       </div>
 
-     {/* Only render toggles if the user is authenticated or is an admin */}
+      {/* Only render toggles if the user is authenticated or is an admin */}
       {(isAuthenticated || isAdmin) && (
         <div className="space-y-4 mt-4">
           <ToggleSection
-            title="Show Checklist"
+            title="Show FireDrill Checklist"
             isOpen={showChecklist}
             onToggle={() => setShowChecklist(!showChecklist)}
           />
-          
+
           {showChecklist && (
             <div className="ml-4">
               <div className="flex items-center space-x-2 mb-4">
@@ -50,6 +52,18 @@ function HomeContent() {
                 <Switch isChecked={isAdvanced} onChange={setIsAdvanced} />
               </div>
               {isAdvanced ? <AdvancedChecklist /> : <Checklist />}
+            </div>
+          )}
+
+          <ToggleSection
+            title="Show Checkins History"
+            isOpen={showCheckins}
+            onToggle={() => setShowCheckins(!showCheckins)}
+          />
+
+          {showCheckins && (
+            <div className="ml-4">
+              <CheckInsTable />
             </div>
           )}
 
@@ -70,7 +84,7 @@ function HomeContent() {
             </>
           )}
         </div>
-      )} 
+      )}
 
       <AuthModal
         isOpen={isAuthModalOpen}
