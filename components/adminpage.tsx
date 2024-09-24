@@ -1,13 +1,16 @@
 // components/AdminPage.tsx
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { tx } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
 import { useAutoNavigate } from "@/hooks/useAutoNavigate";
 import { useAuth } from "@/hooks/authContext";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Search } from "lucide-react";
 import { CheckActionType, performCheckinOut } from "@/utils/checkInOut";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import { Select } from "./ui/select";
 
 export default function AdminPage() {
   const [userId, setUserId] = useState(null);
@@ -16,6 +19,9 @@ export default function AdminPage() {
   const [isClient, setIsClient] = useState(false);
   const { user, isAdmin } = useAuth();
   const [visibleBarcodes, setVisibleBarcodes] = useState({});
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // console.log(`user: ${user}, isAdmin: ${isAdmin}`)
   if (!isAdmin) {
@@ -28,6 +34,23 @@ export default function AdminPage() {
       punches: {},
     },
   });
+
+  const filteredUsers = useMemo(() => {
+    if (!data?.users) return [];
+    return data.users.filter(
+      (user) =>
+        user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.barcode?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [data?.users, searchTerm]);
+
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredUsers.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredUsers, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
 
   const handleBarcodeChange = async (userId, newBarcode) => {
     try {
@@ -117,11 +140,27 @@ export default function AdminPage() {
       <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-gray-800">
         Admin Page
       </h1>
+      <div className="mb-4 flex items-center space-x-4">
+        <div className="relative w-1/3">
+          <Input
+            type="text"
+            placeholder="Search users..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 pr-4 py-2 border rounded-md"
+          />
+          <Search
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+            size={20}
+          />
+        </div>
+        <span className="text-sm text-gray-600">
+          Search by name, email, or barcode
+        </span>
+      </div>
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <div className="max-h-[800px] overflow-y-auto">
-            {" "}
-            {/* Adjust max-height as needed */}
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
@@ -146,14 +185,14 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {data.users.map((user) => (
+                {paginatedUsers.map((user) => (
                   <tr key={user.id}>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex items-center">
                         {editingBarcode === user.id ? (
                           <input
                             className="border rounded px-2 py-1 w-full mr-2"
-                            defaultValue={user.barcode}
+                            defaultValue={user.barcode ?? ""}
                             onBlur={(e) =>
                               handleBarcodeChange(user.id, e.target.value)
                             }
@@ -165,7 +204,7 @@ export default function AdminPage() {
                             }`}
                             onClick={() => setEditingBarcode(user.id)}
                           >
-                            {user.barcode}
+                            {user.barcode ?? "N/A"}
                           </span>
                         )}
                         <button
@@ -181,20 +220,20 @@ export default function AdminPage() {
                       </div>
                     </td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.email}
+                      {user.email ?? "N/A"}
                     </td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                       {editingUser === user.id ? (
                         <input
                           className="border rounded px-2 py-1 w-full"
-                          defaultValue={user.name}
+                          defaultValue={user.name ?? ""}
                           onBlur={(e) =>
                             handleNameChange(user.id, e.target.value)
                           }
                         />
                       ) : (
                         <span className="text-sm font-medium text-gray-900">
-                          {user.name}
+                          {user.name ?? "N/A"}
                         </span>
                       )}
                     </td>
@@ -268,6 +307,38 @@ export default function AdminPage() {
             </table>
           </div>
         </div>
+      </div>
+      <div className="mt-4 flex justify-between items-center">
+        <div>
+          <Button
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </Button>
+          <span className="mx-2">
+            Page {currentPage} of {totalPages}
+          </span>
+          <Button
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+            }
+            disabled={currentPage === totalPages}
+          >
+            Next
+          </Button>
+        </div>
+        <Select
+          value={itemsPerPage.toString()}
+          onValueChange={(e) => {
+            setItemsPerPage(Number(e));
+            setCurrentPage(1);
+          }}
+        >
+          <option value="10">10 per page</option>
+          <option value="20">20 per page</option>
+          <option value="50">50 per page</option>
+        </Select>
       </div>
     </div>
   );

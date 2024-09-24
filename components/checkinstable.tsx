@@ -46,9 +46,11 @@ export default function CheckInsTable() {
       })
       .sort((a, b) => {
         if (sortField === "users.name") {
+          const nameA = a.users[0]?.name ?? "";
+          const nameB = b.users[0]?.name ?? "";
           return sortOrder === "asc"
-            ? a.users[0].name.localeCompare(b.users[0].name)
-            : b.users[0].name.localeCompare(a.users[0].name);
+            ? nameA.localeCompare(nameB)
+            : nameB.localeCompare(nameA);
         }
         if (sortField === "type") {
           return sortOrder === "asc"
@@ -171,7 +173,9 @@ export default function CheckInsTable() {
             <tbody>
               {paginatedPunches.map((punch) => (
                 <tr key={punch.id}>
-                  <td className="border px-4 py-2">{punch.users[0].name}</td>
+                  <td className="border px-4 py-2">
+                    {punch.users[0]?.name ?? "Unknown User"}
+                  </td>
                   <td className="border px-4 py-2">{punch.type}</td>
                   <td className="border px-4 py-2">
                     {format(new Date(punch.timestamp), "yyyy-MM-dd HH:mm:ss")}
