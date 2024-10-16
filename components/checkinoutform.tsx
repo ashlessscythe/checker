@@ -12,13 +12,13 @@ import { useAutoCheckout } from "@/hooks/useAutoCheckout";
 const ENABLE_AUTO_CLEANUP =
   process.env.NEXT_PUBLIC_ENABLE_AUTO_CLEANUP === "true";
 
+const DEBOUNCE_TIMEOUT =
+  Number(process.env.NEXT_PUBLIC_DEBOUNCE_TIMEOUT) || 5000; // Default to 5 seconds if not set
+
 // Add the extractUserId function
 function extractUserId(scannedId: string) {
   // Check if the scannedId contains any alphabetic characters
   if (/[a-zA-Z]/.test(scannedId)) {
-    // console.log(
-    //   `Scanned ID contains alphabetic characters. Returning original: ${scannedId}`
-    // );
     return scannedId;
   }
 
@@ -56,12 +56,8 @@ function extractUserId(scannedId: string) {
   }
 
   if (bestMatch.match) {
-    // console.log(`Extracted ID: ${bestMatch.match}`);
     return bestMatch.match;
   } else {
-    // console.log(
-    //   `Nothing was extracted from scannedId: ${scannedId}. Returning the original scannedId.`
-    // );
     return scannedId;
   }
 }
@@ -72,6 +68,8 @@ interface CheckInOutFormProps {
 
 export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
   const [barcode, setBarcode] = useState("");
+  const [lastScanTime, setLastScanTime] = useState(0);
+  const [lastScannedBarcode, setLastScannedBarcode] = useState("");
   const inputRef = useAutoFocus(shouldFocus);
 
   // Fetch users with their punches
@@ -105,8 +103,38 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
     return data.users.find((u) => u.barcode === extractedId);
   }, [data, barcode]);
 
+  const isDoubleScan = useCallback(
+    (currentBarcode: string) => {
+      const currentTime = Date.now();
+      if (
+        currentBarcode === lastScannedBarcode &&
+        currentTime - lastScanTime < DEBOUNCE_TIMEOUT
+      ) {
+        return true;
+      }
+      setLastScanTime(currentTime);
+      setLastScannedBarcode(currentBarcode);
+      return false;
+    },
+    [lastScanTime, lastScannedBarcode]
+  );
+
   const handleCheckInOut = useCallback(async () => {
     if (isLoading || !barcode || !data) return;
+
+    const extractedId = extractUserId(barcode);
+    if (isDoubleScan(extractedId)) {
+      toast.error("DOUBLE SCAN, SLOW DOWN 🛑", {
+        duration: 3000,
+        style: {
+          borderRadius: "10px",
+          background: "#333",
+          color: "#fff",
+        },
+      });
+      setBarcode("");
+      return;
+    }
 
     const user = findUser;
     if (!user) {
@@ -124,7 +152,7 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
 
     await performCheckinOut(user);
     setBarcode("");
-  }, [isLoading, barcode, data, findUser]);
+  }, [isLoading, barcode, data, findUser, isDoubleScan]);
 
   if (isLoading) {
     return <div>Loading...</div>;
@@ -156,7 +184,7 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           onKeyPress={(e) => e.key === "Enter" && handleCheckInOut()}
-          placeholder="Scan barcode..."
+          placeholder="Use your badge..."
           className="w-full p-2 mb-4 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
         />
         <button
