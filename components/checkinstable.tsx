@@ -15,71 +15,43 @@ export default function CheckInsTable() {
   const [filterType, setFilterType] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+  const [endCursor, setEndCursor] = useState(null);
 
   useAutoNavigate("/", 5 * 60 * 1000);
 
-  const { data, isLoading, error } = db.useQuery({
+  const { data, isLoading, error, pageInfo } = db.useQuery({
     punches: {
+      $: {
+        first: itemsPerPage,
+        after: endCursor,
+        order: {
+          serverCreatedAt: "desc",
+        },
+      },
       users: {},
     },
   });
 
-  const filteredAndSortedPunches = useMemo(() => {
+  const filteredPunches = useMemo(() => {
     if (!data || !data.punches) return [];
 
-    return data.punches
-      .filter((punch) => {
-        const nameMatch = filterName
-          ? punch.users[0]?.name
-              ?.toLowerCase()
-              .includes(filterName.toLowerCase()) ?? false
-          : true;
-        const typeMatch = filterType ? punch.type === filterType : true;
-        const dateMatch =
-          (filterDateFrom
-            ? punch.timestamp >= new Date(filterDateFrom).getTime()
-            : true) &&
-          (filterDateTo
-            ? punch.timestamp <= new Date(filterDateTo).getTime()
-            : true);
-        return nameMatch && typeMatch && dateMatch;
-      })
-      .sort((a, b) => {
-        if (sortField === "users.name") {
-          const nameA = a.users[0]?.name ?? "";
-          const nameB = b.users[0]?.name ?? "";
-          return sortOrder === "asc"
-            ? nameA.localeCompare(nameB)
-            : nameB.localeCompare(nameA);
-        }
-        if (sortField === "type") {
-          return sortOrder === "asc"
-            ? a.type.localeCompare(b.type)
-            : b.type.localeCompare(a.type);
-        }
-        return sortOrder === "asc"
-          ? a.timestamp - b.timestamp
-          : b.timestamp - a.timestamp;
-      });
-  }, [
-    data,
-    filterName,
-    filterType,
-    filterDateFrom,
-    filterDateTo,
-    sortField,
-    sortOrder,
-  ]);
-
-  const paginatedPunches = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredAndSortedPunches.slice(
-      startIndex,
-      startIndex + itemsPerPage
-    );
-  }, [filteredAndSortedPunches, currentPage, itemsPerPage]);
-
-  const totalPages = Math.ceil(filteredAndSortedPunches.length / itemsPerPage);
+    return data.punches.filter((punch) => {
+      const nameMatch = filterName
+        ? punch.users[0]?.name
+            ?.toLowerCase()
+            .includes(filterName.toLowerCase()) ?? false
+        : true;
+      const typeMatch = filterType ? punch.type === filterType : true;
+      const dateMatch =
+        (filterDateFrom
+          ? punch.timestamp >= new Date(filterDateFrom).getTime()
+          : true) &&
+        (filterDateTo
+          ? punch.timestamp <= new Date(filterDateTo).getTime()
+          : true);
+      return nameMatch && typeMatch && dateMatch;
+    });
+  }, [data, filterName, filterType, filterDateFrom, filterDateTo]);
 
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error.message}</div>;
@@ -94,9 +66,12 @@ export default function CheckInsTable() {
       setSortField(field);
       setSortOrder("asc");
     }
+    setEndCursor(null);
+    setCurrentPage(1);
   };
 
   const handleFilter = () => {
+    setEndCursor(null);
     setCurrentPage(1);
   };
 
@@ -105,7 +80,15 @@ export default function CheckInsTable() {
     setFilterType("");
     setFilterDateFrom("");
     setFilterDateTo("");
+    setEndCursor(null);
     setCurrentPage(1);
+  };
+
+  const loadMore = () => {
+    if (pageInfo?.punches?.endCursor) {
+      setEndCursor(pageInfo.punches.endCursor);
+      setCurrentPage(currentPage + 1);
+    }
   };
 
   return (
@@ -138,7 +121,7 @@ export default function CheckInsTable() {
         <Button onClick={handleClearFilters}>Clear Filters</Button>
       </div>
 
-      {paginatedPunches.length === 0 ? (
+      {filteredPunches.length === 0 ? (
         <p>No punches recorded.</p>
       ) : (
         <>
@@ -171,7 +154,7 @@ export default function CheckInsTable() {
               </tr>
             </thead>
             <tbody>
-              {paginatedPunches.map((punch) => (
+              {filteredPunches.map((punch) => (
                 <tr key={punch.id}>
                   <td className="border px-4 py-2">
                     {punch.users[0]?.name ?? "Unknown User"}
@@ -185,29 +168,20 @@ export default function CheckInsTable() {
             </tbody>
           </table>
 
-          {/* Pagination */}
-          <div className="mt-4 flex justify-between items-center">
-            <div>
-              <Button
-                onClick={() => setCurrentPage(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              <span className="mx-2">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                onClick={() => setCurrentPage(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </Button>
+          {/* Load More Button */}
+          {pageInfo?.punches?.hasNextPage && (
+            <div className="mt-4 flex justify-center">
+              <Button onClick={loadMore}>Load More</Button>
             </div>
+          )}
+
+          {/* Items per page selector */}
+          <div className="mt-4 flex justify-end">
             <Select
               value={itemsPerPage.toString()}
               onValueChange={(e) => {
                 setItemsPerPage(Number(e));
+                setEndCursor(null);
                 setCurrentPage(1);
               }}
             >
