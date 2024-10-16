@@ -91,6 +91,13 @@ export default function CheckInsTable() {
     }
   };
 
+  const loadPrevious = () => {
+    if (currentPage > 1) {
+      setEndCursor(null);
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
   return (
     <div>
       <h2 className="text-2xl font-bold mb-4">Recent Swipes</h2>
@@ -168,12 +175,19 @@ export default function CheckInsTable() {
             </tbody>
           </table>
 
-          {/* Load More Button */}
-          {pageInfo?.punches?.hasNextPage && (
-            <div className="mt-4 flex justify-center">
-              <Button onClick={loadMore}>Load More</Button>
-            </div>
-          )}
+          {/* Pagination */}
+          <div className="mt-4 flex justify-between items-center">
+            <Button onClick={loadPrevious} disabled={currentPage === 1}>
+              Previous
+            </Button>
+            <span>Page {currentPage}</span>
+            <Button
+              onClick={loadMore}
+              disabled={!pageInfo?.punches?.hasNextPage}
+            >
+              Next
+            </Button>
+          </div>
 
           {/* Items per page selector */}
           <div className="mt-4 flex justify-end">
@@ -187,7 +201,6 @@ export default function CheckInsTable() {
             >
               <option value={10}>10 per page</option>
               <option value={20}>20 per page</option>
-              <option value={50}>50 per page</option>
             </Select>
           </div>
         </>
