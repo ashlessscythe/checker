@@ -13,6 +13,7 @@ import { lazyLoad } from "@/utils/lazyLoader";
 const AdvancedChecklist = lazyLoad("adv-checklist");
 const Checklist = lazyLoad("checklist");
 const AdminPage = lazyLoad("adminpage");
+const BackupPage = lazyLoad("backuppage");
 const CheckInsTable = lazyLoad("checkinstable");
 
 function HomeContent() {
@@ -23,6 +24,7 @@ function HomeContent() {
   const [showChecklist, setShowChecklist] = useState(false);
   const [showCheckins, setShowCheckins] = useState(false);
   const [showAdminPage, setShowAdminPage] = useState(false);
+  const [showBackupPage, setShowBackupPage] = useState(false);
 
   const shouldFocusCheckInOut = useMemo(() => {
     return !isAuthModalOpen && !isAuthenticated;
@@ -78,6 +80,19 @@ function HomeContent() {
                 <div className="ml-4">
                   <Suspense fallback={<div>Loading admin page...</div>}>
                     <AdminPage />
+                  </Suspense>
+                </div>
+              )}
+
+              <ToggleSection
+                title="Show Backup & Archive"
+                isOpen={showBackupPage}
+                onToggle={() => setShowBackupPage(!showBackupPage)}
+              />
+              {showBackupPage && (
+                <div className="ml-4">
+                  <Suspense fallback={<div>Loading backup page...</div>}>
+                    <BackupPage />
                   </Suspense>
                 </div>
               )}

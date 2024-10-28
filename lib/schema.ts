@@ -23,6 +23,11 @@ const graph = i.graph(
       name: i.string(),
       departmentId: i.string(), // This corresponds to the deptId in users
     }),
+    backups: i.entity({
+      // backups stuffs
+      timestamp: i.number(),
+      type: i.string(),
+    }),
   },
   {
     userPunches: {
