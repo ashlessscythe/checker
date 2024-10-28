@@ -4,3 +4,4 @@ node_modules/
 .env.local
 schema/
 script/
+docs/
