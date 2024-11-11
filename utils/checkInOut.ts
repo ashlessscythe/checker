@@ -76,7 +76,10 @@ export async function performCheckinOut(user: any, force?: ForceAction) {
 
   if (force) {
     actionType = force;
-    isSystemAction = force === CheckActionType.SystemCheckOut;
+    isSystemAction = [
+      CheckActionType.SystemCheckOut,
+      CheckActionType.SystemCheckIn,
+    ].includes(force);
     isAdminAction =
       force === CheckActionType.AdminCheckIn ||
       force === CheckActionType.AdminCheckOut;
