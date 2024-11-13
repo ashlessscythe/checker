@@ -22,10 +22,47 @@ const TABLES = [
   { value: "backups", label: "Backups" },
 ];
 
+// Convert UTC timestamp to MST ISO8601
+const convertToMST = (timestamp) => {
+  const date = new Date(timestamp);
+  return (
+    date
+      .toLocaleString("sv", { timeZone: "America/Denver" })
+      .replace(" ", "T") + "-07:00"
+  );
+};
+
+// Add local timestamps to an item and its nested punches
+const addLocalTimestamps = (item) => {
+  const processedItem = { ...item };
+
+  // Handle top-level timestamps
+  if (processedItem.timestamp) {
+    processedItem.timestampLocal = convertToMST(processedItem.timestamp);
+  }
+  if (processedItem.lastLoginAt) {
+    processedItem.lastLoginLocal = convertToMST(processedItem.lastLoginAt);
+  }
+
+  // Handle nested punches array if it exists
+  if (Array.isArray(processedItem.punches)) {
+    processedItem.punches = processedItem.punches.map((punch) => {
+      const processedPunch = { ...punch };
+      if (processedPunch.timestamp) {
+        processedPunch.timestampLocal = convertToMST(processedPunch.timestamp);
+      }
+      return processedPunch;
+    });
+  }
+
+  return processedItem;
+};
+
 // Sample data showing direct fields only
 const SAMPLE_DATA = {
   users: {
-    timestamp: new Date().toISOString(),
+    timestamp: Date.now(),
+    timestampLocal: convertToMST(Date.now()),
     table: "users",
     note: "Basic user fields for restore",
     data: [
@@ -36,11 +73,21 @@ const SAMPLE_DATA = {
         isAdmin: false,
         isAuth: true,
         deptId: "dept1",
+        lastLoginAt: Date.now(),
+        lastLoginLocal: convertToMST(Date.now()),
+        punches: [
+          {
+            type: "checkin",
+            timestamp: Date.now(),
+            timestampLocal: convertToMST(Date.now()),
+          },
+        ],
       },
     ],
   },
   departments: {
-    timestamp: new Date().toISOString(),
+    timestamp: Date.now(),
+    timestampLocal: convertToMST(Date.now()),
     table: "departments",
     note: "Department fields",
     data: [
@@ -51,13 +98,15 @@ const SAMPLE_DATA = {
     ],
   },
   punches: {
-    timestamp: new Date().toISOString(),
+    timestamp: Date.now(),
+    timestampLocal: convertToMST(Date.now()),
     table: "punches",
     note: "Punch fields with userId",
     data: [
       {
         type: "checkin",
         timestamp: Date.now(),
+        timestampLocal: convertToMST(Date.now()),
         userId: "user123",
       },
     ],
@@ -150,8 +199,12 @@ export default function BackupPage() {
           return itemDate >= start && itemDate <= end;
         });
 
+        // Add local timestamps while preserving original timestamps
+        const dataWithLocalTime = filteredData.map(addLocalTimestamps);
+
         exportData = {
-          timestamp: new Date().toISOString(),
+          timestamp: Date.now(),
+          timestampLocal: convertToMST(Date.now()),
           table: selectedTable,
           note:
             selectedTable === "users"
@@ -162,17 +215,21 @@ export default function BackupPage() {
             end: endDate,
             note: "Date range is inclusive",
           },
-          data: filteredData,
+          data: dataWithLocalTime,
         };
       } else {
+        // Add local timestamps while preserving original timestamps
+        const dataWithLocalTime = data[selectedTable].map(addLocalTimestamps);
+
         exportData = {
-          timestamp: new Date().toISOString(),
+          timestamp: Date.now(),
+          timestampLocal: convertToMST(Date.now()),
           table: selectedTable,
           note:
             selectedTable === "users"
               ? "Includes punches for viewing only"
               : "Direct table fields",
-          data: data[selectedTable],
+          data: dataWithLocalTime,
         };
       }
 
@@ -233,6 +290,9 @@ export default function BackupPage() {
         delete itemData.department;
         delete itemData.users;
         delete itemData.user;
+        // Remove local timestamp fields before restore
+        delete itemData.timestampLocal;
+        delete itemData.lastLoginLocal;
         return tx[selectedTable][tx_id].update(itemData);
       });
 
