@@ -1,6 +1,9 @@
 "use client";
 import Link from "next/link";
 import { useAuth } from "../hooks/authContext";
+import { useAutoNavigate } from "@/hooks/useAutoNavigate";
+
+const RELOAD_MINUTES = process.env.NEXT_PUBLIC_AUTO_RELOAD_MINUTES || "5";
 
 interface HeaderProps {
   setIsAuthModalOpen: (isOpen: boolean) => void;
@@ -19,6 +22,9 @@ export default function Header({ setIsAuthModalOpen }: HeaderProps) {
     window.location.reload();
   };
 
+  // reload page every so often
+  useAutoNavigate("/", parseInt(RELOAD_MINUTES, 10) * 60 * 1000, true);
+
   return (
     <>
       <header className="flex justify-between items-center mb-8">
@@ -27,6 +33,9 @@ export default function Header({ setIsAuthModalOpen }: HeaderProps) {
           className="text-2xl font-bold hover:text-gray-700 transition-colors cursor-pointer"
         >
           Check-In System
+          <span className="block text-sm text-gray-500">
+            Press here to reload if there's an error
+          </span>
         </button>
         {isAuthenticated ? (
           <div className="flex items-center space-x-4">
