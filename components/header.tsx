@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useAuth } from "@/hooks/authContext";
+import { useAuth } from "../hooks/authContext";
 
 interface HeaderProps {
   setIsAuthModalOpen: (isOpen: boolean) => void;
@@ -15,10 +15,19 @@ export default function Header({ setIsAuthModalOpen }: HeaderProps) {
     window.location.href = "/"; // Redirect to home after logout
   };
 
+  const handleRefresh = () => {
+    window.location.reload();
+  };
+
   return (
     <>
       <header className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold">Check-In System</h1>
+        <button
+          onClick={handleRefresh}
+          className="text-2xl font-bold hover:text-gray-700 transition-colors cursor-pointer"
+        >
+          Check-In System
+        </button>
         {isAuthenticated ? (
           <div className="flex items-center space-x-4">
             <span>Welcome, {user?.email}</span>
