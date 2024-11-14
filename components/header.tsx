@@ -33,8 +33,8 @@ export default function Header({ setIsAuthModalOpen }: HeaderProps) {
           className="text-2xl font-bold hover:text-gray-700 transition-colors cursor-pointer"
         >
           Check-In System
-          <span className="block text-sm text-gray-500">
-            Press here to reload if there's an error
+          <span className="block text-sm text-green-500">
+            Press here to reload
           </span>
         </button>
         {isAuthenticated ? (
