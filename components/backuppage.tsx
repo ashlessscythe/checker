@@ -337,12 +337,16 @@ export default function BackupPage() {
           <h2 className="text-xl font-semibold mb-4">Select Table</h2>
           <div className="space-y-4 mb-4">
             <Select value={selectedTable} onValueChange={setSelectedTable}>
-              <SelectTrigger>
+              <SelectTrigger className="text-foreground bg-white border border-border shadow-md rounded-sm">
                 <SelectValue placeholder="Select table" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="text-foreground bg-white border border-border shadow-md rounded-sm">
                 {TABLES.map((table) => (
-                  <SelectItem key={table.value} value={table.value}>
+                  <SelectItem
+                    key={table.value}
+                    value={table.value}
+                    className="hover:bg-gray-100 cursor-pointer px-2 py-1 rounded-md"
+                  >
                     {table.label}
                   </SelectItem>
                 ))}

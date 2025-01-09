@@ -15,6 +15,7 @@ export default function CheckInsTable() {
   const [filterType, setFilterType] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+  const [cursors, setCursors] = useState([null]); // Array to store cursors for each page
   const [endCursor, setEndCursor] = useState(null);
 
   useAutoNavigate("/", 5 * 60 * 1000);
@@ -66,11 +67,13 @@ export default function CheckInsTable() {
       setSortField(field);
       setSortOrder("asc");
     }
+    setCursors([null]);
     setEndCursor(null);
     setCurrentPage(1);
   };
 
   const handleFilter = () => {
+    setCursors([null]);
     setEndCursor(null);
     setCurrentPage(1);
   };
@@ -80,20 +83,27 @@ export default function CheckInsTable() {
     setFilterType("");
     setFilterDateFrom("");
     setFilterDateTo("");
+    setCursors([null]);
     setEndCursor(null);
     setCurrentPage(1);
   };
 
   const loadMore = () => {
     if (pageInfo?.punches?.endCursor) {
-      setEndCursor(pageInfo.punches.endCursor);
+      const newCursor = pageInfo.punches.endCursor;
+      setCursors((prev) => [...prev, newCursor]); // Add new cursor to history
+      setEndCursor(newCursor);
       setCurrentPage(currentPage + 1);
     }
   };
 
   const loadPrevious = () => {
     if (currentPage > 1) {
-      setEndCursor(null);
+      const previousCursors = [...cursors];
+      previousCursors.pop(); // Remove current cursor
+      const previousCursor = previousCursors[previousCursors.length - 1]; // Get last cursor
+      setCursors(previousCursors);
+      setEndCursor(previousCursor);
       setCurrentPage(currentPage - 1);
     }
   };
@@ -195,6 +205,7 @@ export default function CheckInsTable() {
               value={itemsPerPage.toString()}
               onValueChange={(e) => {
                 setItemsPerPage(Number(e));
+                setCursors([null]);
                 setEndCursor(null);
                 setCurrentPage(1);
               }}
