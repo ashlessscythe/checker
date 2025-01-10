@@ -1,11 +1,9 @@
 // app/layout.tsx
+"use client";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
-
-export const metadata = {
-  title: "Check In/Out App",
-  description: "A simple check in/out application",
-};
+import { AuthProvider } from "@/hooks/authContext";
+import { DbProvider } from "@/components/providers/db-provider";
 
 export default function RootLayout({
   children,
@@ -15,7 +13,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-gray-100 dark:bg-gray-900">
-        {children}
+        <AuthProvider>
+          <DbProvider>{children}</DbProvider>
+          <Toaster position="top-right" />
+        </AuthProvider>
       </body>
     </html>
   );
