@@ -60,7 +60,6 @@ export const checkOutTypes = new Set([
 
 // Define a type for the force parameter
 type ForceAction = CheckActionType | undefined;
-``;
 
 export async function performCheckinOut(user: any, force?: ForceAction) {
   if (!user) {

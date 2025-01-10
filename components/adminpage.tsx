@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { tx } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
+import { useCreateUser } from "@/hooks/useCreateUser";
 import toast, { Toaster } from "react-hot-toast";
 import { useAutoNavigate } from "@/hooks/useAutoNavigate";
 import { useAuth } from "@/hooks/authContext";
@@ -22,6 +23,19 @@ export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newUser, setNewUser] = useState({
+    name: "",
+    email: "",
+    barcode: "",
+    isAdmin: false,
+  });
+
+  const {
+    createUser,
+    isLoading: isCreating,
+    error: createError,
+  } = useCreateUser();
 
   // console.log(`user: ${user}, isAdmin: ${isAdmin}`)
   if (!isAdmin) {
@@ -140,24 +154,103 @@ export default function AdminPage() {
       <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-gray-800">
         Admin Page
       </h1>
-      <div className="mb-4 flex items-center space-x-4">
-        <div className="relative w-1/3">
-          <Input
-            type="text"
-            placeholder="Search users..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2 border rounded-md"
-          />
-          <Search
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-            size={20}
-          />
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <div className="relative w-1/3">
+            <Input
+              type="text"
+              placeholder="Search users..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 border rounded-md"
+            />
+            <Search
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              size={20}
+            />
+          </div>
+          <span className="text-sm text-gray-600">
+            Search by name, email, or barcode
+          </span>
         </div>
-        <span className="text-sm text-gray-600">
-          Search by name, email, or barcode
-        </span>
+        <Button
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className="bg-green-600 hover:bg-green-700 text-white"
+        >
+          {showCreateForm ? "Cancel" : "Create User"}
+        </Button>
       </div>
+
+      {showCreateForm && (
+        <div className="mb-6 p-4 bg-white rounded-lg shadow">
+          <h2 className="text-xl font-semibold mb-4">Create New User</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              placeholder="Name"
+              value={newUser.name}
+              onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+            />
+            <Input
+              placeholder="Email"
+              type="email"
+              value={newUser.email}
+              onChange={(e) =>
+                setNewUser({ ...newUser, email: e.target.value })
+              }
+            />
+            <Input
+              placeholder="Barcode"
+              value={newUser.barcode}
+              onChange={(e) =>
+                setNewUser({ ...newUser, barcode: e.target.value })
+              }
+            />
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="isAdmin"
+                checked={newUser.isAdmin}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, isAdmin: e.target.checked })
+                }
+                className="rounded border-gray-300"
+              />
+              <label htmlFor="isAdmin">Is Admin</label>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end space-x-2">
+            <Button
+              onClick={async () => {
+                try {
+                  await createUser(newUser);
+                  setNewUser({
+                    name: "",
+                    email: "",
+                    barcode: "",
+                    isAdmin: false,
+                  });
+                  setShowCreateForm(false);
+                  toast.success("User created successfully");
+                } catch (err) {
+                  toast.error("Failed to create user");
+                }
+              }}
+              disabled={
+                isCreating ||
+                !newUser.name ||
+                !newUser.email ||
+                !newUser.barcode
+              }
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isCreating ? "Creating..." : "Create"}
+            </Button>
+          </div>
+          {createError && (
+            <p className="mt-2 text-sm text-red-600">{createError}</p>
+          )}
+        </div>
+      )}
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <div className="max-h-[800px] overflow-y-auto">
