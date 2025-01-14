@@ -58,6 +58,53 @@ export const checkOutTypes = new Set([
   CheckActionType.SystemCheckOut,
 ]);
 
+// Extract user ID from scanned barcode
+export function extractUserId(scannedId: string) {
+  // Check if the scannedId contains any alphabetic characters
+  if (/[a-zA-Z]/.test(scannedId)) {
+    return scannedId;
+  }
+
+  const patterns = [
+    { prefix: "100", length: 9 },
+    { prefix: "21", length: 8 },
+    { prefix: "20", length: 8 },
+    { prefix: "104", length: 9 },
+    { prefix: "600", length: 9 },
+  ];
+
+  let bestMatch = { match: "", startIndex: Infinity, length: 0 };
+
+  for (const pattern of patterns) {
+    let startIndex = scannedId.indexOf(pattern.prefix);
+    while (startIndex !== -1) {
+      if (startIndex + pattern.length <= scannedId.length) {
+        const possibleMatch = scannedId.substr(startIndex, pattern.length);
+
+        if (
+          startIndex < bestMatch.startIndex ||
+          (startIndex === bestMatch.startIndex &&
+            pattern.length > bestMatch.length)
+        ) {
+          bestMatch = {
+            match: possibleMatch,
+            startIndex: startIndex,
+            length: pattern.length,
+          };
+        }
+      }
+
+      startIndex = scannedId.indexOf(pattern.prefix, startIndex + 1);
+    }
+  }
+
+  if (bestMatch.match) {
+    return bestMatch.match;
+  } else {
+    return scannedId;
+  }
+}
+
 // Define a type for the force parameter
 type ForceAction = CheckActionType | undefined;
 

@@ -6,61 +6,19 @@ import { db } from "@/lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useAutoNavigate } from "@/hooks/useAutoNavigate";
-import { CheckActionType, performCheckinOut } from "@/utils/checkInOut";
+import {
+  CheckActionType,
+  performCheckinOut,
+  extractUserId,
+} from "@/utils/checkInOut";
 import { useAutoCheckout } from "@/hooks/useAutoCheckout";
+import SwipesModal from "./swipes-modal";
 
 const ENABLE_AUTO_CLEANUP =
   process.env.NEXT_PUBLIC_ENABLE_AUTO_CLEANUP === "true";
 
 const DEBOUNCE_TIMEOUT =
   Number(process.env.NEXT_PUBLIC_DEBOUNCE_TIMEOUT) || 5000; // Default to 5 seconds if not set
-
-// Add the extractUserId function
-function extractUserId(scannedId: string) {
-  // Check if the scannedId contains any alphabetic characters
-  if (/[a-zA-Z]/.test(scannedId)) {
-    return scannedId;
-  }
-
-  const patterns = [
-    { prefix: "100", length: 9 },
-    { prefix: "21", length: 8 },
-    { prefix: "20", length: 8 },
-    { prefix: "104", length: 9 },
-    { prefix: "600", length: 9 },
-  ];
-
-  let bestMatch = { match: "", startIndex: Infinity, length: 0 };
-
-  for (const pattern of patterns) {
-    let startIndex = scannedId.indexOf(pattern.prefix);
-    while (startIndex !== -1) {
-      if (startIndex + pattern.length <= scannedId.length) {
-        const possibleMatch = scannedId.substr(startIndex, pattern.length);
-
-        if (
-          startIndex < bestMatch.startIndex ||
-          (startIndex === bestMatch.startIndex &&
-            pattern.length > bestMatch.length)
-        ) {
-          bestMatch = {
-            match: possibleMatch,
-            startIndex: startIndex,
-            length: pattern.length,
-          };
-        }
-      }
-
-      startIndex = scannedId.indexOf(pattern.prefix, startIndex + 1);
-    }
-  }
-
-  if (bestMatch.match) {
-    return bestMatch.match;
-  } else {
-    return scannedId;
-  }
-}
 
 interface CheckInOutFormProps {
   shouldFocus: boolean;
@@ -70,7 +28,8 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
   const [barcode, setBarcode] = useState("");
   const [lastScanTime, setLastScanTime] = useState(0);
   const [lastScannedBarcode, setLastScannedBarcode] = useState("");
-  const inputRef = useAutoFocus(shouldFocus);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const inputRef = useAutoFocus(shouldFocus && !isModalOpen);
 
   // Fetch users with their punches
   const { isLoading, error, data } = db.useQuery({
@@ -187,13 +146,22 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
           placeholder="Use your badge..."
           className="w-full p-2 mb-4 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
         />
-        <button
-          onClick={handleCheckInOut}
-          className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-        >
-          Check In / Out
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleCheckInOut}
+            className="flex-1 bg-blue-500 text-white p-2 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+          >
+            Check In / Out
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex-1 bg-blue-500 text-white p-2 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+          >
+            View My Punches
+          </button>
+        </div>
       </div>
+      <SwipesModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   );
 }
