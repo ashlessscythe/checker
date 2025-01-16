@@ -11,6 +11,13 @@ import {
   checkInTypes,
   checkOutTypes,
 } from "@/utils/checkInOut";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 
 export default React.memo(function CheckList() {
   const [checkedUsers, setCheckedUsers] = useState<
@@ -20,7 +27,11 @@ export default React.memo(function CheckList() {
   const [isClient, setIsClient] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [dateTime, setDateTime] = useState(new Date().toLocaleString());
-  const [filters, setFilters] = useState({ name: "", status: "all" });
+  const [filters, setFilters] = useState({
+    name: "",
+    status: "all",
+    deptId: "all",
+  });
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: "asc" | "desc";
@@ -65,11 +76,15 @@ export default React.memo(function CheckList() {
           order: { serverCreatedAt: "desc" },
         },
       },
+      department: {},
     },
     fireDrillChecks: {
       $: {
         where: { drillId: drillId },
       },
+    },
+    departments: {
+      $: {},
     },
   });
 
@@ -186,7 +201,13 @@ export default React.memo(function CheckList() {
         timeAgoString = `${days} day${days !== 1 ? "s" : ""} ago`;
       }
 
-      return { ...user, timeAgoString, name, hoursAgo: diffInHours };
+      return {
+        ...user,
+        timeAgoString,
+        name,
+        hoursAgo: diffInHours,
+        deptId: user.deptId,
+      };
     });
   }, [data?.users, currentTime]);
 
@@ -210,6 +231,9 @@ export default React.memo(function CheckList() {
           (filters.status === "checked" && checkedUsers.has(user.id)) ||
           (filters.status === "unchecked" && !checkedUsers.has(user.id))
       );
+    }
+    if (filters.deptId !== "all") {
+      result = result.filter((user) => user.deptId === filters.deptId);
     }
 
     // Apply sorting
@@ -249,6 +273,7 @@ export default React.memo(function CheckList() {
       name: string;
       punches: any[];
       id: string;
+      deptId: string;
     };
     isChecked: boolean;
     accountedBy: string | undefined;
@@ -339,7 +364,7 @@ export default React.memo(function CheckList() {
       <h1 className="text-2xl font-bold mb-4">
         Fire Drill Checklist - {dateTime}
       </h1>
-      <div className="mb-4 flex space-x-4">
+      <div className="mb-4 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
         <input
           type="text"
           placeholder="Filter by name"
@@ -360,6 +385,24 @@ export default React.memo(function CheckList() {
           <option value="checked">Checked</option>
           <option value="unchecked">Unchecked</option>
         </select>
+        <Select
+          value={filters.deptId}
+          onValueChange={(value) =>
+            setFilters((prev) => ({ ...prev, deptId: value }))
+          }
+        >
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Filter by department" />
+          </SelectTrigger>
+          <SelectContent className="bg-white">
+            <SelectItem value="all">All Departments</SelectItem>
+            {data?.departments?.map((dept) => (
+              <SelectItem key={dept.id} value={dept.id}>
+                {dept.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
         <div className="max-h-[600px] overflow-y-auto">
@@ -390,7 +433,7 @@ export default React.memo(function CheckList() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredAndSortedUsers.map((user) => (
+              {paginatedUsers.map((user) => (
                 <CheckListRow
                   key={user.id}
                   user={user}

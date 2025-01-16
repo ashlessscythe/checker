@@ -11,22 +11,35 @@ const graph = i.graph(
       isAdmin: i.boolean(),
       isAuth: i.boolean(),
       lastLoginAt: i.number(),
-      createdAt: i.number(), // Adding createdAt field
-      deptId: i.string(), // Adding deptId field for department association
+      createdAt: i.number(),
+      deptId: i.string(),
+      serverCreatedAt: i.number(), // Adding serverCreatedAt for sorting
     }),
     punches: i.entity({
       type: i.string(),
       timestamp: i.number(),
+      serverCreatedAt: i.number(), // Adding serverCreatedAt for sorting
     }),
     departments: i.entity({
-      // Adding departments entity
       name: i.string(),
-      departmentId: i.string(), // This corresponds to the deptId in users
+      departmentId: i.string(),
     }),
     backups: i.entity({
-      // backups stuffs
       timestamp: i.number(),
       type: i.string(),
+    }),
+    fireDrillChecks: i.entity({
+      drillId: i.string(),
+      userId: i.string(),
+      timestamp: i.number(),
+      status: i.string(), // 'checked' or 'unchecked'
+      accountedBy: i.string(),
+    }),
+    firedrills: i.entity({
+      drillId: i.string(),
+      completedAt: i.number(),
+      totalChecked: i.number(),
+      totalPresent: i.number(),
     }),
   },
   {
@@ -43,7 +56,6 @@ const graph = i.graph(
       },
     },
     userDepartment: {
-      // Adding relationship between users and departments
       forward: {
         on: "users",
         has: "one",
@@ -53,6 +65,18 @@ const graph = i.graph(
         on: "departments",
         has: "many",
         label: "users",
+      },
+    },
+    userFireDrillChecks: {
+      forward: {
+        on: "users",
+        has: "many",
+        label: "fireDrillChecks",
+      },
+      reverse: {
+        on: "fireDrillChecks",
+        has: "one",
+        label: "user",
       },
     },
   }

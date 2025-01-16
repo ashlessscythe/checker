@@ -1,7 +1,7 @@
 // components/AdminPage.tsx
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { tx } from "@instantdb/react";
+import { tx, id } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
 import { useCreateUser } from "@/hooks/useCreateUser";
 import toast, { Toaster } from "react-hot-toast";
@@ -11,7 +11,13 @@ import { Eye, EyeOff, Search } from "lucide-react";
 import { CheckActionType, performCheckinOut } from "@/utils/checkInOut";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
-import { Select } from "./ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 
 export default function AdminPage() {
   const [userId, setUserId] = useState(null);
@@ -24,11 +30,17 @@ export default function AdminPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showDeptForm, setShowDeptForm] = useState(false);
+  const [newDepartment, setNewDepartment] = useState({
+    name: "",
+    departmentId: "",
+  });
   const [newUser, setNewUser] = useState({
     name: "",
     email: "",
     barcode: "",
     isAdmin: false,
+    deptId: "", // Add department field
   });
 
   const {
@@ -46,6 +58,10 @@ export default function AdminPage() {
     users: {
       $: {},
       punches: {},
+      department: {}, // Include department relation
+    },
+    departments: {
+      $: {},
     },
   });
 
@@ -173,13 +189,79 @@ export default function AdminPage() {
             Search by name, email, or barcode
           </span>
         </div>
-        <Button
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-green-600 hover:bg-green-700 text-white"
-        >
-          {showCreateForm ? "Cancel" : "Create User"}
-        </Button>
+        <div className="flex space-x-2">
+          <Button
+            onClick={() => {
+              setShowCreateForm(!showCreateForm);
+              if (showDeptForm) setShowDeptForm(false);
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            {showCreateForm ? "Cancel" : "Create User"}
+          </Button>
+          <Button
+            onClick={() => {
+              setShowDeptForm(!showDeptForm);
+              if (showCreateForm) setShowCreateForm(false);
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {showDeptForm ? "Cancel" : "Create Department"}
+          </Button>
+        </div>
       </div>
+
+      {showDeptForm && (
+        <div className="mb-6 p-4 bg-white rounded-lg shadow">
+          <h2 className="text-xl font-semibold mb-4">Create New Department</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              placeholder="Department Name"
+              value={newDepartment.name}
+              onChange={(e) =>
+                setNewDepartment({ ...newDepartment, name: e.target.value })
+              }
+            />
+            <Input
+              placeholder="Department ID"
+              value={newDepartment.departmentId}
+              onChange={(e) =>
+                setNewDepartment({
+                  ...newDepartment,
+                  departmentId: e.target.value,
+                })
+              }
+            />
+          </div>
+          <div className="mt-4 flex justify-end space-x-2">
+            <Button
+              onClick={async () => {
+                try {
+                  const deptId = id();
+                  await db.transact([
+                    tx.departments[deptId].update({
+                      name: newDepartment.name,
+                      departmentId: newDepartment.departmentId,
+                    }),
+                  ]);
+                  setNewDepartment({
+                    name: "",
+                    departmentId: "",
+                  });
+                  setShowDeptForm(false);
+                  toast.success("Department created successfully");
+                } catch (err) {
+                  toast.error("Failed to create department");
+                }
+              }}
+              disabled={!newDepartment.name || !newDepartment.departmentId}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Create Department
+            </Button>
+          </div>
+        </div>
+      )}
 
       {showCreateForm && (
         <div className="mb-6 p-4 bg-white rounded-lg shadow">
@@ -205,6 +287,23 @@ export default function AdminPage() {
                 setNewUser({ ...newUser, barcode: e.target.value })
               }
             />
+            <Select
+              value={newUser.deptId}
+              onValueChange={(value) =>
+                setNewUser({ ...newUser, deptId: value })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select Department" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border border-border shadow-sm rounded-md">
+                {data?.departments?.map((dept) => (
+                  <SelectItem key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="flex items-center space-x-2">
               <input
                 type="checkbox"
@@ -228,6 +327,7 @@ export default function AdminPage() {
                     email: "",
                     barcode: "",
                     isAdmin: false,
+                    deptId: "",
                   });
                   setShowCreateForm(false);
                   toast.success("User created successfully");
@@ -239,7 +339,8 @@ export default function AdminPage() {
                 isCreating ||
                 !newUser.name ||
                 !newUser.email ||
-                !newUser.barcode
+                !newUser.barcode ||
+                !newUser.deptId
               }
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
@@ -271,6 +372,9 @@ export default function AdminPage() {
                   </th>
                   <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Auth
+                  </th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Department
                   </th>
                   <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -352,6 +456,33 @@ export default function AdminPage() {
                         {user.isAuth ? "Authorized" : "Unauthorized"}
                       </span>
                     </td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                      <Select
+                        value={user.deptId || ""}
+                        onValueChange={async (value) => {
+                          try {
+                            await db.transact([
+                              tx.users[user.id].update({ deptId: value }),
+                            ]);
+                            toast.success("Department updated successfully");
+                          } catch (error) {
+                            console.error("Error updating department:", error);
+                            toast.error("Failed to update department");
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Department" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border border-border shadow-sm rounded-md">
+                          {data?.departments?.map((dept) => (
+                            <SelectItem key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                         <button
@@ -423,14 +554,19 @@ export default function AdminPage() {
         </div>
         <Select
           value={itemsPerPage.toString()}
-          onValueChange={(e) => {
-            setItemsPerPage(Number(e));
+          onValueChange={(value) => {
+            setItemsPerPage(Number(value));
             setCurrentPage(1);
           }}
         >
-          <option value="10">10 per page</option>
-          <option value="20">20 per page</option>
-          <option value="50">50 per page</option>
+          <SelectTrigger>
+            <SelectValue placeholder="Items per page" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="10">10 per page</SelectItem>
+            <SelectItem value="20">20 per page</SelectItem>
+            <SelectItem value="50">50 per page</SelectItem>
+          </SelectContent>
         </Select>
       </div>
     </div>
