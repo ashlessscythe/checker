@@ -191,7 +191,12 @@ export default React.memo(function CheckList() {
   }, [data?.users, currentTime]);
 
   const filteredAndSortedUsers = useMemo(() => {
-    let result = checkedInUsersWithHours;
+    // First filter out old users
+    let result = checkedInUsersWithHours.filter((user) => {
+      const checkInTime = new Date(user.punches[0].timestamp).getTime();
+      const diffInHours = (currentTime - checkInTime) / (1000 * 60 * 60);
+      return diffInHours < IS_OLD_HOURS;
+    });
 
     // Apply filters
     if (filters.name) {
@@ -281,7 +286,7 @@ export default React.memo(function CheckList() {
     `}
       >
         <td className="px-6 py-4 whitespace-nowrap">
-          <div className="text-sm font-medium text-gray-900 dark:text-white">
+          <div className="text-sm font-medirm text-gray-900 dark:text-white">
             {user.name}
           </div>
         </td>
@@ -294,7 +299,7 @@ export default React.memo(function CheckList() {
                 : "bg-red-200 text-red-800 dark:bg-red-600 dark:text-red-100"
             }`}
           >
-            {isChecked ? `Accounted by ${accountedBy}` : "Missing"}
+            {isChecked ? `Accounted by ${accountedBy}` : "Unaccounted"}
           </button>
         </td>
         <td className="px-6 py-4 whitespace-nowrap">
@@ -400,7 +405,12 @@ export default React.memo(function CheckList() {
       </div>
       <div className="mt-4 flex flex-col sm:flex-row justify-between items-center">
         <span className="font-bold mb-2 sm:mb-0">
-          Accounted: {checkedUsers.size} / {checkedInUsersWithHours.length}
+          Accounted: {checkedUsers.size} / {filteredAndSortedUsers.length}
+          <span className="text-gray-500 ml-2">
+            (not showing{" "}
+            {checkedInUsersWithHours.length - filteredAndSortedUsers.length} old
+            punches)
+          </span>
         </span>
         <button
           onClick={handleCompleteDrill}
