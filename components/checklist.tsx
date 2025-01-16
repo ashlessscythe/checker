@@ -405,11 +405,11 @@ export default React.memo(function CheckList() {
       </div>
       <div className="mt-4 flex flex-col sm:flex-row justify-between items-center">
         <span className="font-bold mb-2 sm:mb-0">
-          Accounted: {checkedUsers.size} / {filteredAndSortedUsers.length}
+          Accounted: {checkedUsers.size} / {filteredAndSortedUsers.length} -
           <span className="text-gray-500 ml-2">
             (not showing{" "}
             {checkedInUsersWithHours.length - filteredAndSortedUsers.length} old
-            punches)
+            punche(s) older than {IS_OLD_HOURS} hours)
           </span>
         </span>
         <button
