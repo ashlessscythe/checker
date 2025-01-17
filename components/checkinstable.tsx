@@ -17,8 +17,14 @@ export default function CheckInsTable() {
   const [filterDateTo, setFilterDateTo] = useState("");
   const [cursors, setCursors] = useState([null]); // Array to store cursors for each page
   const [endCursor, setEndCursor] = useState(null);
+  const [timeWindow, setTimeWindow] = useState(24); // hours to load
 
   useAutoNavigate("/", 5 * 60 * 1000);
+
+  // Calculate timestamp for timeWindow hours ago
+  const timeWindowAgo = useMemo(() => {
+    return Date.now() - timeWindow * 60 * 60 * 1000;
+  }, [timeWindow]);
 
   const { data, isLoading, error, pageInfo } = db.useQuery({
     punches: {
@@ -33,10 +39,20 @@ export default function CheckInsTable() {
     },
   });
 
+  if (error) {
+    console.error("Query Error:", error); // Debugging line
+  }
+
+  console.log("Query Data:", data); // Debugging line
+
   const filteredPunches = useMemo(() => {
     if (!data || !data.punches) return [];
 
     return data.punches.filter((punch) => {
+      // Time window filter
+      const timeMatch = punch.timestamp >= timeWindowAgo;
+
+      // Other filters
       const nameMatch = filterName
         ? punch.users[0]?.name
             ?.toLowerCase()
@@ -50,9 +66,10 @@ export default function CheckInsTable() {
         (filterDateTo
           ? punch.timestamp <= new Date(filterDateTo).getTime()
           : true);
-      return nameMatch && typeMatch && dateMatch;
+
+      return timeMatch && nameMatch && typeMatch && dateMatch;
     });
-  }, [data, filterName, filterType, filterDateFrom, filterDateTo]);
+  }, [data, filterName, filterType, filterDateFrom, filterDateTo, timeWindow]);
 
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error.message}</div>;
@@ -60,7 +77,7 @@ export default function CheckInsTable() {
     return <div>No data available</div>;
   }
 
-  const handleSort = (field) => {
+  const handleSort = (field: string) => {
     if (field === sortField) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
@@ -94,6 +111,12 @@ export default function CheckInsTable() {
       setCursors((prev) => [...prev, newCursor]); // Add new cursor to history
       setEndCursor(newCursor);
       setCurrentPage(currentPage + 1);
+    } else {
+      // If no more data in current time window, extend the window
+      setTimeWindow((prev) => prev + 24);
+      setEndCursor(null);
+      setCursors([null]);
+      setCurrentPage(1);
     }
   };
 
@@ -199,8 +222,9 @@ export default function CheckInsTable() {
             </Button>
           </div>
 
-          {/* Items per page selector */}
-          <div className="mt-4 flex justify-end">
+          {/* Items per page selector and time window indicator */}
+          <div className="mt-4 flex justify-between items-center">
+            <div>Showing data from last {timeWindow} hours</div>
             <Select
               value={itemsPerPage.toString()}
               onValueChange={(e) => {

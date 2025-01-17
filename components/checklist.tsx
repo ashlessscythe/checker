@@ -36,13 +36,10 @@ export default React.memo(function CheckList() {
     key: string;
     direction: "asc" | "desc";
   } | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const IS_OLD_HOURS = parseInt(
     process.env.NEXT_PUBLIC_THRESHOLD_HOURS || "14",
     10
   );
-  const itemsPerPage = 20;
-
   useAutoNavigate("/", 60 * 1000, true);
 
   const { user } = useAuth();
@@ -259,14 +256,6 @@ export default React.memo(function CheckList() {
     return result;
   }, [checkedInUsersWithHours, filters, sortConfig, checkedUsers]);
 
-  const paginatedUsers = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredAndSortedUsers.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredAndSortedUsers, currentPage]);
-
-  // Pagination controls
-  const totalPages = Math.ceil(filteredAndSortedUsers.length / itemsPerPage);
-
   const CheckListRow: React.FC<{
     user: {
       timeAgoString: string;
@@ -433,7 +422,7 @@ export default React.memo(function CheckList() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {paginatedUsers.map((user) => (
+              {filteredAndSortedUsers.map((user) => (
                 <CheckListRow
                   key={user.id}
                   user={user}
@@ -448,11 +437,64 @@ export default React.memo(function CheckList() {
       </div>
       <div className="mt-4 flex flex-col sm:flex-row justify-between items-center">
         <span className="font-bold mb-2 sm:mb-0">
-          Accounted: {checkedUsers.size} / {filteredAndSortedUsers.length} -
+          Accounted: {checkedUsers.size} / {filteredAndSortedUsers.length}
           <span className="text-gray-500 ml-2">
-            (not showing{" "}
-            {checkedInUsersWithHours.length - filteredAndSortedUsers.length} old
-            punche(s) older than {IS_OLD_HOURS} hours)
+            {" - "}
+            {(() => {
+              // First filter by age
+              const nonOldUsers = checkedInUsersWithHours.filter((user) => {
+                const checkInTime = new Date(
+                  user.punches[0].timestamp
+                ).getTime();
+                const diffInHours =
+                  (currentTime - checkInTime) / (1000 * 60 * 60);
+                return diffInHours < IS_OLD_HOURS;
+              });
+
+              // Then apply other filters to get count of hidden by filters
+              let filteredUsers = nonOldUsers;
+              if (filters.name) {
+                filteredUsers = filteredUsers.filter((user) =>
+                  user.name.toLowerCase().includes(filters.name.toLowerCase())
+                );
+              }
+              if (filters.status !== "all") {
+                filteredUsers = filteredUsers.filter(
+                  (user) =>
+                    (filters.status === "checked" &&
+                      checkedUsers.has(user.id)) ||
+                    (filters.status === "unchecked" &&
+                      !checkedUsers.has(user.id))
+                );
+              }
+              if (filters.deptId !== "all") {
+                filteredUsers = filteredUsers.filter(
+                  (user) => user.deptId === filters.deptId
+                );
+              }
+
+              const hiddenByFilters = nonOldUsers.length - filteredUsers.length;
+              const hiddenByAge =
+                checkedInUsersWithHours.length - nonOldUsers.length;
+
+              const filterText =
+                hiddenByFilters > 0
+                  ? `${hiddenByFilters} hidden by filters`
+                  : "";
+              const ageText =
+                hiddenByAge > 0
+                  ? `${hiddenByAge} older than ${IS_OLD_HOURS} hours`
+                  : "";
+
+              if (filterText && ageText) {
+                return `(${filterText}, ${ageText})`;
+              } else if (filterText) {
+                return `(${filterText})`;
+              } else if (ageText) {
+                return `(${ageText})`;
+              }
+              return "";
+            })()}
           </span>
         </span>
         <button
