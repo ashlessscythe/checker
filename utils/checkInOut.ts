@@ -52,6 +52,7 @@ export const checkInTypes = new Set([
   CheckActionType.SystemCheckIn,
   CheckActionType.AdminCheckIn,
 ]);
+
 export const checkOutTypes = new Set([
   CheckActionType.CheckOut,
   CheckActionType.AdminCheckOut,
@@ -108,14 +109,17 @@ export function extractUserId(scannedId: string) {
 // Define a type for the force parameter
 type ForceAction = CheckActionType | undefined;
 
-export async function performCheckinOut(user: any, force?: ForceAction) {
-  if (!user) {
-    toast.error("User not found");
+export async function performCheckinOut(entity: any, force?: ForceAction) {
+  if (!entity) {
+    toast.error("User/Visitor not found");
     return;
   }
 
-  // Get the last punch for this user
-  const lastPunch = user.punches[0];
+  // Check if entity is a visitor by checking if they're in the VISITOR department
+  const isVisitor = entity.purpose !== undefined;
+
+  // Get the last punch for this entity
+  const lastPunch = entity.punches[0];
   let actionType: CheckActionType;
   let isSystemAction = false;
   let isAdminAction = false;
@@ -145,11 +149,12 @@ export async function performCheckinOut(user: any, force?: ForceAction) {
       lastPunch.type === CheckActionType.SystemCheckOut)
   ) {
     console.log(
-      `User ${user.name} is checking in after an ${
+      `${isVisitor ? "Visitor" : "User"} ${
+        entity.name
+      } is checking in after an ${
         lastPunch.type === CheckActionType.AdminCheckOut ? "admin" : "system"
       } checkout`
     );
-    // You might want to add a special notification here
   }
 
   // Handle auto-reset logic
@@ -174,7 +179,7 @@ export async function performCheckinOut(user: any, force?: ForceAction) {
         isSystemGenerated: isSystemAction,
         isAdminGenerated: isAdminAction,
       }),
-      tx.users[user.id].link({ punches: newPunchId }),
+      tx.users[entity.id].link({ punches: newPunchId }),
     ]);
 
     // Handle notifications
@@ -182,7 +187,7 @@ export async function performCheckinOut(user: any, force?: ForceAction) {
       case CheckActionType.CheckIn:
       case CheckActionType.CheckOut:
         toast.success(
-          `${user.name}: ${
+          `${isVisitor ? "Visitor" : ""} ${entity.name}: ${
             actionType === CheckActionType.CheckIn
               ? "checked in"
               : "checked out"
@@ -206,7 +211,7 @@ export async function performCheckinOut(user: any, force?: ForceAction) {
             actionType === CheckActionType.AdminCheckIn
               ? "checked in"
               : "checked out"
-          } ${user.name}`,
+          } ${isVisitor ? "visitor" : ""} ${entity.name}`,
           {
             ...baseToastStyle,
             style: {
@@ -220,7 +225,11 @@ export async function performCheckinOut(user: any, force?: ForceAction) {
         );
         break;
       case CheckActionType.SystemCheckOut:
-        console.log(`System checkout performed for user ${user.name}`);
+        console.log(
+          `System checkout performed for ${isVisitor ? "visitor" : "user"} ${
+            entity.name
+          }`
+        );
         break;
     }
   } catch (error) {

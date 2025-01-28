@@ -12,7 +12,15 @@ export function useAutoFocus(
 
     if (shouldFocus) {
       intervalId = setInterval(() => {
-        if (ref.current && document.activeElement !== ref.current) {
+        const activeElement = document.activeElement;
+        // Only force focus if no input/textarea is currently focused
+        if (
+          ref.current &&
+          (!activeElement ||
+            (activeElement.tagName !== "INPUT" &&
+              activeElement.tagName !== "TEXTAREA") ||
+            activeElement === document.body)
+        ) {
           ref.current.focus();
         }
       }, delay);

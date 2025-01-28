@@ -14,6 +14,8 @@ const graph = i.graph(
       createdAt: i.number(),
       deptId: i.string(),
       serverCreatedAt: i.number(), // Adding serverCreatedAt for sorting
+      laptopSerial: i.string(), // For visitors with laptops
+      purpose: i.string(), // For visitor purpose
     }),
     punches: i.entity({
       type: i.string(),

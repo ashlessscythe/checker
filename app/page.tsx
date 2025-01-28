@@ -10,6 +10,7 @@ import ToggleSection from "@/components/toggle-section";
 import { lazyLoad } from "@/utils/lazyLoader";
 
 // Lazy load the components
+const VisitorRegistration = lazyLoad("visitorcheck");
 const AdvancedChecklist = lazyLoad("adv-checklist");
 const Checklist = lazyLoad("checklist");
 const AdminPage = lazyLoad("adminpage");
@@ -38,6 +39,11 @@ function HomeContent() {
       <Header setIsAuthModalOpen={setIsAuthModalOpen} />
 
       <div className="container mx-auto p-4">
+        <div className="mb-4">
+          <Suspense fallback={<div>Loading visitor registration...</div>}>
+            <VisitorRegistration />
+          </Suspense>
+        </div>
         <CheckInOutForm shouldFocus={shouldFocusCheckInOut} />
       </div>
 
