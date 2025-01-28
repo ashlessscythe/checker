@@ -1,21 +1,31 @@
 // app/page.tsx
 "use client";
-import { useMemo, useState, Suspense } from "react";
+import React, { useMemo, useState, Suspense } from "react";
 import CheckInOutForm from "@/components/checkinoutform";
 import { AuthModal } from "@/components/authmodal";
 import { useAuth, AuthProvider } from "@/hooks/authContext";
 import Header from "@/components/header";
 import { Switch } from "@/components/ui/Switch";
 import ToggleSection from "@/components/toggle-section";
+import VisitorRegistration from "@/components/visitorcheck";
 import { lazyLoad } from "@/utils/lazyLoader";
 
-// Lazy load the components
-const VisitorRegistration = lazyLoad("visitorcheck");
-const AdvancedChecklist = lazyLoad("adv-checklist");
-const Checklist = lazyLoad("checklist");
-const AdminPage = lazyLoad("adminpage");
+// Lazy load admin components together
+const AdminPage = lazyLoad("adminpage", { withAutoNav: true });
 const BackupPage = lazyLoad("backuppage");
-const CheckInsTable = lazyLoad("checkinstable");
+const CheckInsTable = lazyLoad("checkinstable", {
+  withAutoNav: true,
+  path: "/",
+  fullReload: true,
+});
+
+// Lazy load checklists conditionally
+const getChecklist = (isAdvanced: boolean) =>
+  lazyLoad(isAdvanced ? "adv-checklist" : "checklist", {
+    withAutoNav: true,
+    path: "/",
+    fullReload: true,
+  });
 
 function HomeContent() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -41,9 +51,7 @@ function HomeContent() {
       <div className="container mx-auto p-4">
         <CheckInOutForm shouldFocus={shouldFocusCheckInOut} />
         <div className="mt-4">
-          <Suspense fallback={<div>Loading visitor registration...</div>}>
-            <VisitorRegistration />
-          </Suspense>
+          <VisitorRegistration />
         </div>
       </div>
 
@@ -67,7 +75,9 @@ function HomeContent() {
                     </span>
                     <Switch isChecked={isAdvanced} onChange={setIsAdvanced} />
                   </div>
-                  {isAdvanced ? <AdvancedChecklist /> : <Checklist />}
+                  <Suspense fallback={<div>Loading checklist...</div>}>
+                    {React.createElement(getChecklist(isAdvanced))}
+                  </Suspense>
                 </div>
               )}
 
@@ -79,7 +89,9 @@ function HomeContent() {
 
               {showCheckins && (
                 <div className="ml-4">
-                  <CheckInsTable />
+                  <Suspense fallback={<div>Loading check-ins history...</div>}>
+                    <CheckInsTable />
+                  </Suspense>
                 </div>
               )}
             </>
@@ -88,31 +100,29 @@ function HomeContent() {
           {/* Admin-only sections */}
           {isAdmin && (
             <>
-              <ToggleSection
-                title="Show Admin Page"
-                isOpen={showAdminPage}
-                onToggle={() => setShowAdminPage(!showAdminPage)}
-              />
-              {showAdminPage && (
-                <div className="ml-4">
-                  <Suspense fallback={<div>Loading admin page...</div>}>
+              <Suspense fallback={<div>Loading admin features...</div>}>
+                <ToggleSection
+                  title="Show Admin Page"
+                  isOpen={showAdminPage}
+                  onToggle={() => setShowAdminPage(!showAdminPage)}
+                />
+                {showAdminPage && (
+                  <div className="ml-4">
                     <AdminPage />
-                  </Suspense>
-                </div>
-              )}
+                  </div>
+                )}
 
-              <ToggleSection
-                title="Show Backup & Archive"
-                isOpen={showBackupPage}
-                onToggle={() => setShowBackupPage(!showBackupPage)}
-              />
-              {showBackupPage && (
-                <div className="ml-4">
-                  <Suspense fallback={<div>Loading backup page...</div>}>
+                <ToggleSection
+                  title="Show Backup & Archive"
+                  isOpen={showBackupPage}
+                  onToggle={() => setShowBackupPage(!showBackupPage)}
+                />
+                {showBackupPage && (
+                  <div className="ml-4">
                     <BackupPage />
-                  </Suspense>
-                </div>
-              )}
+                  </div>
+                )}
+              </Suspense>
             </>
           )}
         </div>

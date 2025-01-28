@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { db, tx } from "@/lib/instantdb";
-import { useAutoNavigate } from "@/hooks/useAutoNavigate";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
 import { Button } from "./ui/button";
@@ -18,8 +17,6 @@ export default function CheckInsTable() {
   const [cursors, setCursors] = useState([null]); // Array to store cursors for each page
   const [endCursor, setEndCursor] = useState(null);
   const [timeWindow, setTimeWindow] = useState(24); // hours to load
-
-  useAutoNavigate("/", 5 * 60 * 1000);
 
   // Calculate timestamp for timeWindow hours ago
   const timeWindowAgo = useMemo(() => {

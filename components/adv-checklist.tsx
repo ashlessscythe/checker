@@ -5,7 +5,6 @@ import React, { useMemo, useEffect, useState, useCallback } from "react";
 import { id, tx } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
 import { useAuth } from "@/hooks/authContext";
-import { useAutoNavigate } from "@/hooks/useAutoNavigate";
 import {
   CheckActionType,
   checkInTypes,
@@ -36,8 +35,6 @@ export default React.memo(function AdvancedChecklist() {
     10
   );
   const itemsPerPage = 20;
-
-  useAutoNavigate("/", 5 * 60 * 1000, true); // every 5 min default
 
   const { user } = useAuth();
   const authUser = user;

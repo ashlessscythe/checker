@@ -2,8 +2,7 @@
 import Link from "next/link";
 import { useAuth } from "../hooks/authContext";
 import { useAutoNavigate } from "@/hooks/useAutoNavigate";
-
-const RELOAD_MINUTES = process.env.NEXT_PUBLIC_AUTO_RELOAD_MINUTES || "5";
+import { getAutoNavigateTimeout } from "@/lib/config";
 
 interface HeaderProps {
   setIsAuthModalOpen: (isOpen: boolean) => void;
@@ -22,8 +21,8 @@ export default function Header({ setIsAuthModalOpen }: HeaderProps) {
     window.location.reload();
   };
 
-  // reload page every so often
-  useAutoNavigate("/", parseInt(RELOAD_MINUTES, 10) * 60 * 1000, true);
+  // reload page based on environment config
+  useAutoNavigate("/", getAutoNavigateTimeout(), true);
 
   return (
     <>

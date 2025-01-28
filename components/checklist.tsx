@@ -5,7 +5,6 @@ import React, { useMemo, useEffect, useState, useCallback } from "react";
 import { id, tx } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
 import { useAuth } from "@/hooks/authContext";
-import { useAutoNavigate } from "@/hooks/useAutoNavigate";
 import {
   CheckActionType,
   checkInTypes,
@@ -40,8 +39,6 @@ export default React.memo(function CheckList() {
     process.env.NEXT_PUBLIC_THRESHOLD_HOURS || "14",
     10
   );
-  useAutoNavigate("/", 60 * 1000, true);
-
   const { user } = useAuth();
   const authUser = user;
 
