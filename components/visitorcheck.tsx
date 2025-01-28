@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
+import { verifyBarcode } from "@/utils/barcodeVerification";
 import { useModalAutoNavigate } from "@/hooks/useModalAutoNavigate";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { tx, id } from "@instantdb/react";
@@ -35,6 +36,12 @@ export default function VisitorRegistration() {
   const barcodeInputRef = useAutoFocus(showForm && !formData.barcode);
 
   const closeModal = useCallback(() => {
+    setFormData({
+      name: "",
+      purpose: "",
+      laptopSerial: "",
+      barcode: "",
+    });
     setShowForm(false);
   }, []);
 
@@ -91,6 +98,13 @@ export default function VisitorRegistration() {
       return;
     }
 
+    if (!verifyBarcode(formData.barcode)) {
+      toast.error(
+        "Invalid barcode format. Please enter a valid 20-character security barcode"
+      );
+      return;
+    }
+
     // Check if barcode is already in use
     if (data?.users?.length > 0) {
       toast.error("This barcode is already registered");
@@ -120,9 +134,9 @@ export default function VisitorRegistration() {
       await db.transact([
         tx.users[visitorId].update({
           name: formData.name,
-          email: `${formData.purpose.toLowerCase()}_${
-            formData.barcode
-          }@visitor`,
+          email: `${formData.purpose.toLowerCase()}_${crypto
+            .randomUUID()
+            .slice(0, 10)}@visitor`,
           barcode: formData.barcode,
           isAdmin: false,
           isAuth: false,
@@ -158,12 +172,17 @@ export default function VisitorRegistration() {
               </label>
               <Input
                 ref={barcodeInputRef}
-                type="text"
+                type="password"
                 value={formData.barcode}
                 onChange={(e) =>
-                  setFormData({ ...formData, barcode: e.target.value })
+                  setFormData({
+                    ...formData,
+                    barcode: e.target.value.toUpperCase(),
+                  })
                 }
-                placeholder="Scan the barcode provided by security"
+                placeholder="Scan the barcode you were provided"
+                maxLength={20}
+                pattern="[346789ACDEFGHJKLMNPQRTUVWXY]{20}"
                 required
               />
             </div>

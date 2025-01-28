@@ -39,12 +39,12 @@ function HomeContent() {
       <Header setIsAuthModalOpen={setIsAuthModalOpen} />
 
       <div className="container mx-auto p-4">
-        <div className="mb-4">
+        <CheckInOutForm shouldFocus={shouldFocusCheckInOut} />
+        <div className="mt-4">
           <Suspense fallback={<div>Loading visitor registration...</div>}>
             <VisitorRegistration />
           </Suspense>
         </div>
-        <CheckInOutForm shouldFocus={shouldFocusCheckInOut} />
       </div>
 
       {/* Show sections if user is either authorized or admin */}

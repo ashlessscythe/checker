@@ -11,11 +11,11 @@ import {
   performCheckinOut,
   extractUserId,
 } from "@/utils/checkInOut";
-import { useAutoCheckout } from "@/hooks/useAutoCheckout";
+// import { useAutoCheckout } from "@/hooks/useAutoCheckout";
 import SwipesModal from "./swipes-modal";
 
-const ENABLE_AUTO_CLEANUP =
-  process.env.NEXT_PUBLIC_ENABLE_AUTO_CLEANUP === "true";
+// const ENABLE_AUTO_CLEANUP =
+// process.env.NEXT_PUBLIC_ENABLE_AUTO_CLEANUP === "true";
 
 const DEBOUNCE_TIMEOUT =
   Number(process.env.NEXT_PUBLIC_DEBOUNCE_TIMEOUT) || 5000; // Default to 5 seconds if not set

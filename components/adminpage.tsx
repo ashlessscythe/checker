@@ -93,6 +93,16 @@ export default function AdminPage() {
     }
   };
 
+  const decoupleBarcode = async (userId) => {
+    try {
+      await db.transact([tx.users[userId].update({ barcode: null })]);
+      toast.success("Barcode decoupled successfully");
+    } catch (error) {
+      console.error("Error decoupling barcode:", error);
+      toast.error("Failed to decouple barcode");
+    }
+  };
+
   const handleNameChange = async (userId, newName) => {
     try {
       await db.transact([tx.users[userId].update({ name: newName })]);
@@ -522,6 +532,13 @@ export default function AdminPage() {
                           className="text-red-600 hover:text-red-900"
                         >
                           Force Check-Out
+                        </button>
+                        <button
+                          onClick={() => decoupleBarcode(user.id)}
+                          className="text-orange-600 hover:text-orange-900"
+                          disabled={!user.barcode}
+                        >
+                          Decouple Barcode
                         </button>
                       </div>
                     </td>
