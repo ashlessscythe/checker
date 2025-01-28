@@ -1,5 +1,6 @@
 "use client";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useDebounce } from "@/hooks/useDebounce";
 import { verifyBarcode } from "@/utils/barcodeVerification";
 import { useModalAutoNavigate } from "@/hooks/useModalAutoNavigate";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
@@ -73,22 +74,48 @@ export default function VisitorRegistration() {
     };
   }, [showForm]);
 
-  const { data } = db.useQuery({
-    departments: {
-      $: {
-        where: {
-          departmentId: "VISITOR",
+  // Debounce barcode input to prevent excessive queries
+  const debouncedBarcode = useDebounce(formData.barcode, 300);
+
+  // Memoize department query to prevent unnecessary re-renders
+  const deptQuery = useMemo(
+    () => ({
+      departments: {
+        $: {
+          where: {
+            departmentId: "VISITOR",
+          },
         },
       },
-    },
+    }),
+    []
+  );
+
+  // Separate queries for better performance and cleanup
+  const { data: deptData } = db.useQuery(deptQuery);
+  // Query for users with the debounced barcode
+  const { data: userData } = db.useQuery({
     users: {
       $: {
         where: {
-          barcode: formData.barcode,
+          barcode: debouncedBarcode || "NO_MATCH", // Use placeholder when no barcode
         },
       },
     },
   });
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      // Cleanup form data when component unmounts
+      setFormData({
+        name: "",
+        purpose: "",
+        laptopSerial: "",
+        barcode: "",
+      });
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +133,7 @@ export default function VisitorRegistration() {
     }
 
     // Check if barcode is already in use
-    if (data?.users?.length > 0) {
+    if (userData?.users?.length > 0) {
       toast.error("This barcode is already registered");
       return;
     }
@@ -115,7 +142,7 @@ export default function VisitorRegistration() {
       // First, ensure VISITOR department exists
       let visitorDeptId = "";
 
-      if (!data?.departments || data.departments.length === 0) {
+      if (!deptData?.departments || deptData.departments.length === 0) {
         // Create VISITOR department if it doesn't exist
         visitorDeptId = id();
         await db.transact([
@@ -125,7 +152,7 @@ export default function VisitorRegistration() {
           }),
         ]);
       } else {
-        visitorDeptId = data.departments[0].id;
+        visitorDeptId = deptData.departments[0].id;
       }
 
       // Create visitor in users table
