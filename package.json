@@ -7,7 +7,8 @@
     "prod": "npm-run-all build start"
   },
   "dependencies": {
-    "@instantdb/react": "^0.12.14",
+    "@instantdb/core": "^0.17.32",
+    "@instantdb/react": "^0.17.32",
     "@radix-ui/react-select": "^2.1.1",
     "@radix-ui/react-slot": "^1.1.0",
     "class-variance-authority": "^0.7.0",

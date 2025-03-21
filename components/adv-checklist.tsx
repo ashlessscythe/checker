@@ -163,7 +163,8 @@ export default React.memo(function AdvancedChecklist() {
 
   function isUserCheckedIn(user: any): boolean {
     const lastPunch = user.punches[0];
-    return lastPunch && checkInTypes.has(lastPunch.type);
+    // Cast the string to CheckActionType enum
+    return lastPunch && checkInTypes.has(lastPunch.type as CheckActionType);
   }
 
   const usersWithStatus = useMemo(() => {
@@ -171,7 +172,9 @@ export default React.memo(function AdvancedChecklist() {
 
     return data.users.map((user) => {
       const lastPunch = user.punches[0];
-      const isCheckedIn = lastPunch && checkInTypes.has(lastPunch.type);
+      // Cast the string to CheckActionType enum
+      const isCheckedIn =
+        lastPunch && checkInTypes.has(lastPunch.type as CheckActionType);
       const timestamp = lastPunch ? new Date(lastPunch.timestamp).getTime() : 0;
       const diffInHours = (currentTime - timestamp) / (1000 * 60 * 60);
       const name = user.name;

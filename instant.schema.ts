@@ -1,9 +1,18 @@
-import { i } from "@instantdb/core";
-import { INSTANT_APP_ID } from "./config";
+// Docs: https://www.instantdb.com/docs/modeling-data
 
-const graph = i.graph(
-  INSTANT_APP_ID,
-  {
+import { i } from "@instantdb/react";
+
+const _schema = i.schema({
+  entities: {
+    // System entities
+    $files: i.entity({
+      path: i.string().unique().indexed(),
+      url: i.any(),
+    }),
+    $users: i.entity({
+      email: i.string().unique().indexed(),
+    }),
+    // Custom entities
     users: i.entity({
       name: i.string(),
       email: i.string(),
@@ -19,8 +28,10 @@ const graph = i.graph(
     }),
     punches: i.entity({
       type: i.string(),
-      timestamp: i.number(),
+      timestamp: i.number().indexed(), // added indexed
       serverCreatedAt: i.number(), // Adding serverCreatedAt for sorting
+      isAdminGenerated: i.boolean(), // From inferred schema
+      isSystemGenerated: i.boolean(), // From inferred schema
     }),
     departments: i.entity({
       name: i.string(),
@@ -44,8 +55,10 @@ const graph = i.graph(
       totalPresent: i.number(),
     }),
   },
-  {
-    userPunches: {
+  links: {
+    // Important: Updating the relationship to match the code's expectations
+    // The code expects a punch to have multiple users
+    usersPunches: {
       forward: {
         on: "users",
         has: "many",
@@ -53,8 +66,8 @@ const graph = i.graph(
       },
       reverse: {
         on: "punches",
-        has: "one",
-        label: "user",
+        has: "many", // Changed from "one" to "many" to match code expectations
+        label: "users",
       },
     },
     userDepartment: {
@@ -81,7 +94,14 @@ const graph = i.graph(
         label: "user",
       },
     },
-  }
-);
+  },
+  rooms: {},
+});
 
-export default graph;
+// This helps Typescript display nicer intellisense
+type _AppSchema = typeof _schema;
+interface AppSchema extends _AppSchema {}
+const schema: AppSchema = _schema;
+
+export type { AppSchema };
+export default schema;
