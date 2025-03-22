@@ -18,6 +18,37 @@ import {
   SelectValue,
 } from "./ui/select";
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  barcode: string;
+  isAdmin: boolean;
+  isAuth: boolean;
+  lastLoginAt: number;
+  createdAt: number;
+  deptId: string;
+  serverCreatedAt: number;
+  laptopSerial: string;
+  purpose: string;
+}
+
+interface Punch {
+  id: string;
+  type: string;
+  timestamp: number;
+  userId: string;
+  serverCreatedAt: number;
+  isAdminGenerated: boolean;
+  isSystemGenerated: boolean;
+}
+
+interface UserWithStatus extends User {
+  timeAgoString: string;
+  hoursAgo: number;
+  isOld?: boolean;
+}
+
 export default React.memo(function CheckList() {
   const [checkedUsers, setCheckedUsers] = useState<
     Map<string, { status: boolean; accountedBy: string }>
@@ -65,12 +96,37 @@ export default React.memo(function CheckList() {
   const { data, isLoading, error } = db.useQuery({
     users: {
       $: {},
-      punches: {
-        $: {
-          order: { serverCreatedAt: "desc" },
-        },
-      },
+      name: true,
+      id: true,
+      email: true,
+      barcode: true,
+      isAdmin: true,
+      isAuth: true,
+      lastLoginAt: true,
+      createdAt: true,
+      deptId: true,
+      serverCreatedAt: true,
+      laptopSerial: true,
+      purpose: true,
       department: {},
+    },
+    punches: {
+      $: {
+        order: { serverCreatedAt: "desc" },
+      },
+      type: true,
+      timestamp: true,
+      userId: true,
+      serverCreatedAt: true,
+      isAdminGenerated: true,
+      isSystemGenerated: true,
+      user: {
+        $: {
+          on: "users",
+          by: "userId",
+        },
+        name: true,
+      },
     },
     fireDrillChecks: {
       $: {
@@ -145,9 +201,10 @@ export default React.memo(function CheckList() {
   const handleCompleteDrill = useCallback(async () => {
     if (!data || !data.users) return;
 
-    const checkedInUsers = data.users.filter(
-      (user) => user.punches[0]?.type === "checkin"
-    );
+    const checkedInUsers = data.users.filter((user) => {
+      const userPunch = data.punches?.find(punch => punch.userId === user.id);
+      return userPunch?.type === "checkin";
+    });
 
     try {
       const newDrillRecordId = id(); // Generate a new ID for the fire drill record
@@ -168,16 +225,18 @@ export default React.memo(function CheckList() {
     }
   }, [data, drillId, checkedUsers, generateNewDrillId]);
 
-  function isUserCheckedIn(user: any): boolean {
-    const lastPunch = user.punches[0];
-    return lastPunch && checkInTypes.has(lastPunch.type);
+  function isUserCheckedIn(user: User): boolean {
+    if (!data?.punches) return false;
+    const lastPunch = data.punches.find(punch => punch.userId === user.id);
+    return lastPunch ? checkInTypes.has(lastPunch.type as CheckActionType) : false;
   }
 
   const checkedInUsersWithHours = useMemo(() => {
-    if (!data?.users) return [];
+    if (!data?.users || !data?.punches) return [];
 
     return data.users.filter(isUserCheckedIn).map((user) => {
-      const checkInTime = new Date(user.punches[0].timestamp).getTime();
+      const lastPunch = data.punches.find(punch => punch.userId === user.id);
+      const checkInTime = lastPunch ? new Date(lastPunch.timestamp).getTime() : 0;
       const diffInHours = (currentTime - checkInTime) / (1000 * 60 * 60);
       const name = user.name;
 
@@ -203,19 +262,17 @@ export default React.memo(function CheckList() {
         deptId: user.deptId,
       };
     });
-  }, [data?.users, currentTime]);
+  }, [data?.users, data?.punches, currentTime]);
 
   const filteredAndSortedUsers = useMemo(() => {
     // First filter out old users
     let result = checkedInUsersWithHours.filter((user) => {
-      const checkInTime = new Date(user.punches[0].timestamp).getTime();
-      const diffInHours = (currentTime - checkInTime) / (1000 * 60 * 60);
-      return diffInHours < IS_OLD_HOURS;
+      return user.hoursAgo < IS_OLD_HOURS;
     });
 
     // Apply filters
     if (filters.name) {
-      result = result.filter((user) =>
+      result = result.filter((user: UserWithStatus) =>
         user.name.toLowerCase().includes(filters.name.toLowerCase())
       );
     }
@@ -251,43 +308,17 @@ export default React.memo(function CheckList() {
     }
 
     return result;
-  }, [checkedInUsersWithHours, filters, sortConfig, checkedUsers]);
+  }, [checkedInUsersWithHours, filters, sortConfig, checkedUsers, IS_OLD_HOURS]);
 
-  const CheckListRow: React.FC<{
-    user: {
-      timeAgoString: string;
-      name: string;
-      punches: any[];
-      id: string;
-      deptId: string;
-    };
+  interface CheckListRowProps {
+    user: UserWithStatus;
     isChecked: boolean;
     accountedBy: string | undefined;
     onCheck: (userId: string) => Promise<void>;
-  }> = React.memo(({ user, isChecked, accountedBy, onCheck }) => {
-    // parse hours
-    // Parse the timeAgoString to get the number of hours
-    const parseTimeAgo = (timeAgoString: string): number => {
-      const [value, unit] = timeAgoString.split(" ");
-      const numValue = parseInt(value, 10);
+  }
 
-      switch (unit) {
-        case "day":
-        case "days":
-          return numValue * 24;
-        case "hour":
-        case "hours":
-          return numValue;
-        case "minute":
-        case "minutes":
-          return numValue / 60;
-        default:
-          return 0; // For "Just now" or unexpected formats
-      }
-    };
-
-    const hoursAgo = parseTimeAgo(user.timeAgoString);
-    const isOld = hoursAgo >= IS_OLD_HOURS;
+  const CheckListRow: React.FC<CheckListRowProps> = React.memo(({ user, isChecked, accountedBy, onCheck }) => {
+    const isOld = user.hoursAgo >= IS_OLD_HOURS;
 
     return (
       <tr
@@ -439,19 +470,14 @@ export default React.memo(function CheckList() {
             {" - "}
             {(() => {
               // First filter by age
-              const nonOldUsers = checkedInUsersWithHours.filter((user) => {
-                const checkInTime = new Date(
-                  user.punches[0].timestamp
-                ).getTime();
-                const diffInHours =
-                  (currentTime - checkInTime) / (1000 * 60 * 60);
-                return diffInHours < IS_OLD_HOURS;
-              });
+              const nonOldUsers = checkedInUsersWithHours.filter(
+                (user) => user.hoursAgo < IS_OLD_HOURS
+              );
 
               // Then apply other filters to get count of hidden by filters
               let filteredUsers = nonOldUsers;
               if (filters.name) {
-                filteredUsers = filteredUsers.filter((user) =>
+                filteredUsers = filteredUsers.filter((user: UserWithStatus) =>
                   user.name.toLowerCase().includes(filters.name.toLowerCase())
                 );
               }

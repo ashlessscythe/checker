@@ -28,10 +28,11 @@ const _schema = i.schema({
     }),
     punches: i.entity({
       type: i.string(),
-      timestamp: i.number().indexed(), // added indexed
-      serverCreatedAt: i.number(), // Adding serverCreatedAt for sorting
-      isAdminGenerated: i.boolean(), // From inferred schema
-      isSystemGenerated: i.boolean(), // From inferred schema
+      timestamp: i.number().indexed(),
+      serverCreatedAt: i.number(),
+      isAdminGenerated: i.boolean(),
+      isSystemGenerated: i.boolean(),
+      userId: i.string().indexed(), // Add direct reference to user
     }),
     departments: i.entity({
       name: i.string(),
@@ -56,20 +57,6 @@ const _schema = i.schema({
     }),
   },
   links: {
-    // Important: Updating the relationship to match the code's expectations
-    // The code expects a punch to have multiple users
-    usersPunches: {
-      forward: {
-        on: "users",
-        has: "many",
-        label: "punches",
-      },
-      reverse: {
-        on: "punches",
-        has: "many", // Changed from "one" to "many" to match code expectations
-        label: "users",
-      },
-    },
     userDepartment: {
       forward: {
         on: "users",

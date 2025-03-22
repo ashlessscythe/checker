@@ -115,11 +115,14 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
     return;
   }
 
+  console.log(`performing punch for user ${JSON.stringify(entity)}`)
+
   // Check if entity is a visitor by checking if they're in the VISITOR department
   const isVisitor = entity.purpose !== undefined;
 
   // Get the last punch for this entity
   const lastPunch = entity.punches[0];
+  console.log(`last punch is ${lastPunch}`)
   let actionType: CheckActionType;
   let isSystemAction = false;
   let isAdminAction = false;
@@ -134,9 +137,11 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
       force === CheckActionType.AdminCheckIn ||
       force === CheckActionType.AdminCheckOut;
   } else if (!lastPunch) {
+    // First punch of the day is always check-in
     actionType = CheckActionType.CheckIn;
   } else {
-    // Check if the last punch was any type of check-out (including admin and system)
+    // If last punch was a check-out type (including admin/system), then check-in
+    // Otherwise (if last punch was a check-in type), then check-out
     actionType = checkOutTypes.has(lastPunch.type)
       ? CheckActionType.CheckIn
       : CheckActionType.CheckOut;
@@ -182,8 +187,9 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
           timestamp: Date.now(),
           isSystemGenerated: isSystemAction,
           isAdminGenerated: isAdminAction,
-        }),
-        tx.users[entity.id].link({ punches: newPunchId }),
+          userId: entity.id, // Add userId field
+          serverCreatedAt: Date.now(),
+        })
       ]);
       return true;
     } catch (error) {

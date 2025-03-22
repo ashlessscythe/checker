@@ -47,12 +47,12 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
     punches: Punch[];
   }
 
-  // Basic query for users and punches
+  // Query for users and punches
   const { isLoading, error, data } = db.useQuery({
     users: {},
     punches: {
       $: {
-        order: { serverCreatedAt: "desc" }
+        order: { timestamp: "desc" }
       }
     }
   });
@@ -87,14 +87,16 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
     const user = data.users.find((u) => u.barcode === extractedId);
     if (!user) return null;
     
-    // Find user's punches using the correct relationship field
+    // Get user's punches
     const userPunches = data.punches
-      ?.filter(p => {
-        // Check if this punch belongs to the user through the usersPunches relationship
-        const punchUsers = (p as any).usersPunches;
-        return Array.isArray(punchUsers) && punchUsers.some(u => u.id === user.id);
-      })
+      ?.filter(punch => punch.userId === user.id)
+      ?.sort((a, b) => b.timestamp - a.timestamp)
       ?.slice(0, 10) || [];
+
+    console.log('User:', user);
+    console.log('Found punches:', userPunches);
+
+    console.log(`Found ${userPunches.length} punches for user ${user.name}`);
 
     return {
       ...user,

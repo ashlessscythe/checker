@@ -9,6 +9,31 @@ interface SwipesModalProps {
   onClose: () => void;
 }
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  barcode: string;
+  isAdmin: boolean;
+  isAuth: boolean;
+  lastLoginAt: number;
+  createdAt: number;
+  deptId: string;
+  serverCreatedAt: number;
+  laptopSerial: string;
+  purpose: string;
+}
+
+interface Punch {
+  id: string;
+  type: string;
+  timestamp: number;
+  userId: string;
+  serverCreatedAt: number;
+  isAdminGenerated: boolean;
+  isSystemGenerated: boolean;
+}
+
 export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
   const [barcode, setBarcode] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
@@ -31,16 +56,33 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
     }
   }, [isOpen, resetModal]);
 
-  // Fetch users with their punches for barcode lookup
+  // Fetch users and their punches
   const { data: userData, isLoading: isUserLoading } = db.useQuery({
     users: {
-      punches: {
-        $: {
-          first: 10,
-          order: {
-            serverCreatedAt: "desc",
-          },
+      $: {},
+      id: true,
+      name: true,
+      barcode: true,
+    },
+    punches: {
+      $: {
+        first: 10,
+        order: {
+          serverCreatedAt: "desc",
         },
+      },
+      type: true,
+      timestamp: true,
+      userId: true,
+      serverCreatedAt: true,
+      isAdminGenerated: true,
+      isSystemGenerated: true,
+      user: {
+        $: {
+          on: "users",
+          by: "userId",
+        },
+        name: true,
       },
     },
   });
@@ -71,18 +113,21 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
       return;
     }
 
-    console.log("Setting userId:", user.id, "with punches:", user.punches);
+    console.log("Setting userId:", user.id);
     setUserId(user.id);
     setBarcode("");
   }, [isUserLoading, barcode, userData, findUser]);
 
-  if (!isOpen) return null;
+  // Get user's punches
+  const userPunches = useMemo(() => {
+    if (!userId || !userData?.punches) return [];
+    return userData.punches
+      .filter(punch => punch.userId === userId)
+      .sort((a, b) => b.serverCreatedAt - a.serverCreatedAt)
+      .slice(0, 10);
+  }, [userId, userData]);
 
-  // Find the user with their punches in the userData
-  const userWithPunches = userId
-    ? userData?.users.find((u) => u.id === userId)
-    : null;
-  console.log("Current user with punches:", userWithPunches);
+  if (!isOpen) return null;
 
   return (
     <div
@@ -117,11 +162,11 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
           </div>
         ) : isUserLoading ? (
           <div>Loading...</div>
-        ) : !userWithPunches?.punches?.length ? (
+        ) : !userPunches.length ? (
           <div>No recent swipes found</div>
         ) : (
           <div className="space-y-2">
-            {userWithPunches.punches.map((punch) => (
+            {userPunches.map((punch) => (
               <div
                 key={punch.id}
                 className={`flex justify-between items-center p-2 rounded ${

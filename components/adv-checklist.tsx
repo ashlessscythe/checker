@@ -11,6 +11,28 @@ import {
   checkOutTypes,
 } from "@/utils/checkInOut";
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  barcode: string;
+  isAdmin: boolean;
+  isAuth: boolean;
+  lastLoginAt: number;
+  createdAt: number;
+  deptId: string;
+  serverCreatedAt: number;
+  laptopSerial: string;
+  purpose: string;
+}
+
+interface UserWithStatus extends User {
+  isCheckedIn: boolean;
+  timeAgoString: string;
+  hoursAgo: number;
+  isOld: boolean;
+}
+
 export default React.memo(function AdvancedChecklist() {
   const [checkedUsers, setCheckedUsers] = useState<
     Map<string, { status: boolean; accountedBy: string }>
@@ -62,10 +84,32 @@ export default React.memo(function AdvancedChecklist() {
   const { data, isLoading, error } = db.useQuery({
     users: {
       $: {},
-      punches: {
+      name: true,
+      id: true,
+      email: true,
+      barcode: true,
+      isAdmin: true,
+      isAuth: true,
+      lastLoginAt: true,
+      createdAt: true,
+      deptId: true,
+      serverCreatedAt: true,
+      laptopSerial: true,
+      purpose: true,
+    },
+    punches: {
+      $: {
+        order: { serverCreatedAt: "desc" },
+      },
+      type: true,
+      timestamp: true,
+      userId: true,
+      user: {
         $: {
-          order: { serverCreatedAt: "desc" },
+          on: "users",
+          by: "userId",
         },
+        name: true,
       },
     },
     fireDrillChecks: {
@@ -138,9 +182,10 @@ export default React.memo(function AdvancedChecklist() {
   const handleCompleteDrill = useCallback(async () => {
     if (!data || !data.users) return;
 
-    const checkedInUsers = data.users.filter(
-      (user) => user.punches[0]?.type === "checkin"
-    );
+    const checkedInUsers = data.users.filter((user) => {
+      const userPunch = data.punches?.find(punch => punch.userId === user.id);
+      return userPunch?.type === "checkin";
+    });
 
     try {
       const newDrillRecordId = id(); // Generate a new ID for the fire drill record
@@ -168,10 +213,10 @@ export default React.memo(function AdvancedChecklist() {
   }
 
   const usersWithStatus = useMemo(() => {
-    if (!data?.users) return [];
+    if (!data?.users || !data?.punches) return [];
 
     return data.users.map((user) => {
-      const lastPunch = user.punches[0];
+      const lastPunch = data.punches.find(punch => punch.userId === user.id);
       // Cast the string to CheckActionType enum
       const isCheckedIn =
         lastPunch && checkInTypes.has(lastPunch.type as CheckActionType);
@@ -205,7 +250,7 @@ export default React.memo(function AdvancedChecklist() {
   }, [data?.users, currentTime]);
 
   const filteredAndSortedUsers = useMemo(() => {
-    let result = usersWithStatus;
+    let result = usersWithStatus as UserWithStatus[];
 
     // Apply filters
     if (filters.name) {
@@ -261,19 +306,30 @@ export default React.memo(function AdvancedChecklist() {
   // Pagination controls
   const totalPages = Math.ceil(filteredAndSortedUsers.length / itemsPerPage);
 
-  const CheckListRow: React.FC<{
+  interface CheckListRowProps {
     user: {
       timeAgoString: string;
       name: string;
-      punches: any[];
       id: string;
       isCheckedIn: boolean;
       isOld: boolean;
+      email: string;
+      barcode: string;
+      isAdmin: boolean;
+      isAuth: boolean;
+      lastLoginAt: number;
+      createdAt: number;
+      deptId: string;
+      serverCreatedAt: number;
+      laptopSerial: string;
+      purpose: string;
     };
     isChecked: boolean;
     accountedBy: string | undefined;
     onCheck: (userId: string) => Promise<void>;
-  }> = React.memo(({ user, isChecked, accountedBy, onCheck }) => {
+  }
+
+  const CheckListRow: React.FC<CheckListRowProps> = React.memo(({ user, isChecked, accountedBy, onCheck }) => {
     const statusClass = user.isCheckedIn
       ? isChecked
         ? "bg-green-100 dark:bg-green-700"

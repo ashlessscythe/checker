@@ -5,6 +5,21 @@ import { Input } from "./ui/input";
 import { Select } from "./ui/select";
 import { Button } from "./ui/button";
 
+import { AppSchema } from "@/instant.schema";
+
+interface User {
+  id: string;
+  name: string;
+}
+
+interface Punch {
+  id: string;
+  userId: string;
+  type: string;
+  timestamp: number;
+  serverCreatedAt: number;
+}
+
 export default function CheckInsTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -24,6 +39,12 @@ export default function CheckInsTable() {
   }, [timeWindow]);
 
   const { data, isLoading, error, pageInfo } = db.useQuery({
+    users: {
+      $: {},
+      id: true,
+      name: true,
+      email: true,
+    },
     punches: {
       $: {
         first: itemsPerPage,
@@ -32,7 +53,13 @@ export default function CheckInsTable() {
           serverCreatedAt: "desc",
         },
       },
-      users: {},
+      id: true,
+      type: true,
+      timestamp: true,
+      userId: true,
+      serverCreatedAt: true,
+      isAdminGenerated: true,
+      isSystemGenerated: true,
     },
   });
 
@@ -43,17 +70,19 @@ export default function CheckInsTable() {
   console.log("Query Data:", data); // Debugging line
 
   const filteredPunches = useMemo(() => {
-    if (!data || !data.punches) return [];
+    if (!data || !data.punches || !data.users) return [];
 
-    return data.punches.filter((punch) => {
+    const users = data.users as User[];
+    const punches = data.punches as Punch[];
+    
+    return punches.filter((punch) => {
       // Time window filter
       const timeMatch = punch.timestamp >= timeWindowAgo;
 
       // Other filters
+      const userName = users.find(u => u.id === punch.userId)?.name || '';
       const nameMatch = filterName
-        ? punch.users[0]?.name
-            ?.toLowerCase()
-            .includes(filterName.toLowerCase()) ?? false
+        ? userName.toLowerCase().includes(filterName.toLowerCase())
         : true;
       const typeMatch = filterType ? punch.type === filterType : true;
       const dateMatch =
@@ -194,7 +223,7 @@ export default function CheckInsTable() {
               {filteredPunches.map((punch) => (
                 <tr key={punch.id}>
                   <td className="border px-4 py-2">
-                    {punch.users[0]?.name ?? "Unknown User"}
+                    {(data.users as User[]).find(u => u.id === punch.userId)?.name || "Unknown User"}
                   </td>
                   <td className="border px-4 py-2">{punch.type}</td>
                   <td className="border px-4 py-2">
