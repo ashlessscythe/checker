@@ -170,17 +170,33 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
 
   console.log(`Determined action: ${actionType}`);
 
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000;
+  
+  const attemptTransaction = async (retryCount = 0) => {
+    try {
+      const newPunchId = id();
+      await db.transact([
+        tx.punches[newPunchId].update({
+          type: actionType,
+          timestamp: Date.now(),
+          isSystemGenerated: isSystemAction,
+          isAdminGenerated: isAdminAction,
+        }),
+        tx.users[entity.id].link({ punches: newPunchId }),
+      ]);
+      return true;
+    } catch (error) {
+      if (retryCount < MAX_RETRIES && error.message?.includes('timed out')) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return attemptTransaction(retryCount + 1);
+      }
+      throw error;
+    }
+  };
+
   try {
-    const newPunchId = id();
-    await db.transact([
-      tx.punches[newPunchId].update({
-        type: actionType,
-        timestamp: Date.now(),
-        isSystemGenerated: isSystemAction,
-        isAdminGenerated: isAdminAction,
-      }),
-      tx.users[entity.id].link({ punches: newPunchId }),
-    ]);
+    await attemptTransaction();
 
     // Handle notifications
     switch (actionType) {
@@ -234,7 +250,11 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
     }
   } catch (error) {
     if (!isSystemAction) {
-      toast.error("An error occurred. Please try again.", {
+      const errorMessage = error.message?.includes('timed out')
+        ? "Operation timed out. Please try again."
+        : "An error occurred. Please try again.";
+      
+      toast.error(errorMessage, {
         ...baseToastStyle,
         icon: "❌",
         style: {
@@ -245,5 +265,6 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
       });
     }
     console.error("Check-in/out error:", error);
+    throw error; // Re-throw to allow component level handling
   }
 }

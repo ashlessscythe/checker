@@ -31,16 +31,41 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const inputRef = useAutoFocus(shouldFocus && !isModalOpen);
 
-  // Fetch users with their punches
+  // Define types for our data
+  interface Punch {
+    id: string;
+    type: string;
+    timestamp: number;
+    serverCreatedAt: number;
+  }
+
+  interface User {
+    id: string;
+    barcode: string;
+    name: string;
+    purpose?: string;
+    punches: Punch[];
+  }
+
+  // Basic query for users and punches
   const { isLoading, error, data } = db.useQuery({
-    users: {
-      punches: {
-        $: {
-          order: { serverCreatedAt: "desc" },
-        },
-      },
-    },
+    users: {},
+    punches: {
+      $: {
+        order: { serverCreatedAt: "desc" }
+      }
+    }
   });
+
+  // Handle timeout errors with retry
+  useEffect(() => {
+    if (error?.message?.includes('timed out') || error?.message?.includes('validation failed')) {
+      const timer = setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   // Always call hooks, but control their effect based on shouldFocus
   useAutoNavigate("/");
@@ -57,9 +82,24 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
   }, [barcode]);
 
   const findUser = useMemo(() => {
-    if (!data) return null;
+    if (!data?.users?.length) return null;
     const extractedId = extractUserId(barcode);
-    return data.users.find((u) => u.barcode === extractedId);
+    const user = data.users.find((u) => u.barcode === extractedId);
+    if (!user) return null;
+    
+    // Find user's punches using the correct relationship field
+    const userPunches = data.punches
+      ?.filter(p => {
+        // Check if this punch belongs to the user through the usersPunches relationship
+        const punchUsers = (p as any).usersPunches;
+        return Array.isArray(punchUsers) && punchUsers.some(u => u.id === user.id);
+      })
+      ?.slice(0, 10) || [];
+
+    return {
+      ...user,
+      punches: userPunches
+    } as User;
   }, [data, barcode]);
 
   const isDoubleScan = useCallback(
@@ -109,8 +149,15 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
       return;
     }
 
-    await performCheckinOut(user);
-    setBarcode("");
+    try {
+      await performCheckinOut(user);
+      setBarcode("");
+    } catch (error) {
+      console.error("Error in handleCheckInOut:", error);
+      if (error?.message?.includes('validation failed')) {
+        window.location.reload();
+      }
+    }
   }, [isLoading, barcode, data, findUser, isDoubleScan]);
 
   if (isLoading) {
@@ -118,7 +165,12 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
   }
 
   if (error) {
-    return <div>Error: {error.message}</div>;
+    return (
+      <div className="text-center p-4">
+        <div className="text-red-500 mb-2">Error: {error.message}</div>
+        <div className="text-sm text-gray-600">Retrying in 2 seconds...</div>
+      </div>
+    );
   }
 
   return (
