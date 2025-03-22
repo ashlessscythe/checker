@@ -95,47 +95,21 @@ export default React.memo(function CheckList() {
 
   const { data, isLoading, error } = db.useQuery({
     users: {
-      $: {},
-      name: true,
-      id: true,
-      email: true,
-      barcode: true,
-      isAdmin: true,
-      isAuth: true,
-      lastLoginAt: true,
-      createdAt: true,
-      deptId: true,
-      serverCreatedAt: true,
-      laptopSerial: true,
-      purpose: true,
-      department: {},
+      $: {}
     },
     punches: {
       $: {
-        order: { serverCreatedAt: "desc" },
-      },
-      type: true,
-      timestamp: true,
-      userId: true,
-      serverCreatedAt: true,
-      isAdminGenerated: true,
-      isSystemGenerated: true,
-      user: {
-        $: {
-          on: "users",
-          by: "userId",
-        },
-        name: true,
-      },
+        order: { serverCreatedAt: "desc" }
+      }
     },
     fireDrillChecks: {
       $: {
-        where: { drillId: drillId },
-      },
+        where: { drillId }
+      }
     },
     departments: {
-      $: {},
-    },
+      $: {}
+    }
   });
 
   useEffect(() => {

@@ -40,27 +40,20 @@ export default function CheckInsTable() {
 
   const { data, isLoading, error, pageInfo } = db.useQuery({
     users: {
-      $: {},
-      id: true,
-      name: true,
-      email: true,
+      $: {
+        where: {}
+      }
     },
     punches: {
       $: {
+        where: {},
         first: itemsPerPage,
         after: endCursor,
         order: {
           serverCreatedAt: "desc",
-        },
-      },
-      id: true,
-      type: true,
-      timestamp: true,
-      userId: true,
-      serverCreatedAt: true,
-      isAdminGenerated: true,
-      isSystemGenerated: true,
-    },
+        }
+      }
+    }
   });
 
   if (error) {
