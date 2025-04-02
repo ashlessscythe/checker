@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { db } from "@/lib/instantdb";
-import { extractUserId } from "@/utils/checkInOut";
+import { extractUserId, getMostReliablePunch } from "@/utils/checkInOut";
 
 interface SwipesModalProps {
   isOpen: boolean;
@@ -56,7 +56,9 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
     }
   }, [isOpen, resetModal]);
 
-  // Fetch users and their punches
+  // Fetch users and their punches with improved ordering
+  // Note: InstantDB might not support multiple order fields in some versions
+  // So we'll use a single order field for reliability
   const { data: userData, isLoading: isUserLoading } = db.useQuery({
     users: {
       $: {},
@@ -66,8 +68,9 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
     },
     punches: {
       $: {
-        first: 10,
+        first: 50, // Fetch more punches to ensure we have enough after filtering
         order: {
+          // Prioritize server timestamp for more reliable ordering
           serverCreatedAt: "desc",
         },
       },
@@ -118,14 +121,55 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
     setBarcode("");
   }, [isUserLoading, barcode, userData, findUser]);
 
-  // Get user's punches
+  // Get user's punches with improved reliability
   const userPunches = useMemo(() => {
     if (!userId || !userData?.punches) return [];
-    return userData.punches
-      .filter(punch => punch.userId === userId)
-      .sort((a, b) => b.serverCreatedAt - a.serverCreatedAt)
-      .slice(0, 10);
+
+    // Filter punches for this user
+    const filteredPunches = userData.punches.filter(
+      (punch) => punch.userId === userId
+    );
+
+    // We'll use the sorting from the query, which prioritizes serverCreatedAt
+    // but we'll also ensure we're getting the most recent 10 punches
+    return filteredPunches.slice(0, 10);
   }, [userId, userData]);
+
+  // Format the punch type for display
+  const formatPunchType = (type: string) => {
+    if (
+      type.includes("checkin") ||
+      type.includes("admin_checkin") ||
+      type.includes("sys_checkin")
+    ) {
+      return "Check In";
+    } else if (
+      type.includes("checkout") ||
+      type.includes("admin_checkout") ||
+      type.includes("sys_checkout")
+    ) {
+      return "Check Out";
+    }
+    return type;
+  };
+
+  // Determine background color based on punch type
+  const getPunchBackgroundColor = (type: string) => {
+    if (
+      type.includes("checkin") ||
+      type.includes("admin_checkin") ||
+      type.includes("sys_checkin")
+    ) {
+      return "bg-green-50";
+    } else if (
+      type.includes("checkout") ||
+      type.includes("admin_checkout") ||
+      type.includes("sys_checkout")
+    ) {
+      return "bg-red-50";
+    }
+    return "bg-gray-50";
+  };
 
   if (!isOpen) return null;
 
@@ -169,13 +213,22 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
             {userPunches.map((punch) => (
               <div
                 key={punch.id}
-                className={`flex justify-between items-center p-2 rounded ${
-                  punch.type === "checkin" ? "bg-green-50" : "bg-red-50"
-                }`}
+                className={`flex justify-between items-center p-2 rounded ${getPunchBackgroundColor(
+                  punch.type
+                )}`}
               >
-                <span className="font-medium">
-                  {punch.type === "checkin" ? "Check In" : "Check Out"}
-                </span>
+                <div className="flex flex-col">
+                  <span className="font-medium">
+                    {formatPunchType(punch.type)}
+                  </span>
+                  {(punch.isAdminGenerated || punch.isSystemGenerated) && (
+                    <span className="text-xs text-gray-500">
+                      {punch.isAdminGenerated
+                        ? "Admin generated"
+                        : "System generated"}
+                    </span>
+                  )}
+                </div>
                 <span className="text-gray-600">
                   {format(new Date(punch.timestamp), "MMM d, h:mm a")}
                 </span>

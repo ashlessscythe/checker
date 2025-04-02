@@ -4,14 +4,17 @@ import {
   checkInTypes,
   CheckActionType,
   performCheckinOut,
+  getMostReliablePunch,
 } from "../utils/checkInOut";
 
 const CHECKOUT_INTERVAL =
   parseInt(process.env.NEXT_PUBLIC_CLEANUP_INTERVAL_MINUTES, 10) * 60 * 1000 ||
   10 * 60 * 1000; // 10 min in milliseconds
 const MAX_CHECKIN_DURATION =
-  parseInt(process.env.NEXT_PUBLIC_CLEANUP_HOURS, 10) * 60 * 60 * 1000 ||
-  16 * 60 * 60 * 1000; // 16 hours in milliseconds
+  parseInt(process.env.NEXT_PUBLIC_STALE_CHECKIN_CLEANUP_HOURS, 10) *
+    60 *
+    60 *
+    1000 || 16 * 60 * 60 * 1000; // 16 hours in milliseconds
 
 export function useAutoCheckout({ data }) {
   const [userData, setUserData] = useState(data);
@@ -26,13 +29,22 @@ export function useAutoCheckout({ data }) {
 
   useEffect(() => {
     const checkAndForceCheckout = () => {
+      if (!userData?.users?.length || !userData?.punches?.length) return;
+
       const currentTime = Date.now();
 
       // Filter users first
       const usersToCheckout = userData.users.filter((user) => {
-        const lastPunch = user.punches[0]; // Get the last punch
+        // Get all punches for this user
+        const userPunches = userData.punches.filter(
+          (punch) => punch.userId === user.id
+        );
 
-        if (!lastPunch) return false; // No punches, skip this user
+        if (!userPunches.length) return false; // No punches, skip this user
+
+        // Get the most reliable last punch
+        const lastPunch = getMostReliablePunch(userPunches);
+        if (!lastPunch) return false;
 
         // Check if the last punch is a check-in (regular or admin)
         const isCheckedIn = checkInTypes.has(lastPunch.type);
@@ -49,8 +61,23 @@ export function useAutoCheckout({ data }) {
 
       // Process only the filtered users
       usersToCheckout.forEach((user) => {
+        // Get all punches for this user again to ensure we have the latest data
+        const userPunches = userData.punches.filter(
+          (punch) => punch.userId === user.id
+        );
+
+        const userWithPunches = {
+          ...user,
+          punches: userPunches,
+        };
+
         console.log(`Force checkout for user ${user.name}`);
-        performCheckinOut(user, CheckActionType.SystemCheckOut);
+        performCheckinOut(
+          userWithPunches,
+          CheckActionType.SystemCheckOut
+        ).catch((error) =>
+          console.error(`Auto-checkout error for ${user.name}:`, error)
+        );
       });
     };
 
@@ -59,5 +86,5 @@ export function useAutoCheckout({ data }) {
 
     // Clean up interval on component unmount
     return () => clearInterval(intervalId);
-  }, [userData, performCheckinOut]); // Add any other dependencies as needed
+  }, [userData]); // Add any other dependencies as needed
 }

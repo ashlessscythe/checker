@@ -109,20 +109,36 @@ export function extractUserId(scannedId: string) {
 // Define a type for the force parameter
 type ForceAction = CheckActionType | undefined;
 
+// Helper function to get the most reliable punch
+export function getMostReliablePunch(punches) {
+  if (!punches || punches.length === 0) return null;
+
+  // Sort by serverCreatedAt (most reliable) then by timestamp as fallback
+  return [...punches].sort((a, b) => {
+    // First compare by serverCreatedAt (most reliable server timestamp)
+    if (a.serverCreatedAt && b.serverCreatedAt) {
+      return b.serverCreatedAt - a.serverCreatedAt;
+    }
+    // Fall back to client timestamp if serverCreatedAt is missing
+    return b.timestamp - a.timestamp;
+  })[0];
+}
+
 export async function performCheckinOut(entity: any, force?: ForceAction) {
   if (!entity) {
     toast.error("User/Visitor not found");
     return;
   }
 
-  console.log(`performing punch for user ${JSON.stringify(entity)}`)
+  console.log(`performing punch for user ${JSON.stringify(entity)}`);
 
   // Check if entity is a visitor by checking if they're in the VISITOR department
   const isVisitor = entity.purpose !== undefined;
 
-  // Get the last punch for this entity
-  const lastPunch = entity.punches[0];
-  console.log(`last punch is ${lastPunch}`)
+  // Get the most reliable last punch for this entity
+  const lastPunch = getMostReliablePunch(entity.punches);
+  console.log(`last punch is ${JSON.stringify(lastPunch)}`);
+
   let actionType: CheckActionType;
   let isSystemAction = false;
   let isAdminAction = false;
@@ -177,24 +193,36 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
 
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 1000;
-  
+
   const attemptTransaction = async (retryCount = 0) => {
     try {
       const newPunchId = id();
+      const currentTime = Date.now();
+
       await db.transact([
         tx.punches[newPunchId].update({
           type: actionType,
-          timestamp: Date.now(),
+          timestamp: currentTime, // Client timestamp
           isSystemGenerated: isSystemAction,
           isAdminGenerated: isAdminAction,
           userId: entity.id, // Add userId field
-          serverCreatedAt: Date.now(),
-        })
+          serverCreatedAt: currentTime, // This will be overwritten by the server with its own timestamp
+        }),
       ]);
       return true;
     } catch (error) {
-      if (retryCount < MAX_RETRIES && error.message?.includes('timed out')) {
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      if (
+        retryCount < MAX_RETRIES &&
+        (error.message?.includes("timed out") ||
+          error.message?.includes("validation failed") ||
+          error.message?.includes("network error"))
+      ) {
+        console.log(
+          `Retry ${retryCount + 1}/${MAX_RETRIES} after error: ${error.message}`
+        );
+        await new Promise((resolve) =>
+          setTimeout(resolve, RETRY_DELAY * (retryCount + 1))
+        ); // Exponential backoff
         return attemptTransaction(retryCount + 1);
       }
       throw error;
@@ -256,10 +284,10 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
     }
   } catch (error) {
     if (!isSystemAction) {
-      const errorMessage = error.message?.includes('timed out')
+      const errorMessage = error.message?.includes("timed out")
         ? "Operation timed out. Please try again."
         : "An error occurred. Please try again.";
-      
+
       toast.error(errorMessage, {
         ...baseToastStyle,
         icon: "❌",

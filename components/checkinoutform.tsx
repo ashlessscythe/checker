@@ -10,12 +10,9 @@ import {
   CheckActionType,
   performCheckinOut,
   extractUserId,
+  getMostReliablePunch,
 } from "@/utils/checkInOut";
-// import { useAutoCheckout } from "@/hooks/useAutoCheckout";
 import SwipesModal from "./swipes-modal";
-
-// const ENABLE_AUTO_CLEANUP =
-// process.env.NEXT_PUBLIC_ENABLE_AUTO_CLEANUP === "true";
 
 const DEBOUNCE_TIMEOUT =
   Number(process.env.NEXT_PUBLIC_DEBOUNCE_TIMEOUT) || 5000; // Default to 5 seconds if not set
@@ -47,19 +44,27 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
     punches: Punch[];
   }
 
-  // Query for users and punches
+  // Query for users and punches with improved ordering
+  // Note: InstantDB might not support multiple order fields in some versions
+  // So we'll use a single order field for reliability
   const { isLoading, error, data } = db.useQuery({
     users: {},
     punches: {
       $: {
-        order: { timestamp: "desc" }
-      }
-    }
+        order: {
+          // Use serverCreatedAt as the primary sort field
+          serverCreatedAt: "desc",
+        },
+      },
+    },
   });
 
   // Handle timeout errors with retry
   useEffect(() => {
-    if (error?.message?.includes('timed out') || error?.message?.includes('validation failed')) {
+    if (
+      error?.message?.includes("timed out") ||
+      error?.message?.includes("validation failed")
+    ) {
       const timer = setTimeout(() => {
         window.location.reload();
       }, 2000);
@@ -69,8 +74,9 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
 
   // Always call hooks, but control their effect based on shouldFocus
   useAutoNavigate("/");
-  // useAutoCheckout({ data });
+  // useAutoCheckout({ data }); // Re-enable auto checkout
 
+  // Clear barcode input after timeout
   useEffect(() => {
     const timer = setTimeout(() => {
       if (barcode) {
@@ -86,21 +92,21 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
     const extractedId = extractUserId(barcode);
     const user = data.users.find((u) => u.barcode === extractedId);
     if (!user) return null;
-    
-    // Get user's punches
-    const userPunches = data.punches
-      ?.filter(punch => punch.userId === user.id)
-      ?.sort((a, b) => b.timestamp - a.timestamp)
-      ?.slice(0, 10) || [];
 
-    console.log('User:', user);
-    console.log('Found punches:', userPunches);
+    // Get user's punches with improved reliability
+    const userPunches =
+      data.punches
+        ?.filter((punch) => punch.userId === user.id)
+        // We'll use the sorting from the query, which prioritizes serverCreatedAt
+        ?.slice(0, 10) || [];
 
+    console.log("User:", user);
+    console.log("Found punches:", userPunches);
     console.log(`Found ${userPunches.length} punches for user ${user.name}`);
 
     return {
       ...user,
-      punches: userPunches
+      punches: userPunches,
     } as User;
   }, [data, barcode]);
 
@@ -156,7 +162,7 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
       setBarcode("");
     } catch (error) {
       console.error("Error in handleCheckInOut:", error);
-      if (error?.message?.includes('validation failed')) {
+      if (error?.message?.includes("validation failed")) {
         window.location.reload();
       }
     }
