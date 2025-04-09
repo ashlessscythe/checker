@@ -4,6 +4,11 @@ import toast, { Toaster } from "react-hot-toast";
 
 // from .env 14 by default
 const RESET_HOURS = parseInt(process.env.NEXT_PUBLIC_RESET_HOURS || "14", 10);
+// Allow opposite action after X minutes (default 3)
+const ALLOW_OPPOSITE_MINUTES = parseInt(
+  process.env.NEXT_PUBLIC_ALLOW_OPPOSITE_MINUTES || "3",
+  10
+);
 
 // Define base toast style
 const baseToastStyle = {
@@ -158,9 +163,63 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
   } else {
     // If last punch was a check-out type (including admin/system), then check-in
     // Otherwise (if last punch was a check-in type), then check-out
-    actionType = checkOutTypes.has(lastPunch.type)
+    const newActionType = checkOutTypes.has(lastPunch.type)
       ? CheckActionType.CheckIn
       : CheckActionType.CheckOut;
+
+    // Check if the new action is the same category as the last punch
+    // This prevents consecutive check-ins or check-outs
+    const isLastPunchCheckIn = checkInTypes.has(lastPunch.type);
+    const isNewActionCheckIn = checkInTypes.has(newActionType);
+
+    // Calculate minutes since last punch
+    const lastPunchTime = new Date(lastPunch.timestamp).getTime();
+    const currentTime = Date.now();
+    const minutesSinceLastPunch = (currentTime - lastPunchTime) / (1000 * 60);
+
+    if (isLastPunchCheckIn === isNewActionCheckIn && !force) {
+      // User is trying to perform the same action type consecutively
+
+      // Allow if enough time has passed since the last punch
+      if (minutesSinceLastPunch >= ALLOW_OPPOSITE_MINUTES) {
+        console.log(
+          `Allowing opposite action after ${minutesSinceLastPunch.toFixed(
+            1
+          )} minutes for ${entity.name}`
+        );
+      } else {
+        // Not enough time has passed
+        const actionName = isLastPunchCheckIn ? "checked in" : "checked out";
+        const minutesRemaining = Math.ceil(
+          ALLOW_OPPOSITE_MINUTES - minutesSinceLastPunch
+        );
+        toast.error(
+          `${isVisitor ? "Visitor" : ""} ${
+            entity.name
+          } is already ${actionName}. You can punch ${
+            isLastPunchCheckIn ? "out" : "in"
+          } after ${minutesRemaining} minute${
+            minutesRemaining !== 1 ? "s" : ""
+          }`,
+          {
+            ...baseToastStyle,
+            style: {
+              ...baseToastStyle.style,
+              ...errorColors,
+              animation: "shake 0.5s ease-in-out",
+            },
+          }
+        );
+        console.log(
+          `Prevented duplicate ${actionName} for ${
+            entity.name
+          } (${minutesSinceLastPunch.toFixed(1)} minutes since last punch)`
+        );
+        return; // Exit early without creating a new punch
+      }
+    }
+
+    actionType = newActionType;
   }
 
   if (
