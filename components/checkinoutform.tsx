@@ -59,33 +59,42 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
     },
   });
 
+  // Always call hooks, but control their effect based on shouldFocus
+  useAutoNavigate("/");
+  // useAutoCheckout({ data }); // Keeping auto-checkout disabled
+
+  // Clear barcode input after timeout
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (barcode) {
+      timer = setTimeout(() => {
+        setBarcode("");
+      }, 5000);
+    }
+    return () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [barcode]);
+
   // Handle timeout errors with retry
   useEffect(() => {
+    let timer: NodeJS.Timeout;
     if (
       error?.message?.includes("timed out") ||
       error?.message?.includes("validation failed")
     ) {
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         window.location.reload();
       }, 2000);
-      return () => clearTimeout(timer);
     }
-  }, [error]);
-
-  // Always call hooks, but control their effect based on shouldFocus
-  useAutoNavigate("/");
-  // useAutoCheckout({ data }); // Re-enable auto checkout
-
-  // Clear barcode input after timeout
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (barcode) {
-        setBarcode("");
+    return () => {
+      if (timer) {
+        clearTimeout(timer);
       }
-    }, 5000);
-
-    return () => clearTimeout(timer);
-  }, [barcode]);
+    };
+  }, [error]);
 
   const findUser = useMemo(() => {
     if (!data?.users?.length) return null;
@@ -98,7 +107,7 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
       data.punches
         ?.filter((punch) => punch.userId === user.id)
         // We'll use the sorting from the query, which prioritizes serverCreatedAt
-        ?.slice(0, 10) || [];
+        ?.slice(0, 50) || []; // Increased from 10 to 50 to get more historical data
 
     console.log("User:", user);
     console.log("Found punches:", userPunches);
