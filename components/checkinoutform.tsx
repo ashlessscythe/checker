@@ -17,6 +17,12 @@ import SwipesModal from "./swipes-modal";
 const DEBOUNCE_TIMEOUT =
   Number(process.env.NEXT_PUBLIC_DEBOUNCE_TIMEOUT) || 5000; // Default to 5 seconds if not set
 
+// Add email validation function
+const isValidEmail = (email: string) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
 interface CheckInOutFormProps {
   shouldFocus: boolean;
 }
@@ -137,6 +143,20 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
 
   const handleCheckInOut = useCallback(async () => {
     if (isLoading || !barcode || !data) return;
+
+    // Check if input is an email address
+    if (isValidEmail(barcode)) {
+      toast.error("That looks like an email address. \n\nPlease use the 'Log In' button in the upper right corner", {
+        duration: 5000,
+        style: {
+          borderRadius: "10px",
+          background: "#333",
+          color: "#fff",
+        },
+      });
+      setBarcode("");
+      return;
+    }
 
     const extractedId = extractUserId(barcode);
     if (isDoubleScan(extractedId)) {
