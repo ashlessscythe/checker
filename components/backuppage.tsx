@@ -138,7 +138,10 @@ export default function BackupPage() {
       $: {},
     },
     punches: {
-      $: {},
+      $: {
+        order: { serverCreatedAt: 'desc' },
+        limit: 1000,
+      }
     },
     backups: {
       $: {},
@@ -325,6 +328,68 @@ export default function BackupPage() {
     toast.success(`Sample ${selectedTable} template downloaded`);
   };
 
+  const handleDownloadPunchReport = async () => {
+    try {
+      setIsExporting(true);
+      
+      // Process the data from our existing query
+      const userMap = Object.fromEntries(data.users.map(u => [u.id, u]));
+      const grouped: Record<string, Array<{ type: string; timestampLocal: string }>> = {};
+
+      // Get last 4 punches per user, newest to oldest
+      for (const p of data.punches) {
+        const userId = p.userId;
+        if (!grouped[userId]) grouped[userId] = [];
+        if (grouped[userId].length < 4) {
+          grouped[userId].push({
+            type: p.type,
+            timestampLocal: convertToMST(p.timestamp)
+          });
+        }
+      }
+
+      // Convert to CSV format
+      const headers = ['Name', 'Email', 'Punch Type', 'Local Timestamp'];
+      const csvRows = [headers];
+
+      // Process each user
+      for (const user of data.users) {
+        const punches = grouped[user.id] || [];
+        // If user has no punches, add a single row with unknown values
+        if (punches.length === 0) {
+          csvRows.push([user.name || 'unknown', user.email || 'unknown', 'unknown', 'unknown']);
+        } else {
+          // Add a row for each punch
+          for (const punch of punches) {
+            csvRows.push([
+              user.name || 'unknown',
+              user.email || 'unknown',
+              punch.type,
+              punch.timestampLocal
+            ]);
+          }
+        }
+      }
+
+      const csvContent = csvRows.map(row => row.join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `punch_report_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('Punch report downloaded successfully');
+    } catch (error) {
+      console.error('Error generating punch report:', error);
+      toast.error('Failed to generate punch report');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 sm:p-6 bg-gray-100 rounded-lg">
       <Toaster position="top-right" />
@@ -387,27 +452,21 @@ export default function BackupPage() {
                   Trim Old Punches
                 </Button>
               ) : (
-                <div className="space-y-2">
-                  <p className="text-orange-600 font-medium">
-                    Are you sure you want to delete all punch records older than{" "}
-                    {daysToKeep} days? This action cannot be undone.
-                  </p>
-                  <div className="flex space-x-2">
-                    <Button
-                      onClick={handleTrimPunches}
-                      disabled={isTrimming}
-                      className="w-1/2 bg-orange-600 hover:bg-orange-700"
-                    >
-                      {isTrimming ? "Trimming..." : "Confirm Trim"}
-                    </Button>
-                    <Button
-                      onClick={() => setShowTrimConfirm(false)}
-                      disabled={isTrimming}
-                      className="w-1/2"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={handleTrimPunches}
+                    disabled={isTrimming}
+                    className="w-1/2 bg-orange-600 hover:bg-orange-700"
+                  >
+                    {isTrimming ? "Trimming..." : "Confirm Trim"}
+                  </Button>
+                  <Button
+                    onClick={() => setShowTrimConfirm(false)}
+                    disabled={isTrimming}
+                    className="w-1/2"
+                  >
+                    Cancel
+                  </Button>
                 </div>
               )}
             </div>
@@ -510,6 +569,20 @@ export default function BackupPage() {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <h2 className="text-xl font-semibold mb-4">Punch Report</h2>
+          <p className="text-gray-600 mb-4">
+            Download a report of the most recent punches for all users.
+          </p>
+          <Button
+            onClick={handleDownloadPunchReport}
+            disabled={isExporting}
+            className="w-full bg-purple-600 hover:bg-purple-700"
+          >
+            {isExporting ? "Generating Report..." : "Download Punch Report"}
+          </Button>
         </div>
       </div>
     </div>
