@@ -115,12 +115,10 @@ export default React.memo(function CheckList() {
   useEffect(() => {
     if (data && data.fireDrillChecks) {
       const checkedMap = new Map(
-        data.fireDrillChecks
-          .filter((check) => check.status === "checked")
-          .map((check) => [
-            check.userId,
-            { status: true, accountedBy: check.accountedBy || "Unknown User" },
-          ])
+        data.fireDrillChecks.map((check) => [
+          check.userId,
+          { status: true, accountedBy: check.accountedBy || "Unknown User" },
+        ])
       );
       setCheckedUsers(checkedMap);
     }
@@ -130,9 +128,7 @@ export default React.memo(function CheckList() {
     async (userId: string) => {
       const user = authUser;
       const accountedBy = user?.name || user?.email || "Unknown User";
-      const isCurrentlyChecked =
-        checkedUsers.has(userId) && checkedUsers.get(userId)!.status;
-      const newStatus = isCurrentlyChecked ? "unchecked" : "checked";
+      const isCurrentlyChecked = checkedUsers.has(userId);
 
       try {
         // Find existing check for this user in this drill
@@ -140,21 +136,24 @@ export default React.memo(function CheckList() {
           (check) => check.userId === userId
         );
 
-        await db.transact([
-          existingCheck
-            ? tx.fireDrillChecks[existingCheck.id].update({
-                status: newStatus,
-                timestamp: Date.now(),
-                accountedBy: accountedBy,
-              })
-            : tx.fireDrillChecks[id()].update({
-                drillId: drillId,
-                userId: userId,
-                timestamp: Date.now(),
-                status: newStatus,
-                accountedBy: accountedBy,
-              }),
-        ]);
+        if (isCurrentlyChecked) {
+          // If currently checked, delete the record
+          if (existingCheck) {
+            await db.transact([
+              tx.fireDrillChecks[existingCheck.id].delete()
+            ]);
+          }
+        } else {
+          // If not checked, create a new record
+          await db.transact([
+            tx.fireDrillChecks[id()].update({
+              drillId: drillId,
+              userId: userId,
+              timestamp: Date.now(),
+              accountedBy: accountedBy,
+            })
+          ]);
+        }
 
         setCheckedUsers((prev) => {
           const newCheckedUsers = new Map(prev);
@@ -494,12 +493,14 @@ export default React.memo(function CheckList() {
             })()}
           </span>
         </span>
-        <button
-          onClick={handleCompleteDrill}
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
-        >
-          Complete Drill
-        </button>
+        {authUser?.isAdmin && (
+          <button
+            onClick={handleCompleteDrill}
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
+          >
+            Complete Drill
+          </button>
+        )}
       </div>
     </div>
   );
