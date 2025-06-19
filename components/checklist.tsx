@@ -72,6 +72,7 @@ export default React.memo(function CheckList() {
   );
   const { user } = useAuth();
   const authUser = user;
+  const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set());
 
   const generateNewDrillId = useCallback(() => {
     const today = new Date();
@@ -126,6 +127,8 @@ export default React.memo(function CheckList() {
 
   const handleCheckUser = useCallback(
     async (userId: string) => {
+      if (pendingUserIds.has(userId)) return; // Prevent double click
+      setPendingUserIds(prev => new Set(prev).add(userId));
       const user = authUser;
       const accountedBy = user?.name || user?.email || "Unknown User";
       const isCurrentlyChecked = checkedUsers.has(userId);
@@ -166,9 +169,18 @@ export default React.memo(function CheckList() {
         });
       } catch (error) {
         console.error("Error saving fire drill check:", error);
+      } finally {
+        // Add a 500ms artificial delay before removing from pending
+        setTimeout(() => {
+          setPendingUserIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(userId);
+            return newSet;
+          });
+        }, 500);
       }
     },
-    [authUser, checkedUsers, drillId, data]
+    [authUser, checkedUsers, drillId, data, pendingUserIds]
   );
 
   const handleCompleteDrill = useCallback(async () => {
@@ -288,9 +300,10 @@ export default React.memo(function CheckList() {
     isChecked: boolean;
     accountedBy: string | undefined;
     onCheck: (userId: string) => Promise<void>;
+    isPending: boolean;
   }
 
-  const CheckListRow: React.FC<CheckListRowProps> = React.memo(({ user, isChecked, accountedBy, onCheck }) => {
+  const CheckListRow: React.FC<CheckListRowProps> = React.memo(({ user, isChecked, accountedBy, onCheck, isPending }) => {
     const isOld = user.hoursAgo >= IS_OLD_HOURS;
 
     return (
@@ -298,6 +311,7 @@ export default React.memo(function CheckList() {
         className={`
       ${isChecked ? "bg-green-100 dark:bg-green-700" : ""}
       ${isOld ? "opacity-50" : ""}
+      ${isPending ? "opacity-60 pointer-events-none" : ""}
     `}
       >
         <td className="px-6 py-4 whitespace-nowrap">
@@ -313,8 +327,13 @@ export default React.memo(function CheckList() {
                 ? "bg-green-200 text-green-800 dark:bg-green-600 dark:text-green-100"
                 : "bg-red-200 text-red-800 dark:bg-red-600 dark:text-red-100"
             }`}
+            disabled={isPending}
           >
-            {isChecked ? `Accounted by ${accountedBy}` : "Unaccounted"}
+            {isPending
+              ? "Syncing..."
+              : isChecked
+                ? `Accounted by ${accountedBy}`
+                : "Unaccounted"}
           </button>
         </td>
         <td className="px-6 py-4 whitespace-nowrap">
@@ -430,6 +449,7 @@ export default React.memo(function CheckList() {
                   isChecked={checkedUsers.has(user.id)}
                   accountedBy={checkedUsers.get(user.id)?.accountedBy}
                   onCheck={handleCheckUser}
+                  isPending={pendingUserIds.has(user.id)}
                 />
               ))}
             </tbody>
