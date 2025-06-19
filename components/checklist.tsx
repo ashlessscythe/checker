@@ -5,6 +5,7 @@ import React, { useMemo, useEffect, useState, useCallback, useRef } from "react"
 import { id, tx } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
 import { useAuth } from "@/hooks/authContext";
+import toast, { Toaster } from "react-hot-toast";
 import {
   CheckActionType,
   checkInTypes,
@@ -146,6 +147,21 @@ export default React.memo(function CheckList() {
 
       try {
         if (isCurrentlyChecked) {
+          // Check if current user can unaccount this person
+          const canUnaccount = user?.isAdmin || existingCheck.accountedBy === accountedBy;
+          
+          if (!canUnaccount) {
+            toast.error("CANNOT UNACCOUNT OTHERS 🛑", {
+              duration: 3000,
+              style: {
+                borderRadius: "10px",
+                background: "#333",
+                color: "#fff",
+              },
+            });
+            return;
+          }
+          
           // If currently checked, delete the record
           await db.transact([
             tx.fireDrillChecks[existingCheck.id].delete()
@@ -197,12 +213,12 @@ export default React.memo(function CheckList() {
           totalPresent: checkedInUsers.length,
         }),
       ]);
-      alert("Fire drill completed and saved!");
+      toast.success("Fire drill completed and saved!");
       generateNewDrillId(); // Generate a new drill ID for the next drill
       setCheckedUsers(new Map()); // Reset checked users
     } catch (error) {
       console.error("Error completing fire drill:", error);
-      alert("Error saving fire drill. Please try again.");
+      toast.error("Error saving fire drill. Please try again.");
     }
   }, [data, drillId, checkedUsers, generateNewDrillId]);
 
@@ -366,6 +382,16 @@ export default React.memo(function CheckList() {
 
   return (
     <div className="container mx-auto p-4">
+      <div className="h-16">
+        <Toaster
+          containerStyle={{
+            top: 0,
+          }}
+          toastOptions={{
+            className: "relative top-16",
+          }}
+        />
+      </div>
       <h1 className="text-2xl font-bold mb-4">
         Fire Drill Checklist - {dateTime}
       </h1>
