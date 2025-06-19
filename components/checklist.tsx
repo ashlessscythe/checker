@@ -1,7 +1,7 @@
 // components/checklist.tsx
 "use client";
 
-import React, { useMemo, useEffect, useState, useCallback } from "react";
+import React, { useMemo, useEffect, useState, useCallback, useRef } from "react";
 import { id, tx } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
 import { useAuth } from "@/hooks/authContext";
@@ -73,6 +73,7 @@ export default React.memo(function CheckList() {
   const { user } = useAuth();
   const authUser = user;
   const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set());
+  const pendingUserIdsRef = useRef<Set<string>>(new Set());
 
   const generateNewDrillId = useCallback(() => {
     const today = new Date();
@@ -127,25 +128,28 @@ export default React.memo(function CheckList() {
 
   const handleCheckUser = useCallback(
     async (userId: string) => {
-      if (pendingUserIds.has(userId)) return; // Prevent double click
+      // Use ref to track pending operations to avoid stale closures
+      if (pendingUserIdsRef.current.has(userId)) return; // Prevent double click
+      
+      // Add to both ref and state
+      pendingUserIdsRef.current.add(userId);
       setPendingUserIds(prev => new Set(prev).add(userId));
+      
       const user = authUser;
       const accountedBy = user?.name || user?.email || "Unknown User";
-      const isCurrentlyChecked = checkedUsers.has(userId);
+      
+      // Get current status from database state, not local state
+      const existingCheck = data.fireDrillChecks.find(
+        (check) => check.userId === userId
+      );
+      const isCurrentlyChecked = !!existingCheck;
 
       try {
-        // Find existing check for this user in this drill
-        const existingCheck = data.fireDrillChecks.find(
-          (check) => check.userId === userId
-        );
-
         if (isCurrentlyChecked) {
           // If currently checked, delete the record
-          if (existingCheck) {
-            await db.transact([
-              tx.fireDrillChecks[existingCheck.id].delete()
-            ]);
-          }
+          await db.transact([
+            tx.fireDrillChecks[existingCheck.id].delete()
+          ]);
         } else {
           // If not checked, create a new record
           await db.transact([
@@ -157,30 +161,22 @@ export default React.memo(function CheckList() {
             })
           ]);
         }
-
-        setCheckedUsers((prev) => {
-          const newCheckedUsers = new Map(prev);
-          if (isCurrentlyChecked) {
-            newCheckedUsers.delete(userId);
-          } else {
-            newCheckedUsers.set(userId, { status: true, accountedBy });
-          }
-          return newCheckedUsers;
-        });
+        
+        // Don't manually update checkedUsers - let the database query update it
+        // This prevents ghost toggles by ensuring consistency with the database
       } catch (error) {
         console.error("Error saving fire drill check:", error);
       } finally {
-        // Add a 500ms artificial delay before removing from pending
-        setTimeout(() => {
-          setPendingUserIds(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(userId);
-            return newSet;
-          });
-        }, 500);
+        // Remove from both ref and state
+        pendingUserIdsRef.current.delete(userId);
+        setPendingUserIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(userId);
+          return newSet;
+        });
       }
     },
-    [authUser, checkedUsers, drillId, data, pendingUserIds]
+    [authUser, drillId, data] // Removed checkedUsers from dependencies
   );
 
   const handleCompleteDrill = useCallback(async () => {
