@@ -56,54 +56,51 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
     }
   }, [isOpen, resetModal]);
 
-  // Fetch users and their punches with improved ordering
-  // Note: InstantDB might not support multiple order fields in some versions
-  // So we'll use a single order field for reliability
-  const { data: userData, isLoading: isUserLoading } = db.useQuery({
-    users: {
-      $: {},
-      id: true,
-      name: true,
-      barcode: true,
-    },
+  // Fetch users first to isolate the issue
+  const { data: userData, isLoading: isUserLoading, error } = db.useQuery({
+    users: {},
     punches: {
       $: {
-        first: 50, // Fetch more punches to ensure we have enough after filtering
         order: {
-          // Prioritize server timestamp for more reliable ordering
           serverCreatedAt: "desc",
         },
-      },
-      type: true,
-      timestamp: true,
-      userId: true,
-      serverCreatedAt: true,
-      isAdminGenerated: true,
-      isSystemGenerated: true,
-      user: {
-        $: {
-          on: "users",
-          by: "userId",
-        },
-        name: true,
       },
     },
   });
 
+  // Debug: Log the data we're getting
+  useEffect(() => {
+    console.log("userData:", userData);
+    console.log("isUserLoading:", isUserLoading);
+    console.log("error:", error);
+    if (error) {
+      console.error("Database query error:", error);
+    }
+  }, [userData, isUserLoading, error]);
+
   const findUser = useMemo(() => {
-    if (!userData) return null;
+    if (!userData) {
+      console.log("No userData available");
+      return null;
+    }
     const extractedId = extractUserId(barcode);
-    console.log("Looking for barcode:", extractedId);
+    console.log("Looking for barcode:", extractedId, "Original barcode:", barcode);
+    console.log("Available users:", userData.users);
     const user = userData.users.find((u) => u.barcode === extractedId);
     console.log("Found user:", user);
     return user;
   }, [userData, barcode]);
 
   const handleBarcodeSubmit = useCallback(async () => {
-    if (isUserLoading || !barcode || !userData) return;
+    console.log("handleBarcodeSubmit called with barcode:", barcode);
+    if (isUserLoading || !barcode || !userData) {
+      console.log("Early return - isUserLoading:", isUserLoading, "barcode:", barcode, "userData:", !!userData);
+      return;
+    }
 
     const user = findUser;
     if (!user) {
+      console.log("User not found for barcode:", barcode);
       toast.error("User not found", {
         duration: 3000,
         style: {
@@ -198,7 +195,13 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
               type="password"
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && handleBarcodeSubmit()}
+              onKeyDown={(e) => {
+                console.log("Key pressed:", e.key);
+                if (e.key === "Enter") {
+                  console.log("Enter pressed, calling handleBarcodeSubmit");
+                  handleBarcodeSubmit();
+                }
+              }}
               placeholder="Swipe your badge..."
               className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
