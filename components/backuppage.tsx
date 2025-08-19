@@ -125,8 +125,17 @@ export default function BackupPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isTrimming, setIsTrimming] = useState(false);
+  const [deletionProgress, setDeletionProgress] = useState<string>('');
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [daysToKeep, setDaysToKeep] = useState(7);
+
+  // Function to manually refresh data
+  const refreshData = () => {
+    console.log('Manual data refresh requested');
+    // Force a re-render by updating a state variable
+    // This is a workaround since InstantDB doesn't have a direct refresh method
+    window.location.reload();
+  };
 
   // Query data - include punches for users in view only
   const { data, isLoading, error } = db.useQuery({
@@ -140,7 +149,7 @@ export default function BackupPage() {
     punches: {
       $: {
         order: { serverCreatedAt: 'desc' },
-        limit: 1000,
+        // Remove limit to get all punches for deletion
       }
     },
     backups: {
@@ -163,26 +172,228 @@ export default function BackupPage() {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
-      // Find punches older than cutoff date
-      const punchesToDelete = data.punches
-        .filter((punch) => new Date(punch.timestamp) < cutoffDate)
-        .map((punch) => tx.punches[punch.id].delete());
+      console.log('Cutoff date:', cutoffDate);
+      console.log('Total punches:', data.punches?.length || 0);
 
-      if (punchesToDelete.length === 0) {
+      // Find punches older than cutoff date
+      const oldPunches = data.punches?.filter((punch) => {
+        if (!punch.id) {
+          console.warn('Punch missing id:', punch);
+          return false;
+        }
+        
+        // Use serverCreatedAt if available, fallback to timestamp
+        const punchTime = punch.serverCreatedAt || punch.timestamp;
+        if (!punchTime) {
+          console.warn('Punch missing both serverCreatedAt and timestamp:', punch);
+          return false;
+        }
+        
+        const punchDate = new Date(punchTime);
+        const isOld = punchDate < cutoffDate;
+        console.log(`Punch ${punch.id}: ${punchDate} < ${cutoffDate} = ${isOld} (using ${punch.serverCreatedAt ? 'serverCreatedAt' : 'timestamp'})`);
+        return isOld;
+      }) || [];
+
+      console.log('Punches to delete:', oldPunches.length);
+
+      if (oldPunches.length === 0) {
         toast.success("No old punches found to delete");
         return;
       }
 
-      // Execute deletion
-      await db.transact(punchesToDelete);
+      // Create delete operations
+      const deleteOperations = oldPunches.map((punch) => {
+        if (!punch.id) {
+          console.error('Punch missing id:', punch);
+          return null;
+        }
+        
+        // Try different approaches for delete operations
+        let deleteOp;
+        try {
+          deleteOp = tx.punches[punch.id].delete();
+          console.log(`Created delete operation for punch ${punch.id}:`, deleteOp);
+        } catch (error) {
+          console.error(`Error creating delete operation for punch ${punch.id}:`, error);
+          return null;
+        }
+        
+        return deleteOp;
+      }).filter(Boolean); // Remove any null operations
 
-      toast.success(`Deleted ${punchesToDelete.length} old punches`);
+      console.log('Delete operations created:', deleteOperations.length);
+      console.log('Sample delete operation:', deleteOperations[0]);
+      
+      // Alternative approach: try to create delete operations differently
+      if (deleteOperations.length === 0) {
+        console.log('Trying alternative delete operation creation...');
+        const altDeleteOperations = oldPunches.map((punch) => {
+          if (!punch.id) return null;
+          try {
+            // Try using a different approach
+            const deleteOp = tx.punches[punch.id].delete();
+            console.log(`Alternative delete operation for punch ${punch.id}:`, deleteOp);
+            return deleteOp;
+          } catch (error) {
+            console.error(`Alternative approach failed for punch ${punch.id}:`, error);
+            return null;
+          }
+        }).filter(Boolean);
+        
+        if (altDeleteOperations.length > 0) {
+          console.log('Alternative delete operations created:', altDeleteOperations.length);
+          deleteOperations.push(...altDeleteOperations);
+        }
+      }
+
+      if (deleteOperations.length === 0) {
+        toast.error("No valid delete operations could be created");
+        return;
+      }
+
+      // Execute deletion
+      console.log('About to execute transaction with operations:', deleteOperations);
+      
+      // Try batch deletion first
+      try {
+        setDeletionProgress('Attempting batch deletion...');
+        const result = await db.transact(deleteOperations);
+        console.log('Batch transaction result:', result);
+        
+        // Validate the transaction result
+        if (result && typeof result === 'object') {
+          console.log('Transaction result keys:', Object.keys(result));
+          console.log('Transaction result values:', Object.values(result));
+        }
+        
+        setDeletionProgress('Batch deletion completed successfully');
+      } catch (batchError) {
+        console.warn('Batch deletion failed, trying individual deletions:', batchError);
+        setDeletionProgress('Batch failed, trying individual deletions...');
+        
+        // Fallback to individual deletions
+        let successCount = 0;
+        let failureCount = 0;
+        for (let i = 0; i < oldPunches.length; i++) {
+          const punch = oldPunches[i];
+          try {
+            if (punch.id) {
+              setDeletionProgress(`Deleting punch ${i + 1}/${oldPunches.length}...`);
+              console.log(`Attempting to delete punch ${punch.id} (${i + 1}/${oldPunches.length})`);
+              
+              const individualResult = await db.transact([tx.punches[punch.id].delete()]);
+              console.log(`Individual deletion result for ${punch.id}:`, individualResult);
+              
+              successCount++;
+              console.log(`Successfully deleted punch ${punch.id}`);
+            }
+          } catch (individualError) {
+            failureCount++;
+            console.error(`Failed to delete punch ${punch.id}:`, individualError);
+            console.error(`Punch data:`, punch);
+          }
+        }
+        
+        console.log(`Individual deletion completed: ${successCount}/${oldPunches.length} successful, ${failureCount} failed`);
+        setDeletionProgress(`Individual deletion completed: ${successCount}/${oldPunches.length} successful, ${failureCount} failed`);
+        
+        if (successCount === 0) {
+          throw new Error(`All deletion attempts failed. ${failureCount} failures.`);
+        }
+      }
+      
+      // Check if data actually changed
+      console.log('Punches before deletion:', oldPunches.length);
+      console.log('Expected remaining punches:', (data.punches?.length || 0) - deleteOperations.length);
+      
+      // Wait a moment and check if the data actually updated
+      setTimeout(() => {
+        console.log('Data after deletion (delayed check):', data.punches?.length);
+        const deletedPunchesStillExist = oldPunches.filter(punch => 
+          data.punches?.find(p => p.id === punch.id)
+        );
+        console.log('Deleted punches that still exist:', deletedPunchesStillExist.length);
+        
+        // Additional data validation
+        console.log('Sample of remaining punches:', data.punches?.slice(0, 5));
+        console.log('Sample of deleted punches:', oldPunches.slice(0, 5));
+        
+        // If punches still exist, try to force a refresh
+        if (deletedPunchesStillExist.length > 0) {
+          console.log('Some deleted punches still exist, suggesting data refresh needed');
+          toast('Data refresh may be needed. Please refresh the page to see changes.', {
+            icon: 'ℹ️',
+            duration: 5000
+          });
+          
+          // Try to force a data refresh by triggering a re-render
+          setDeletionProgress('Attempting to refresh data...');
+          
+          // Try multiple refresh approaches
+          setTimeout(() => {
+            console.log('Attempting first refresh approach...');
+            // Try to force a re-render by updating state
+            setDeletionProgress('First refresh attempt...');
+          }, 1000);
+          
+          setTimeout(() => {
+            console.log('Attempting second refresh approach...');
+            setDeletionProgress('Second refresh attempt...');
+            // This is a hack to force InstantDB to re-query
+            window.location.reload();
+          }, 3000);
+        } else {
+          console.log('All deleted punches appear to have been removed from the data');
+          setDeletionProgress('Data appears to be updated successfully');
+        }
+      }, 5000); // Increased timeout to 5 seconds
+
+      toast.success(`Deletion completed. ${oldPunches.length} old punches were processed. Check console for detailed results.`);
       setShowTrimConfirm(false);
+      setDeletionProgress('');
+      
+      // Final summary
+      console.log('=== DELETION SUMMARY ===');
+      console.log(`Total punches processed: ${oldPunches.length}`);
+      console.log(`Delete operations created: ${deleteOperations.length}`);
+      console.log('Check the console above for detailed transaction results');
+      console.log('If punches still appear in the UI, a page refresh may be needed');
+      console.log('================================');
+      
+      // Additional debugging info
+      console.log('Current data state:', {
+        totalPunches: data.punches?.length || 0,
+        samplePunches: data.punches?.slice(0, 3) || [],
+        queryInfo: 'Check if InstantDB query needs to be updated'
+      });
+      
+      // Transaction debugging info
+      console.log('Transaction debugging:', {
+        deleteOperationsType: typeof deleteOperations,
+        deleteOperationsLength: deleteOperations.length,
+        deleteOperationsSample: deleteOperations[0],
+        instantDBVersion: 'Check package.json for @instantdb/react version'
+      });
+      
+      // Data refresh debugging info
+      console.log('Data refresh debugging:', {
+        dataUpdateTimeout: '5 seconds',
+        refreshAttempts: 'Multiple approaches tried',
+        fallbackRefresh: 'Page reload after 3 seconds if needed',
+        note: 'InstantDB may need manual refresh to show changes'
+      });
     } catch (error) {
       console.error("Error trimming punches:", error);
-      toast.error("Failed to trim punches");
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      toast.error(`Failed to trim punches: ${error.message}`);
     } finally {
       setIsTrimming(false);
+      setDeletionProgress('');
     }
   };
 
@@ -469,6 +680,86 @@ export default function BackupPage() {
                   </Button>
                 </div>
               )}
+              
+              {/* Progress display */}
+              {isTrimming && deletionProgress && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800 font-medium">Progress:</p>
+                  <p className="text-sm text-blue-600">{deletionProgress}</p>
+                </div>
+              )}
+            </div>
+            
+            {/* Debug section */}
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+              <h3 className="text-lg font-medium mb-3">Debug Info</h3>
+              <div className="text-sm space-y-2">
+                <p>Total punches loaded: {data.punches?.length || 0}</p>
+                <p>Oldest punch: {data.punches?.length > 0 ? new Date(Math.min(...data.punches.map(p => p.serverCreatedAt || p.timestamp))).toLocaleString() : 'None'}</p>
+                <p>Newest punch: {data.punches?.length > 0 ? new Date(Math.max(...data.punches.map(p => p.serverCreatedAt || p.timestamp))).toLocaleString() : 'None'}</p>
+                <p>Cutoff date: {new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000).toLocaleString()}</p>
+              </div>
+              
+              {/* Manual refresh */}
+              <div className="mt-4">
+                <Button
+                  onClick={refreshData}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white mb-2"
+                >
+                  Refresh Page
+                </Button>
+              </div>
+              
+              {/* Test delete single punch */}
+              <div className="mt-4">
+                <h4 className="text-md font-medium mb-2">Test Delete Single Punch</h4>
+                <p className="text-xs text-gray-600 mb-2">Select a punch to test deletion:</p>
+                <select 
+                  className="w-full p-2 border rounded mb-2"
+                  onChange={(e) => {
+                    const punchId = e.target.value;
+                    if (punchId) {
+                      console.log('Selected punch for test delete:', punchId);
+                    }
+                  }}
+                >
+                  <option value="">Select a punch...</option>
+                  {data.punches?.slice(0, 10).map((punch) => (
+                    <option key={punch.id} value={punch.id}>
+                      {punch.id} - {new Date(punch.serverCreatedAt || punch.timestamp).toLocaleString()} - {punch.type}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  onClick={async () => {
+                    const select = document.querySelector('select');
+                    const punchId = select?.value;
+                    if (!punchId) {
+                      toast.error('Please select a punch first');
+                      return;
+                    }
+                    
+                    try {
+                      console.log('Testing delete of punch:', punchId);
+                      const result = await db.transact([tx.punches[punchId].delete()]);
+                      console.log('Test delete result:', result);
+                      toast.success('Test delete successful!');
+                      
+                      // Wait a moment and check if data changed
+                      setTimeout(() => {
+                        console.log('Data after deletion:', data.punches?.length);
+                        console.log('Punch still exists:', data.punches?.find(p => p.id === punchId));
+                      }, 1000);
+                    } catch (error) {
+                      console.error('Test delete failed:', error);
+                      toast.error(`Test delete failed: ${error.message}`);
+                    }
+                  }}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Test Delete Selected Punch
+                </Button>
+              </div>
             </div>
           </div>
         )}
