@@ -49,8 +49,8 @@ function HomeContent() {
       <Header setIsAuthModalOpen={setIsAuthModalOpen} />
 
       <div className="container mx-auto p-4">
-        <CheckInOutForm shouldFocus={shouldFocusCheckInOut} />
-        <div className="mt-4">
+        <div className="flex flex-col items-center space-y-4">
+          <CheckInOutForm shouldFocus={shouldFocusCheckInOut} />
           <VisitorRegistration />
         </div>
       </div>

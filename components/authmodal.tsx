@@ -4,6 +4,10 @@ import { db } from "@/lib/instantdb";
 import { tx, id } from "@instantdb/react";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useAuth } from "@/hooks/authContext";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { X, Mail, Shield, Clock } from "lucide-react";
+import toast from "react-hot-toast";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -18,6 +22,7 @@ export function AuthModal({ isOpen, onClose, shouldFocus }: AuthModalProps) {
   const [timeLeft, setTimeLeft] = useState(15);
   const { setAuthState } = useAuth();
   const inputRef = useAutoFocus(shouldFocus);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let timer;
@@ -36,6 +41,27 @@ export function AuthModal({ isOpen, onClose, shouldFocus }: AuthModalProps) {
     }
     return () => {
       if (timer) clearInterval(timer);
+    };
+  }, [isOpen, onClose]);
+
+  // Handle click outside to close modal
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      // Ignore clicks on select dropdown
+      if (target.closest('[role="listbox"]')) return;
+
+      if (modalRef.current && !modalRef.current.contains(target)) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isOpen, onClose]);
 
@@ -101,72 +127,147 @@ export function AuthModal({ isOpen, onClose, shouldFocus }: AuthModalProps) {
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim()) {
+      toast.error("Please enter your email address");
+      return;
+    }
+    
     try {
       await db.auth.sendMagicCode({ email });
       setSentEmail(true);
       setTimeLeft(120); // Reset timer after sending code
+      toast.success("Verification code sent to your email");
     } catch (err) {
       console.error(err);
-      alert("Error sending code. Please try again.");
+      toast.error("Error sending code. Please try again.");
     }
   };
 
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!code.trim()) {
+      toast.error("Please enter the verification code");
+      return;
+    }
+    
     try {
       await db.auth.signInWithMagicCode({ email, code });
       const existingUser = userData?.users?.[0];
       await logUserToDatabase(email, existingUser);
+      toast.success("Authentication successful!");
       onClose();
     } catch (err) {
       console.error(err);
-      alert("Error verifying code. Please try again.");
+      toast.error("Invalid verification code. Please try again.");
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-      <div className="bg-white p-6 rounded-lg">
-        <h2 className="text-xl mb-4">Authentication</h2>
-        {!sentEmail ? (
-          <form onSubmit={handleSendCode}>
-            <input
-              ref={inputRef}
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              className="border p-2 mb-2 w-full"
-            />
-            <button
-              type="submit"
-              className="bg-blue-500 text-white p-2 rounded"
-            >
-              Send Code
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleVerifyCode}>
-            <input
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="Enter verification code"
-              className="border p-2 mb-2 w-full"
-            />
-            <button
-              type="submit"
-              className="bg-green-500 text-white p-2 rounded"
-            >
-              Verify Code
-            </button>
-          </form>
-        )}
-        <button onClick={onClose} className="mt-4 text-sm text-gray-600">
-          Close
-        </button>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div ref={modalRef} className="bg-white rounded-lg shadow-xl max-w-md w-full">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b">
+          <div className="flex items-center gap-3">
+            <Shield className="text-blue-600" size={24} />
+            <h2 className="text-xl font-semibold text-gray-900">Authentication</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          {!sentEmail ? (
+            <form onSubmit={handleSendCode} className="space-y-6">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                  <Mail size={16} />
+                  Email Address
+                </label>
+                <Input
+                  ref={inputRef}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email address"
+                  required
+                />
+              </div>
+              
+              <div className="flex gap-3">
+                <Button
+                  type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  Send Code
+                </Button>
+                <Button
+                  type="button"
+                  onClick={onClose}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyCode} className="space-y-6">
+              <div className="text-center mb-4">
+                <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-2">
+                  <Mail size={16} />
+                  <span>Code sent to: {email}</span>
+                </div>
+                <div className="flex items-center justify-center gap-2 text-sm text-orange-600">
+                  <Clock size={16} />
+                  <span>Time remaining: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                  <Shield size={16} />
+                  Verification Code
+                </label>
+                <Input
+                  type="text"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="Enter 6-digit verification code"
+                  maxLength={6}
+                  className="text-center text-lg tracking-widest"
+                />
+              </div>
+              
+              <div className="flex gap-3">
+                <Button
+                  type="submit"
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  Verify Code
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setSentEmail(false);
+                    setCode("");
+                    setTimeLeft(120);
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Resend
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

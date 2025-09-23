@@ -1,8 +1,11 @@
-import React, { useCallback, useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { db } from "@/lib/instantdb";
 import { extractUserId, getMostReliablePunch } from "@/utils/checkInOut";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { X, CreditCard, Clock, CheckCircle, XCircle, User } from "lucide-react";
 
 interface SwipesModalProps {
   isOpen: boolean;
@@ -40,6 +43,8 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
   const [autoCloseTimer, setAutoCloseTimer] = useState<NodeJS.Timeout | null>(
     null
   );
+  const modalRef = useRef<HTMLDivElement>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const resetModal = useCallback(() => {
     setBarcode("");
@@ -55,6 +60,33 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
       return () => clearTimeout(timer);
     }
   }, [isOpen, resetModal]);
+
+  // Handle click outside to close modal
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('[role="listbox"]')) return;
+
+      if (modalRef.current && !modalRef.current.contains(target)) {
+        resetModal();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen, resetModal]);
+
+  // Focus barcode input when modal opens
+  useEffect(() => {
+    if (isOpen && barcodeInputRef.current && !userId) {
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
+    }
+  }, [isOpen, userId]);
 
   // Fetch users first to isolate the issue
   const { data: userData, isLoading: isUserLoading, error } = db.useQuery({
@@ -171,74 +203,140 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={resetModal}
-    >
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div
-        className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full max-h-[80vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
+        ref={modalRef}
+        className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
       >
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">View My Swipes</h2>
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b">
+          <div className="flex items-center gap-3">
+            <CreditCard className="text-blue-600" size={24} />
+            <h2 className="text-xl font-semibold text-gray-900">View My Swipes</h2>
+          </div>
           <button
             onClick={resetModal}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-gray-400 hover:text-gray-600 transition-colors"
           >
-            ✕
+            <X size={20} />
           </button>
         </div>
 
-        {!userId ? (
-          <div className="space-y-4">
-            <input
-              type="password"
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              onKeyDown={(e) => {
-                console.log("Key pressed:", e.key);
-                if (e.key === "Enter") {
-                  console.log("Enter pressed, calling handleBarcodeSubmit");
-                  handleBarcodeSubmit();
-                }
-              }}
-              placeholder="Swipe your badge..."
-              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autoFocus
-            />
-          </div>
-        ) : isUserLoading ? (
-          <div>Loading...</div>
-        ) : !userPunches.length ? (
-          <div>No recent swipes found</div>
-        ) : (
-          <div className="space-y-2">
-            {userPunches.map((punch) => (
-              <div
-                key={punch.id}
-                className={`flex justify-between items-center p-2 rounded ${getPunchBackgroundColor(
-                  punch.type
-                )}`}
-              >
-                <div className="flex flex-col">
-                  <span className="font-medium">
-                    {formatPunchType(punch.type)}
-                  </span>
-                  {(punch.isAdminGenerated || punch.isSystemGenerated) && (
-                    <span className="text-xs text-gray-500">
-                      {punch.isAdminGenerated
-                        ? "Admin generated"
-                        : "System generated"}
-                    </span>
-                  )}
-                </div>
-                <span className="text-gray-600">
-                  {format(new Date(punch.timestamp), "MMM d, h:mm a")}
-                </span>
+        {/* Content */}
+        <div className="p-6">
+          {!userId ? (
+            <div className="space-y-6">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                  <CreditCard size={16} />
+                  Badge Scanner
+                </label>
+                <Input
+                  ref={barcodeInputRef}
+                  type="password"
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleBarcodeSubmit();
+                    }
+                  }}
+                  placeholder="Swipe your badge or enter barcode..."
+                  className="text-center"
+                />
               </div>
-            ))}
-          </div>
-        )}
+              
+              <div className="text-center">
+                <Button
+                  onClick={handleBarcodeSubmit}
+                  disabled={!barcode.trim() || isUserLoading}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {isUserLoading ? "Loading..." : "View Swipes"}
+                </Button>
+              </div>
+            </div>
+          ) : isUserLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="flex items-center gap-2 text-gray-600">
+                <Clock size={20} className="animate-spin" />
+                <span>Loading your swipes...</span>
+              </div>
+            </div>
+          ) : !userPunches.length ? (
+            <div className="text-center py-8">
+              <div className="flex flex-col items-center gap-3">
+                <User className="text-gray-400" size={48} />
+                <h3 className="text-lg font-medium text-gray-900">No Recent Swipes</h3>
+                <p className="text-gray-600">No swipe history found for this user.</p>
+                <Button
+                  onClick={() => {
+                    setUserId(null);
+                    setBarcode("");
+                  }}
+                  variant="outline"
+                >
+                  Try Another Badge
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Recent Swipes</h3>
+                <Button
+                  onClick={() => {
+                    setUserId(null);
+                    setBarcode("");
+                  }}
+                  variant="outline"
+                  size="sm"
+                >
+                  New Search
+                </Button>
+              </div>
+              
+              <div className="space-y-3">
+                {userPunches.map((punch) => (
+                  <div
+                    key={punch.id}
+                    className={`flex items-center justify-between p-4 rounded-lg border ${getPunchBackgroundColor(
+                      punch.type
+                    )}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {punch.type.includes("checkin") ? (
+                        <CheckCircle className="text-green-600" size={20} />
+                      ) : (
+                        <XCircle className="text-red-600" size={20} />
+                      )}
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          {formatPunchType(punch.type)}
+                        </div>
+                        {(punch.isAdminGenerated || punch.isSystemGenerated) && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            {punch.isAdminGenerated
+                              ? "Admin generated"
+                              : "System generated"}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-gray-900">
+                        {format(new Date(punch.timestamp), "MMM d")}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {format(new Date(punch.timestamp), "h:mm a")}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
