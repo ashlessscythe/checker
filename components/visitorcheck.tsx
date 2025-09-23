@@ -72,11 +72,16 @@ export default function VisitorRegistration() {
     },
   });
 
-  // Simple barcode validation - just check length and basic format
+  // Enhanced barcode validation - must contain both numbers and letters
   const validateBarcode = (barcode: string): boolean => {
     if (!barcode) return false;
-    // Allow 10-20 character alphanumeric barcodes
-    return /^[A-Za-z0-9]{10,20}$/.test(barcode);
+    // Must be 10-20 characters, alphanumeric, and contain both letters and numbers
+    const hasLetters = /[A-Za-z]/.test(barcode);
+    const hasNumbers = /[0-9]/.test(barcode);
+    const isValidLength = barcode.length >= 10 && barcode.length <= 20;
+    const isAlphanumeric = /^[A-Za-z0-9]+$/.test(barcode);
+    
+    return hasLetters && hasNumbers && isValidLength && isAlphanumeric;
   };
 
   // Form validation
@@ -94,7 +99,9 @@ export default function VisitorRegistration() {
     if (!formData.barcode.trim()) {
       newErrors.barcode = "Barcode is required";
     } else if (!validateBarcode(formData.barcode)) {
-      newErrors.barcode = "Please enter a valid barcode (10-20 characters)";
+      newErrors.barcode = "Barcode must be 10-20 characters with both letters and numbers";
+    } else if (formData.name.trim().toLowerCase() === formData.barcode.trim().toLowerCase()) {
+      newErrors.barcode = "Barcode must be different from your name";
     }
 
     setErrors(newErrors);
