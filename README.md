@@ -21,6 +21,28 @@ Checker is a modern, efficient solution for managing employee attendance and tim
 - InstantDB
 - Deployment platform of choice: (Render/Vercel/Netlify/Heroku) etc.
 
+### 📸 Screenshots
+
+#### Main Interface
+
+![Main Page](docs/images/main_page.png)
+_The main check-in/check-out interface showing real-time employee status_
+
+#### Admin Dashboard
+
+![Admin Page](docs/images/admin_page.png)
+_Administrative dashboard for managing users, departments, and system settings_
+
+#### Fire Drill Checklist
+
+![Fire Drill Checklist](docs/images/firedrill_checklist.png)
+_Emergency fire drill checklist feature for safety compliance_
+
+#### Recent Check-ins
+
+![Recent Check-ins](docs/images/recent_checkins.png)
+_View of recent employee check-ins and check-outs with timestamps_
+
 ### 🚀 Getting Started
 
 1. Clone the repository:
