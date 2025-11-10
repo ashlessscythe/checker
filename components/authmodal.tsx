@@ -166,16 +166,16 @@ export function AuthModal({ isOpen, onClose, shouldFocus }: AuthModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div ref={modalRef} className="bg-white rounded-lg shadow-xl max-w-md w-full">
+      <div ref={modalRef} className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
+        <div className="flex items-center justify-between p-6 border-b dark:border-gray-700">
           <div className="flex items-center gap-3">
-            <Shield className="text-blue-600" size={24} />
-            <h2 className="text-xl font-semibold text-gray-900">Authentication</h2>
+            <Shield className="text-blue-600 dark:text-blue-400" size={24} />
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Authentication</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           >
             <X size={20} />
           </button>
@@ -186,7 +186,7 @@ export function AuthModal({ isOpen, onClose, shouldFocus }: AuthModalProps) {
           {!sentEmail ? (
             <form onSubmit={handleSendCode} className="space-y-6">
               <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   <Mail size={16} />
                   Email Address
                 </label>
@@ -220,18 +220,18 @@ export function AuthModal({ isOpen, onClose, shouldFocus }: AuthModalProps) {
           ) : (
             <form onSubmit={handleVerifyCode} className="space-y-6">
               <div className="text-center mb-4">
-                <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-2">
+                <div className="flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
                   <Mail size={16} />
                   <span>Code sent to: {email}</span>
                 </div>
-                <div className="flex items-center justify-center gap-2 text-sm text-orange-600">
+                <div className="flex items-center justify-center gap-2 text-sm text-orange-600 dark:text-orange-400">
                   <Clock size={16} />
                   <span>Time remaining: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}</span>
                 </div>
               </div>
 
               <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   <Shield size={16} />
                   Verification Code
                 </label>

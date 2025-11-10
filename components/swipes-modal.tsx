@@ -182,6 +182,9 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
     return type;
   };
 
+
+  if (!isOpen) return null;
+
   // Determine background color based on punch type
   const getPunchBackgroundColor = (type: string) => {
     if (
@@ -189,34 +192,32 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
       type.includes("admin_checkin") ||
       type.includes("sys_checkin")
     ) {
-      return "bg-green-50";
+      return "bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800";
     } else if (
       type.includes("checkout") ||
       type.includes("admin_checkout") ||
       type.includes("sys_checkout")
     ) {
-      return "bg-red-50";
+      return "bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800";
     }
-    return "bg-gray-50";
+    return "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700";
   };
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div
         ref={modalRef}
-        className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
+        <div className="flex items-center justify-between p-6 border-b dark:border-gray-700">
           <div className="flex items-center gap-3">
-            <CreditCard className="text-blue-600" size={24} />
-            <h2 className="text-xl font-semibold text-gray-900">View My Swipes</h2>
+            <CreditCard className="text-blue-600 dark:text-blue-400" size={24} />
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">View My Swipes</h2>
           </div>
           <button
             onClick={resetModal}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           >
             <X size={20} />
           </button>
@@ -227,7 +228,7 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
           {!userId ? (
             <div className="space-y-6">
               <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   <CreditCard size={16} />
                   Badge Scanner
                 </label>
@@ -258,7 +259,7 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
             </div>
           ) : isUserLoading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="flex items-center gap-2 text-gray-600">
+              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                 <Clock size={20} className="animate-spin" />
                 <span>Loading your swipes...</span>
               </div>
@@ -266,9 +267,9 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
           ) : !userPunches.length ? (
             <div className="text-center py-8">
               <div className="flex flex-col items-center gap-3">
-                <User className="text-gray-400" size={48} />
-                <h3 className="text-lg font-medium text-gray-900">No Recent Swipes</h3>
-                <p className="text-gray-600">No swipe history found for this user.</p>
+                <User className="text-gray-400 dark:text-gray-500" size={48} />
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">No Recent Swipes</h3>
+                <p className="text-gray-600 dark:text-gray-400">No swipe history found for this user.</p>
                 <Button
                   onClick={() => {
                     setUserId(null);
@@ -283,7 +284,7 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
           ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Recent Swipes</h3>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Recent Swipes</h3>
                 <Button
                   onClick={() => {
                     setUserId(null);
@@ -306,16 +307,16 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
                   >
                     <div className="flex items-center gap-3">
                       {punch.type.includes("checkin") ? (
-                        <CheckCircle className="text-green-600" size={20} />
+                        <CheckCircle className="text-green-600 dark:text-green-400" size={20} />
                       ) : (
-                        <XCircle className="text-red-600" size={20} />
+                        <XCircle className="text-red-600 dark:text-red-400" size={20} />
                       )}
                       <div>
-                        <div className="font-medium text-gray-900">
+                        <div className="font-medium text-gray-900 dark:text-white">
                           {formatPunchType(punch.type)}
                         </div>
                         {(punch.isAdminGenerated || punch.isSystemGenerated) && (
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             {punch.isAdminGenerated
                               ? "Admin generated"
                               : "System generated"}
@@ -324,10 +325,10 @@ export default function SwipesModal({ isOpen, onClose }: SwipesModalProps) {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
                         {format(new Date(punch.timestamp), "MMM d")}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
                         {format(new Date(punch.timestamp), "h:mm a")}
                       </div>
                     </div>

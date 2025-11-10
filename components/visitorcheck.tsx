@@ -274,14 +274,14 @@ export default function VisitorRegistration() {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div
           ref={modalRef}
-          className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
+          className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b">
-            <h2 className="text-xl font-semibold text-gray-900">Visitor Registration</h2>
+          <div className="flex items-center justify-between p-6 border-b dark:border-gray-700">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Visitor Registration</h2>
             <button
               onClick={closeModal}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               <X size={20} />
             </button>
@@ -291,7 +291,7 @@ export default function VisitorRegistration() {
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             {/* Name Field */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 <User size={16} />
                 Full Name
               </label>
@@ -304,13 +304,13 @@ export default function VisitorRegistration() {
                 className={errors.name ? "border-red-500" : ""}
               />
               {errors.name && (
-                <p className="text-red-500 text-xs mt-1">{errors.name}</p>
+                <p className="text-red-500 dark:text-red-400 text-xs mt-1">{errors.name}</p>
               )}
             </div>
 
             {/* Purpose Field */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 <Building size={16} />
                 Purpose of Visit
               </label>
@@ -321,12 +321,12 @@ export default function VisitorRegistration() {
                 <SelectTrigger className={errors.purpose ? "border-red-500" : ""}>
                   <SelectValue placeholder="Select purpose of visit" />
                 </SelectTrigger>
-                <SelectContent className="bg-white border border-border shadow-md rounded-sm">
+                <SelectContent className="bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-md rounded-sm">
                   {VISIT_PURPOSES.map((purpose) => (
                     <SelectItem 
                       key={purpose} 
                       value={purpose}
-                      className="hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                      className="hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
                     >
                       {purpose}
                     </SelectItem>
@@ -334,13 +334,13 @@ export default function VisitorRegistration() {
                 </SelectContent>
               </Select>
               {errors.purpose && (
-                <p className="text-red-500 text-xs mt-1">{errors.purpose}</p>
+                <p className="text-red-500 dark:text-red-400 text-xs mt-1">{errors.purpose}</p>
               )}
             </div>
 
             {/* Barcode Field */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 <QrCode size={16} />
                 Security Barcode
               </label>
@@ -353,13 +353,13 @@ export default function VisitorRegistration() {
                 className={errors.barcode ? "border-red-500" : ""}
               />
               {errors.barcode && (
-                <p className="text-red-500 text-xs mt-1">{errors.barcode}</p>
+                <p className="text-red-500 dark:text-red-400 text-xs mt-1">{errors.barcode}</p>
               )}
             </div>
 
             {/* Laptop Serial Field */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 <Laptop size={16} />
                 Laptop Serial Number (Optional)
               </label>

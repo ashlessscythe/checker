@@ -126,10 +126,10 @@ export default function CheckInsTable() {
   // Calculate total pages for local pagination
   const totalLocalPages = Math.ceil(filteredPunches.length / itemsPerPage);
 
-  if (isLoading && !localPunches.length) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
+  if (isLoading && !localPunches.length) return <div className="text-gray-700 dark:text-gray-300">Loading...</div>;
+  if (error) return <div className="text-red-600 dark:text-red-400">Error: {error.message}</div>;
   if (!data || !data.punches) {
-    return <div>No data available</div>;
+    return <div className="text-gray-700 dark:text-gray-300">No data available</div>;
   }
 
   const handleSort = (field: string) => {
@@ -205,7 +205,7 @@ export default function CheckInsTable() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-4">Recent Swipes</h2>
+      <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Recent Swipes</h2>
 
       {/* Filters */}
       <div className="mb-4 flex space-x-2">
@@ -234,14 +234,14 @@ export default function CheckInsTable() {
       </div>
 
       {paginatedPunches.length === 0 ? (
-        <p>No punches recorded.</p>
+        <p className="text-gray-700 dark:text-gray-300">No punches recorded.</p>
       ) : (
         <>
-          <table className="min-w-full bg-white">
+          <table className="min-w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700">
             <thead>
-              <tr>
+              <tr className="bg-gray-100 dark:bg-gray-700">
                 <th
-                  className="px-4 py-2 cursor-pointer"
+                  className="px-4 py-2 cursor-pointer text-left text-gray-900 dark:text-white border-b dark:border-gray-600"
                   onClick={() => handleSort("users.name")}
                 >
                   Name{" "}
@@ -249,14 +249,14 @@ export default function CheckInsTable() {
                     (sortOrder === "asc" ? "▲" : "▼")}
                 </th>
                 <th
-                  className="px-4 py-2 cursor-pointer"
+                  className="px-4 py-2 cursor-pointer text-left text-gray-900 dark:text-white border-b dark:border-gray-600"
                   onClick={() => handleSort("type")}
                 >
                   Type{" "}
                   {sortField === "type" && (sortOrder === "asc" ? "▲" : "▼")}
                 </th>
                 <th
-                  className="px-4 py-2 cursor-pointer"
+                  className="px-4 py-2 cursor-pointer text-left text-gray-900 dark:text-white border-b dark:border-gray-600"
                   onClick={() => handleSort("timestamp")}
                 >
                   Timestamp{" "}
@@ -267,13 +267,13 @@ export default function CheckInsTable() {
             </thead>
             <tbody>
               {paginatedPunches.map((punch) => (
-                <tr key={punch.id}>
-                  <td className="border px-4 py-2">
+                <tr key={punch.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <td className="border px-4 py-2 text-gray-900 dark:text-white">
                     {(data.users as User[]).find((u) => u.id === punch.userId)
                       ?.name || "Unknown User"}
                   </td>
-                  <td className="border px-4 py-2">{punch.type}</td>
-                  <td className="border px-4 py-2">
+                  <td className="border px-4 py-2 text-gray-900 dark:text-white">{punch.type}</td>
+                  <td className="border px-4 py-2 text-gray-900 dark:text-white">
                     {format(new Date(punch.timestamp), "yyyy-MM-dd HH:mm:ss")}
                   </td>
                 </tr>
@@ -289,7 +289,7 @@ export default function CheckInsTable() {
             >
               Previous
             </Button>
-            <span>
+            <span className="text-gray-700 dark:text-gray-300">
               Page {localCurrentPage} of {totalLocalPages || 1}
               {isLoading && " (Loading more...)"}
             </span>
@@ -307,7 +307,7 @@ export default function CheckInsTable() {
 
           {/* Items per page selector and time window indicator */}
           <div className="mt-4 flex justify-between items-center">
-            <div>Showing data from last {timeWindow} hours</div>
+            <div className="text-gray-700 dark:text-gray-300">Showing data from last {timeWindow} hours</div>
             <Select
               value={itemsPerPage.toString()}
               onValueChange={(e) => {

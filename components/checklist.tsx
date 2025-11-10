@@ -377,8 +377,8 @@ export default React.memo(function CheckList() {
     return () => clearInterval(timer);
   }, []);
 
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
+  if (isLoading) return <div className="text-gray-700 dark:text-gray-300">Loading...</div>;
+  if (error) return <div className="text-red-600 dark:text-red-400">Error: {error.message}</div>;
 
   return (
     <div className="container mx-auto p-4">
@@ -392,7 +392,7 @@ export default React.memo(function CheckList() {
           }}
         />
       </div>
-      <h1 className="text-2xl font-bold mb-4">
+      <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
         Fire Drill Checklist - {dateTime}
       </h1>
       <div className="mb-4 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
@@ -403,14 +403,14 @@ export default React.memo(function CheckList() {
           onChange={(e) =>
             setFilters((prev) => ({ ...prev, name: e.target.value }))
           }
-          className="px-2 py-1 border rounded"
+          className="px-2 py-1 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
         />
         <select
           value={filters.status}
           onChange={(e) =>
             setFilters((prev) => ({ ...prev, status: e.target.value }))
           }
-          className="px-2 py-1 border rounded"
+          className="px-2 py-1 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
         >
           <option value="all">All</option>
           <option value="checked">Checked</option>
@@ -425,7 +425,7 @@ export default React.memo(function CheckList() {
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Filter by department" />
           </SelectTrigger>
-          <SelectContent className="bg-white">
+          <SelectContent className="bg-white dark:bg-gray-800">
             <SelectItem value="all">All Departments</SelectItem>
             {data?.departments?.map((dept) => (
               <SelectItem key={dept.id} value={dept.id}>
@@ -481,7 +481,7 @@ export default React.memo(function CheckList() {
       <div className="mt-4 flex flex-col sm:flex-row justify-between items-center">
         <span className="font-bold mb-2 sm:mb-0">
           Accounted: {checkedUsers.size} / {filteredAndSortedUsers.length}
-          <span className="text-gray-500 ml-2">
+          <span className="text-gray-500 dark:text-gray-400 ml-2">
             {" - "}
             {(() => {
               // First filter by age

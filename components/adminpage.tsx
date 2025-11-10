@@ -171,13 +171,13 @@ export default function AdminPage() {
 
   useAutoNavigate("/"); // Navigate to home after 5 minutes of inactivity
 
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
+  if (isLoading) return <div className="text-gray-700 dark:text-gray-300">Loading...</div>;
+  if (error) return <div className="text-red-600 dark:text-red-400">Error: {error.message}</div>;
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 bg-gray-100 min-h-screen">
+    <div className="container mx-auto p-4 sm:p-6 bg-gray-100 dark:bg-gray-900 min-h-screen">
       <Toaster position="top-right" />
-      <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-gray-800">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-gray-800 dark:text-white">
         Admin Page
       </h1>
       <div className="mb-4 flex items-center justify-between">
@@ -191,11 +191,11 @@ export default function AdminPage() {
               className="pl-10 pr-4 py-2 border rounded-md"
             />
             <Search
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500"
               size={20}
             />
           </div>
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-gray-600 dark:text-gray-400">
             Search by name, email, or barcode
           </span>
         </div>
@@ -222,7 +222,7 @@ export default function AdminPage() {
       </div>
 
       {showDeptForm && (
-        <div className="mb-6 p-4 bg-white rounded-lg shadow">
+        <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
           <h2 className="text-xl font-semibold mb-4">Create New Department</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
@@ -274,7 +274,7 @@ export default function AdminPage() {
       )}
 
       {showCreateForm && (
-        <div className="mb-6 p-4 bg-white rounded-lg shadow">
+        <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
           <h2 className="text-xl font-semibold mb-4">Create New User</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
@@ -306,7 +306,7 @@ export default function AdminPage() {
               <SelectTrigger>
                 <SelectValue placeholder="Select Department" />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-border shadow-sm rounded-md">
+              <SelectContent className="bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-sm rounded-md">
                 {data?.departments?.map((dept) => (
                   <SelectItem key={dept.id} value={dept.id}>
                     {dept.name}
@@ -362,39 +362,39 @@ export default function AdminPage() {
           )}
         </div>
       )}
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <div className="max-h-[800px] overflow-y-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0 z-10">
+              <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
                 <tr>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Barcode
                   </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Email
                   </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Name
                   </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Admin
                   </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Auth
                   </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Department
                   </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {paginatedUsers.map((user) => (
                   <tr key={user.id}>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       <div className="flex items-center">
                         {editingBarcode === user.id ? (
                           <input
@@ -426,7 +426,7 @@ export default function AdminPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {user.email ?? "N/A"}
                     </td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
@@ -439,7 +439,7 @@ export default function AdminPage() {
                           }
                         />
                       ) : (
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
                           {user.name ?? "N/A"}
                         </span>
                       )}
@@ -484,7 +484,7 @@ export default function AdminPage() {
                         <SelectTrigger>
                           <SelectValue placeholder="Select Department" />
                         </SelectTrigger>
-                        <SelectContent className="bg-white border border-border shadow-sm rounded-md">
+                        <SelectContent className="bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-sm rounded-md">
                           {data?.departments?.map((dept) => (
                             <SelectItem key={dept.id} value={dept.id}>
                               {dept.name}
