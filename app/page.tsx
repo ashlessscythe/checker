@@ -8,6 +8,7 @@ import Header from "@/components/header";
 import { Switch } from "@/components/ui/Switch";
 import ToggleSection from "@/components/toggle-section";
 import VisitorRegistration from "@/components/visitorcheck";
+import Screensaver from "@/components/screensaver";
 import { lazyLoad } from "@/utils/lazyLoader";
 
 // Lazy load admin components together
@@ -133,6 +134,7 @@ function HomeContent() {
         onClose={() => setIsAuthModalOpen(false)}
         shouldFocus={isAuthModalOpen}
       />
+      <Screensaver inactivityTimeout={30000} isAuthenticated={isAuthenticated} />
     </div>
   );
 }
