@@ -18,6 +18,7 @@ interface Punch {
   type: string;
   timestamp: number;
   serverCreatedAt: number;
+  device?: string;
 }
 
 export default function CheckInsTable() {
@@ -126,10 +127,18 @@ export default function CheckInsTable() {
   // Calculate total pages for local pagination
   const totalLocalPages = Math.ceil(filteredPunches.length / itemsPerPage);
 
-  if (isLoading && !localPunches.length) return <div className="text-gray-700 dark:text-gray-300">Loading...</div>;
-  if (error) return <div className="text-red-600 dark:text-red-400">Error: {error.message}</div>;
+  if (isLoading && !localPunches.length)
+    return <div className="text-gray-700 dark:text-gray-300">Loading...</div>;
+  if (error)
+    return (
+      <div className="text-red-600 dark:text-red-400">
+        Error: {error.message}
+      </div>
+    );
   if (!data || !data.punches) {
-    return <div className="text-gray-700 dark:text-gray-300">No data available</div>;
+    return (
+      <div className="text-gray-700 dark:text-gray-300">No data available</div>
+    );
   }
 
   const handleSort = (field: string) => {
@@ -155,6 +164,10 @@ export default function CheckInsTable() {
         aValue = a[field as keyof Punch];
         bValue = b[field as keyof Punch];
       }
+
+      // Handle undefined/null values for device field
+      if (aValue === undefined || aValue === null) aValue = "";
+      if (bValue === undefined || bValue === null) bValue = "";
 
       if (sortOrder === "asc") {
         return aValue > bValue ? 1 : -1;
@@ -205,7 +218,9 @@ export default function CheckInsTable() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Recent Swipes</h2>
+      <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
+        Recent Swipes
+      </h2>
 
       {/* Filters */}
       <div className="mb-4 flex space-x-2">
@@ -263,18 +278,33 @@ export default function CheckInsTable() {
                   {sortField === "timestamp" &&
                     (sortOrder === "asc" ? "▲" : "▼")}
                 </th>
+                <th
+                  className="px-4 py-2 cursor-pointer text-left text-gray-900 dark:text-white border-b dark:border-gray-600"
+                  onClick={() => handleSort("device")}
+                >
+                  Device{" "}
+                  {sortField === "device" && (sortOrder === "asc" ? "▲" : "▼")}
+                </th>
               </tr>
             </thead>
             <tbody>
               {paginatedPunches.map((punch) => (
-                <tr key={punch.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                <tr
+                  key={punch.id}
+                  className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
                   <td className="border px-4 py-2 text-gray-900 dark:text-white">
                     {(data.users as User[]).find((u) => u.id === punch.userId)
                       ?.name || "Unknown User"}
                   </td>
-                  <td className="border px-4 py-2 text-gray-900 dark:text-white">{punch.type}</td>
+                  <td className="border px-4 py-2 text-gray-900 dark:text-white">
+                    {punch.type}
+                  </td>
                   <td className="border px-4 py-2 text-gray-900 dark:text-white">
                     {format(new Date(punch.timestamp), "yyyy-MM-dd HH:mm:ss")}
+                  </td>
+                  <td className="border px-4 py-2 text-gray-900 dark:text-white">
+                    {punch.device || "—"}
                   </td>
                 </tr>
               ))}
@@ -307,7 +337,9 @@ export default function CheckInsTable() {
 
           {/* Items per page selector and time window indicator */}
           <div className="mt-4 flex justify-between items-center">
-            <div className="text-gray-700 dark:text-gray-300">Showing data from last {timeWindow} hours</div>
+            <div className="text-gray-700 dark:text-gray-300">
+              Showing data from last {timeWindow} hours
+            </div>
             <Select
               value={itemsPerPage.toString()}
               onValueChange={(e) => {

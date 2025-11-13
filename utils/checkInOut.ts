@@ -1,6 +1,7 @@
 import { tx, id } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
+import { getDeviceId } from "./deviceId";
 
 // from .env 14 by default
 const RESET_HOURS = parseInt(process.env.NEXT_PUBLIC_RESET_HOURS || "14", 10);
@@ -159,7 +160,8 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
     // Calculate hours since last punch
     const lastPunchTime = new Date(lastPunch.timestamp).getTime();
     const currentTime = Date.now();
-    const hoursSinceLastPunch = (currentTime - lastPunchTime) / (1000 * 60 * 60);
+    const hoursSinceLastPunch =
+      (currentTime - lastPunchTime) / (1000 * 60 * 60);
 
     // If time since last punch is >= RESET_HOURS, always check in
     if (hoursSinceLastPunch >= RESET_HOURS) {
@@ -181,6 +183,7 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
     try {
       const newPunchId = id();
       const currentTime = Date.now();
+      const deviceId = getDeviceId();
 
       await db.transact([
         tx.punches[newPunchId].update({
@@ -190,6 +193,7 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
           isAdminGenerated: isAdminAction,
           userId: entity.id, // Add userId field
           serverCreatedAt: currentTime, // This will be overwritten by the server with its own timestamp
+          device: deviceId, // Device identifier
         }),
       ]);
       return true;

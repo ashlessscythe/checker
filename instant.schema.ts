@@ -33,6 +33,7 @@ const _schema = i.schema({
       isAdminGenerated: i.boolean(),
       isSystemGenerated: i.boolean(),
       userId: i.string().indexed(), // Add direct reference to user
+      device: i.string(), // Device identifier (short code like last 4 hex chars)
     }),
     departments: i.entity({
       name: i.string(),
