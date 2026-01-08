@@ -3,7 +3,7 @@
 
 import { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { db } from "@/lib/instantdb";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useAutoNavigate } from "@/hooks/useAutoNavigate";
 import {
@@ -294,16 +294,6 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
       )}
       
       <div className="flex flex-col items-center">
-        <div className="h-16">
-          <Toaster
-            containerStyle={{
-              top: 0,
-            }}
-            toastOptions={{
-              className: "relative top-16",
-            }}
-          />
-        </div>
         <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md w-full max-w-md">
           <h1 className="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-white">
             Check In / Check Out
