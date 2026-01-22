@@ -22,6 +22,8 @@ const TABLES = [
   { value: "backups", label: "Backups" },
 ];
 
+const REPORT_DAYS = 3;
+
 // Convert UTC timestamp to MST ISO8601
 const convertToMST = (timestamp) => {
   const date = new Date(timestamp);
@@ -128,6 +130,7 @@ export default function BackupPage() {
   const [deletionProgress, setDeletionProgress] = useState<string>("");
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [daysToKeep, setDaysToKeep] = useState(7);
+  const [reportDays, setReportDays] = useState(REPORT_DAYS);
 
   // Function to manually refresh data
   const refreshData = () => {
@@ -625,16 +628,23 @@ export default function BackupPage() {
         Array<{ type: string; timestampLocal: string }>
       > = {};
 
-      // Get last 4 punches per user, newest to oldest
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - reportDays);
+
+      // Get punches from the last reportDays days per user
       for (const p of data.punches) {
+        const punchTime = p.serverCreatedAt || p.timestamp;
+        if (!punchTime) continue;
+
+        const punchDate = new Date(punchTime);
+        if (punchDate < cutoffDate) continue;
+
         const userId = p.userId;
         if (!grouped[userId]) grouped[userId] = [];
-        if (grouped[userId].length < 4) {
-          grouped[userId].push({
-            type: p.type,
-            timestampLocal: convertToMST(p.timestamp),
-          });
-        }
+        grouped[userId].push({
+          type: p.type,
+          timestampLocal: convertToMST(punchTime),
+        });
       }
 
       // Convert to CSV format
@@ -993,8 +1003,23 @@ export default function BackupPage() {
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
           <h2 className="text-xl font-semibold mb-4">Punch Report</h2>
           <p className="text-gray-600 mb-4">
-            Download a report of the most recent punches for all users.
+            Download a report of punches from the last {reportDays} days for all
+            users.
           </p>
+          <div className="space-y-2 mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Days to include
+            </label>
+            <Input
+              type="number"
+              min="3"
+              value={reportDays}
+              onChange={(e) =>
+                setReportDays(Math.max(3, parseInt(e.target.value) || 3))
+              }
+              className="w-full"
+            />
+          </div>
           <Button
             onClick={handleDownloadPunchReport}
             disabled={isExporting}

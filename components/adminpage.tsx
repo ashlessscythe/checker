@@ -22,6 +22,7 @@ import {
 export default function AdminPage() {
   const [userId, setUserId] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
+  const [editingEmail, setEditingEmail] = useState(null);
   const [editingBarcode, setEditingBarcode] = useState(null);
   const [isClient, setIsClient] = useState(false);
   const { user, isAdmin } = useAuth();
@@ -114,6 +115,17 @@ export default function AdminPage() {
     }
   };
 
+  const handleEmailChange = async (userId, newEmail) => {
+    try {
+      await db.transact([tx.users[userId].update({ email: newEmail })]);
+      setEditingEmail(null);
+      toast.success("Email updated successfully");
+    } catch (error) {
+      console.error("Error updating email:", error);
+      toast.error("Failed to update email");
+    }
+  };
+
   const toggleAdminStatus = async (userId, currentStatus) => {
     try {
       await db.transact([tx.users[userId].update({ isAdmin: !currentStatus })]);
@@ -137,6 +149,23 @@ export default function AdminPage() {
     } catch (error) {
       console.error("Error updating auth status:", error);
       toast.error("Failed to update authorization status");
+    }
+  };
+
+  const [confirmDeleteUserId, setConfirmDeleteUserId] = useState(null);
+  const [deletingUserId, setDeletingUserId] = useState(null);
+
+  const deleteUser = async (userId) => {
+    try {
+      setDeletingUserId(userId);
+      await db.transact([tx.users[userId].delete()]);
+      toast.success("User deleted successfully");
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast.error("Failed to delete user");
+    } finally {
+      setDeletingUserId(null);
+      setConfirmDeleteUserId(null);
     }
   };
 
@@ -363,189 +392,453 @@ export default function AdminPage() {
         </div>
       )}
       <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <div className="max-h-[800px] overflow-y-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
-                <tr>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Barcode
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+        <div className="md:hidden p-4 space-y-4">
+          {paginatedUsers.map((user) => (
+            <div
+              key={user.id}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3"
+            >
+              <div>
+                <p className="text-xs uppercase text-gray-500 dark:text-gray-400">
+                  Name
+                </p>
+                {editingUser === user.id ? (
+                  <input
+                    className="border rounded px-2 py-1 w-full"
+                    defaultValue={user.name ?? ""}
+                    onBlur={(e) => handleNameChange(user.id, e.target.value)}
+                  />
+                ) : (
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {user.name ?? "N/A"}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs uppercase text-gray-500 dark:text-gray-400">
+                  Email
+                </p>
+                {editingEmail === user.id ? (
+                  <input
+                    className="border rounded px-2 py-1 w-full"
+                    defaultValue={user.email ?? ""}
+                    onBlur={(e) => handleEmailChange(user.id, e.target.value)}
+                  />
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    {user.email ?? "N/A"}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs uppercase text-gray-500 dark:text-gray-400">
+                  Barcode
+                </p>
+                <div className="flex items-center">
+                  {editingBarcode === user.id ? (
+                    <input
+                      className="border rounded px-2 py-1 w-full mr-2"
+                      defaultValue={user.barcode ?? ""}
+                      onBlur={(e) =>
+                        handleBarcodeChange(user.id, e.target.value)
+                      }
+                    />
+                  ) : (
+                    <span
+                      className={`mr-2 cursor-pointer text-sm ${
+                        visibleBarcodes[user.id] ? "" : "filter blur-sm"
+                      }`}
+                      onClick={() => setEditingBarcode(user.id)}
+                    >
+                      {user.barcode ?? "N/A"}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => toggleBarcodeVisibility(user.id)}
+                    className="text-blue-600 hover:text-blue-800"
+                  >
+                    {visibleBarcodes[user.id] ? (
+                      <EyeOff size={16} />
+                    ) : (
+                      <Eye size={16} />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase text-gray-500 dark:text-gray-400">
                     Admin
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  </p>
+                  <span
+                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      user.isAdmin
+                        ? "bg-green-100 text-green-800"
+                        : "bg-red-100 text-red-800"
+                    }`}
+                  >
+                    {user.isAdmin ? "Yes" : "No"}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-gray-500 dark:text-gray-400">
                     Auth
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Department
-                  </th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {paginatedUsers.map((user) => (
-                  <tr key={user.id}>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      <div className="flex items-center">
-                        {editingBarcode === user.id ? (
+                  </p>
+                  <span
+                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      user.isAuth
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {user.isAuth ? "Authorized" : "Unauthorized"}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-gray-500 dark:text-gray-400">
+                  Department
+                </p>
+                <Select
+                  value={user.deptId || ""}
+                  onValueChange={async (value) => {
+                    try {
+                      await db.transact([
+                        tx.users[user.id].update({ deptId: value }),
+                      ]);
+                      toast.success("Department updated successfully");
+                    } catch (error) {
+                      console.error("Error updating department:", error);
+                      toast.error("Failed to update department");
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Department" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-sm rounded-md">
+                    {data?.departments?.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <button
+                  onClick={() => setEditingBarcode(user.id)}
+                  className="text-indigo-600 hover:text-indigo-900 text-sm"
+                >
+                  Edit Barcode
+                </button>
+                <button
+                  onClick={() => setEditingUser(user.id)}
+                  className="text-indigo-600 hover:text-indigo-900 text-sm"
+                >
+                  Edit Name
+                </button>
+                <button
+                  onClick={() => setEditingEmail(user.id)}
+                  className="text-indigo-600 hover:text-indigo-900 text-sm"
+                >
+                  Edit Email
+                </button>
+                <button
+                  onClick={() => toggleAdminStatus(user.id, user.isAdmin)}
+                  className="text-green-600 hover:text-green-900 text-sm"
+                >
+                  {user.isAdmin ? "Remove Admin" : "Make Admin"}
+                </button>
+                <button
+                  onClick={() => makeAuth(user.id, user.isAuth)}
+                  className="text-blue-600 hover:text-blue-900 text-sm"
+                >
+                  {user.isAuth ? "Revoke Auth" : "Grant Auth"}
+                </button>
+                <button
+                  onClick={() => forceCheckIn(user.id)}
+                  className="text-yellow-600 hover:text-yellow-900 text-sm"
+                >
+                  Force Check-In
+                </button>
+                <button
+                  onClick={() => forceCheckOut(user.id)}
+                  className="text-red-600 hover:text-red-900 text-sm"
+                >
+                  Force Check-Out
+                </button>
+                <button
+                  onClick={() => decoupleBarcode(user.id)}
+                  className="text-orange-600 hover:text-orange-900 text-sm"
+                  disabled={!user.barcode}
+                >
+                  Decouple Barcode
+                </button>
+                {confirmDeleteUserId === user.id ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-red-600">Are you sure?</span>
+                    <button
+                      onClick={() => deleteUser(user.id)}
+                      className="text-red-700 hover:text-red-900 text-sm"
+                      disabled={deletingUserId === user.id}
+                    >
+                      {deletingUserId === user.id ? "Deleting..." : "Delete"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteUserId(null)}
+                      className="text-gray-600 hover:text-gray-900 text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteUserId(user.id)}
+                    className="text-red-600 hover:text-red-900 text-sm"
+                  >
+                    Delete User
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden md:block">
+          <div className="overflow-x-auto">
+            <div className="max-h-[800px] overflow-y-auto">
+              <table className="min-w-[1100px] divide-y divide-gray-200">
+                <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Barcode
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Admin
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Auth
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Department
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {paginatedUsers.map((user) => (
+                    <tr key={user.id}>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center">
+                          {editingBarcode === user.id ? (
+                            <input
+                              className="border rounded px-2 py-1 w-full mr-2"
+                              defaultValue={user.barcode ?? ""}
+                              onBlur={(e) =>
+                                handleBarcodeChange(user.id, e.target.value)
+                              }
+                            />
+                          ) : (
+                            <span
+                              className={`mr-2 cursor-pointer ${
+                                visibleBarcodes[user.id] ? "" : "filter blur-sm"
+                              }`}
+                              onClick={() => setEditingBarcode(user.id)}
+                            >
+                              {user.barcode ?? "N/A"}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => toggleBarcodeVisibility(user.id)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            {visibleBarcodes[user.id] ? (
+                              <EyeOff size={16} />
+                            ) : (
+                              <Eye size={16} />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {editingEmail === user.id ? (
                           <input
-                            className="border rounded px-2 py-1 w-full mr-2"
-                            defaultValue={user.barcode ?? ""}
+                            className="border rounded px-2 py-1 w-full"
+                            defaultValue={user.email ?? ""}
                             onBlur={(e) =>
-                              handleBarcodeChange(user.id, e.target.value)
+                              handleEmailChange(user.id, e.target.value)
                             }
                           />
                         ) : (
                           <span
-                            className={`mr-2 cursor-pointer ${
-                              visibleBarcodes[user.id] ? "" : "filter blur-sm"
-                            }`}
-                            onClick={() => setEditingBarcode(user.id)}
+                            className="cursor-pointer"
+                            onClick={() => setEditingEmail(user.id)}
                           >
-                            {user.barcode ?? "N/A"}
+                            {user.email ?? "N/A"}
                           </span>
                         )}
-                        <button
-                          onClick={() => toggleBarcodeVisibility(user.id)}
-                          className="text-blue-600 hover:text-blue-800"
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                        {editingUser === user.id ? (
+                          <input
+                            className="border rounded px-2 py-1 w-full"
+                            defaultValue={user.name ?? ""}
+                            onBlur={(e) =>
+                              handleNameChange(user.id, e.target.value)
+                            }
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">
+                            {user.name ?? "N/A"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            user.isAdmin
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
                         >
-                          {visibleBarcodes[user.id] ? (
-                            <EyeOff size={16} />
-                          ) : (
-                            <Eye size={16} />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {user.email ?? "N/A"}
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                      {editingUser === user.id ? (
-                        <input
-                          className="border rounded px-2 py-1 w-full"
-                          defaultValue={user.name ?? ""}
-                          onBlur={(e) =>
-                            handleNameChange(user.id, e.target.value)
-                          }
-                        />
-                      ) : (
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {user.name ?? "N/A"}
+                          {user.isAdmin ? "Yes" : "No"}
                         </span>
-                      )}
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          user.isAdmin
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {user.isAdmin ? "Yes" : "No"}
-                      </span>
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          user.isAuth
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {user.isAuth ? "Authorized" : "Unauthorized"}
-                      </span>
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                      <Select
-                        value={user.deptId || ""}
-                        onValueChange={async (value) => {
-                          try {
-                            await db.transact([
-                              tx.users[user.id].update({ deptId: value }),
-                            ]);
-                            toast.success("Department updated successfully");
-                          } catch (error) {
-                            console.error("Error updating department:", error);
-                            toast.error("Failed to update department");
-                          }
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Department" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-sm rounded-md">
-                          {data?.departments?.map((dept) => (
-                            <SelectItem key={dept.id} value={dept.id}>
-                              {dept.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                        <button
-                          onClick={() => setEditingBarcode(user.id)}
-                          className="text-indigo-600 hover:text-indigo-900"
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            user.isAuth
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-gray-100 text-gray-800"
+                          }`}
                         >
-                          Edit Barcode
-                        </button>
-                        <button
-                          onClick={() => setEditingUser(user.id)}
-                          className="text-indigo-600 hover:text-indigo-900"
+                          {user.isAuth ? "Authorized" : "Unauthorized"}
+                        </span>
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                        <Select
+                          value={user.deptId || ""}
+                          onValueChange={async (value) => {
+                            try {
+                              await db.transact([
+                                tx.users[user.id].update({ deptId: value }),
+                              ]);
+                              toast.success("Department updated successfully");
+                            } catch (error) {
+                              console.error("Error updating department:", error);
+                              toast.error("Failed to update department");
+                            }
+                          }}
                         >
-                          Edit Name
-                        </button>
-                        <button
-                          onClick={() =>
-                            toggleAdminStatus(user.id, user.isAdmin)
-                          }
-                          className="text-green-600 hover:text-green-900"
-                        >
-                          {user.isAdmin ? "Remove Admin" : "Make Admin"}
-                        </button>
-                        <button
-                          onClick={() => makeAuth(user.id, user.isAuth)}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          {user.isAuth ? "Revoke Auth" : "Grant Auth"}
-                        </button>
-                        <button
-                          onClick={() => forceCheckIn(user.id)}
-                          className="text-yellow-600 hover:text-yellow-900 mr-2"
-                        >
-                          Force Check-In
-                        </button>
-                        <button
-                          onClick={() => forceCheckOut(user.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Force Check-Out
-                        </button>
-                        <button
-                          onClick={() => decoupleBarcode(user.id)}
-                          className="text-orange-600 hover:text-orange-900"
-                          disabled={!user.barcode}
-                        >
-                          Decouple Barcode
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Department" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-sm rounded-md">
+                            {data?.departments?.map((dept) => (
+                              <SelectItem key={dept.id} value={dept.id}>
+                                {dept.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex flex-col lg:flex-row gap-2">
+                          <button
+                            onClick={() => setEditingBarcode(user.id)}
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            Edit Barcode
+                          </button>
+                          <button
+                            onClick={() => setEditingUser(user.id)}
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            Edit Name
+                          </button>
+                          <button
+                            onClick={() => setEditingEmail(user.id)}
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            Edit Email
+                          </button>
+                          <button
+                            onClick={() =>
+                              toggleAdminStatus(user.id, user.isAdmin)
+                            }
+                            className="text-green-600 hover:text-green-900"
+                          >
+                            {user.isAdmin ? "Remove Admin" : "Make Admin"}
+                          </button>
+                          <button
+                            onClick={() => makeAuth(user.id, user.isAuth)}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            {user.isAuth ? "Revoke Auth" : "Grant Auth"}
+                          </button>
+                          <button
+                            onClick={() => forceCheckIn(user.id)}
+                            className="text-yellow-600 hover:text-yellow-900"
+                          >
+                            Force Check-In
+                          </button>
+                          <button
+                            onClick={() => forceCheckOut(user.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Force Check-Out
+                          </button>
+                          <button
+                            onClick={() => decoupleBarcode(user.id)}
+                            className="text-orange-600 hover:text-orange-900"
+                            disabled={!user.barcode}
+                          >
+                            Decouple Barcode
+                          </button>
+                          {confirmDeleteUserId === user.id ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-red-600">
+                                Are you sure?
+                              </span>
+                              <button
+                                onClick={() => deleteUser(user.id)}
+                                className="text-red-700 hover:text-red-900"
+                                disabled={deletingUserId === user.id}
+                              >
+                                {deletingUserId === user.id
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteUserId(null)}
+                                className="text-gray-600 hover:text-gray-900"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmDeleteUserId(user.id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete User
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
