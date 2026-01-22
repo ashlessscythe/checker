@@ -223,11 +223,12 @@ export default function CheckInsTable() {
       </h2>
 
       {/* Filters */}
-      <div className="mb-4 flex space-x-2">
+      <div className="mb-4 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-end">
         <Input
           placeholder="Filter by name"
           value={filterName}
           onChange={(e) => setFilterName(e.target.value)}
+          className="md:w-48"
         />
         <Select value={filterType} onValueChange={(e) => setFilterType(e)}>
           <option value="">All Types</option>
@@ -238,81 +239,89 @@ export default function CheckInsTable() {
           type="date"
           value={filterDateFrom}
           onChange={(e) => setFilterDateFrom(e.target.value)}
+          className="md:w-44"
         />
         <Input
           type="date"
           value={filterDateTo}
           onChange={(e) => setFilterDateTo(e.target.value)}
+          className="md:w-44"
         />
-        <Button onClick={handleFilter}>Apply Filters</Button>
-        <Button onClick={handleClearFilters}>Clear Filters</Button>
+        <Button onClick={handleFilter} className="w-full md:w-auto">
+          Apply Filters
+        </Button>
+        <Button onClick={handleClearFilters} className="w-full md:w-auto">
+          Clear Filters
+        </Button>
       </div>
 
       {paginatedPunches.length === 0 ? (
         <p className="text-gray-700 dark:text-gray-300">No punches recorded.</p>
       ) : (
         <>
-          <table className="min-w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700">
-            <thead>
-              <tr className="bg-gray-100 dark:bg-gray-700">
-                <th
-                  className="px-4 py-2 cursor-pointer text-left text-gray-900 dark:text-white border-b dark:border-gray-600"
-                  onClick={() => handleSort("users.name")}
-                >
-                  Name{" "}
-                  {sortField === "users.name" &&
-                    (sortOrder === "asc" ? "▲" : "▼")}
-                </th>
-                <th
-                  className="px-4 py-2 cursor-pointer text-left text-gray-900 dark:text-white border-b dark:border-gray-600"
-                  onClick={() => handleSort("type")}
-                >
-                  Type{" "}
-                  {sortField === "type" && (sortOrder === "asc" ? "▲" : "▼")}
-                </th>
-                <th
-                  className="px-4 py-2 cursor-pointer text-left text-gray-900 dark:text-white border-b dark:border-gray-600"
-                  onClick={() => handleSort("timestamp")}
-                >
-                  Timestamp{" "}
-                  {sortField === "timestamp" &&
-                    (sortOrder === "asc" ? "▲" : "▼")}
-                </th>
-                <th
-                  className="px-4 py-2 cursor-pointer text-left text-gray-900 dark:text-white border-b dark:border-gray-600"
-                  onClick={() => handleSort("device")}
-                >
-                  Device{" "}
-                  {sortField === "device" && (sortOrder === "asc" ? "▲" : "▼")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedPunches.map((punch) => (
-                <tr
-                  key={punch.id}
-                  className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                >
-                  <td className="border px-4 py-2 text-gray-900 dark:text-white">
-                    {(data.users as User[]).find((u) => u.id === punch.userId)
-                      ?.name || "Unknown User"}
-                  </td>
-                  <td className="border px-4 py-2 text-gray-900 dark:text-white">
-                    {punch.type}
-                  </td>
-                  <td className="border px-4 py-2 text-gray-900 dark:text-white">
-                    {format(new Date(punch.timestamp), "yyyy-MM-dd HH:mm:ss")}
-                  </td>
-                  <td className="border px-4 py-2 text-gray-900 dark:text-white">
-                    {punch.device || "—"}
-                  </td>
+          <div className="overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
+            <table className="min-w-[640px] w-full bg-white dark:bg-gray-800">
+              <thead>
+                <tr className="bg-gray-100 dark:bg-gray-700">
+                  <th
+                    className="cursor-pointer border-b px-3 py-2 text-left text-gray-900 dark:border-gray-600 dark:text-white sm:px-4"
+                    onClick={() => handleSort("users.name")}
+                  >
+                    Name{" "}
+                    {sortField === "users.name" &&
+                      (sortOrder === "asc" ? "▲" : "▼")}
+                  </th>
+                  <th
+                    className="cursor-pointer border-b px-3 py-2 text-left text-gray-900 dark:border-gray-600 dark:text-white sm:px-4"
+                    onClick={() => handleSort("type")}
+                  >
+                    Type{" "}
+                    {sortField === "type" && (sortOrder === "asc" ? "▲" : "▼")}
+                  </th>
+                  <th
+                    className="cursor-pointer border-b px-3 py-2 text-left text-gray-900 dark:border-gray-600 dark:text-white sm:px-4"
+                    onClick={() => handleSort("timestamp")}
+                  >
+                    Timestamp{" "}
+                    {sortField === "timestamp" &&
+                      (sortOrder === "asc" ? "▲" : "▼")}
+                  </th>
+                  <th
+                    className="cursor-pointer border-b px-3 py-2 text-left text-gray-900 dark:border-gray-600 dark:text-white sm:px-4"
+                    onClick={() => handleSort("device")}
+                  >
+                    Device{" "}
+                    {sortField === "device" && (sortOrder === "asc" ? "▲" : "▼")}
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginatedPunches.map((punch) => (
+                  <tr
+                    key={punch.id}
+                    className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    <td className="border px-3 py-2 text-gray-900 dark:text-white sm:px-4">
+                      {(data.users as User[]).find((u) => u.id === punch.userId)
+                        ?.name || "Unknown User"}
+                    </td>
+                    <td className="border px-3 py-2 text-gray-900 dark:text-white sm:px-4">
+                      {punch.type}
+                    </td>
+                    <td className="border px-3 py-2 text-gray-900 dark:text-white sm:px-4">
+                      {format(new Date(punch.timestamp), "yyyy-MM-dd HH:mm:ss")}
+                    </td>
+                    <td className="border px-3 py-2 text-gray-900 dark:text-white sm:px-4">
+                      {punch.device || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {/* Pagination */}
-          <div className="mt-4 flex justify-between items-center">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Button
               onClick={handlePreviousPage}
               disabled={localCurrentPage === 1}
@@ -336,7 +345,7 @@ export default function CheckInsTable() {
           </div>
 
           {/* Items per page selector and time window indicator */}
-          <div className="mt-4 flex justify-between items-center">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-gray-700 dark:text-gray-300">
               Showing data from last {timeWindow} hours
             </div>

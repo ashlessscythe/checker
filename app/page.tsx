@@ -46,10 +46,10 @@ function HomeContent() {
   const canViewChecklist = isAuthorized || isAdmin;
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto px-4 py-4 sm:py-6">
       <Header setIsAuthModalOpen={setIsAuthModalOpen} />
 
-      <div className="container mx-auto p-4">
+      <div className="mx-auto max-w-3xl">
         <div className="flex flex-col items-center space-y-4">
           <CheckInOutForm shouldFocus={shouldFocusCheckInOut} />
           <VisitorRegistration />
@@ -58,7 +58,7 @@ function HomeContent() {
 
       {/* Show sections if user is either authorized or admin */}
       {(isAuthorized || isAdmin) && (
-        <div className="space-y-4 mt-4">
+        <div className="mt-6 space-y-4">
           {/* Checklist and History visible to both authorized users and admins */}
           {canViewChecklist && (
             <>
@@ -69,9 +69,9 @@ function HomeContent() {
               />
 
               {showChecklist && (
-                <div className="ml-4">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <span className="font-semibold">
+                <div className="mt-3 rounded-lg border border-sky-200/70 bg-white/70 p-3 shadow-sm dark:border-sky-700/70 dark:bg-gray-800/50 sm:p-4 md:ml-4">
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                    <span className="font-semibold text-gray-900 dark:text-white">
                       Show Advanced Checklist
                     </span>
                     <Switch isChecked={isAdvanced} onChange={setIsAdvanced} />
@@ -89,7 +89,7 @@ function HomeContent() {
               />
 
               {showCheckins && (
-                <div className="ml-4">
+                <div className="mt-3 rounded-lg border border-sky-200/70 bg-white/70 p-3 shadow-sm dark:border-sky-700/70 dark:bg-gray-800/50 sm:p-4 md:ml-4">
                   <Suspense fallback={<div>Loading check-ins history...</div>}>
                     <CheckInsTable />
                   </Suspense>
@@ -108,7 +108,7 @@ function HomeContent() {
                   onToggle={() => setShowAdminPage(!showAdminPage)}
                 />
                 {showAdminPage && (
-                  <div className="ml-4">
+                  <div className="mt-3 rounded-lg border border-sky-200/70 bg-white/70 p-3 shadow-sm dark:border-sky-700/70 dark:bg-gray-800/50 sm:p-4 md:ml-4">
                     <AdminPage />
                   </div>
                 )}
@@ -119,7 +119,7 @@ function HomeContent() {
                   onToggle={() => setShowBackupPage(!showBackupPage)}
                 />
                 {showBackupPage && (
-                  <div className="ml-4">
+                  <div className="mt-3 rounded-lg border border-sky-200/70 bg-white/70 p-3 shadow-sm dark:border-sky-700/70 dark:bg-gray-800/50 sm:p-4 md:ml-4">
                     <BackupPage />
                   </div>
                 )}
