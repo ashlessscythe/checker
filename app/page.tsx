@@ -10,10 +10,6 @@ import ToggleSection from "@/components/toggle-section";
 import VisitorRegistration from "@/components/visitorcheck";
 import Screensaver from "@/components/screensaver";
 import { lazyLoad } from "@/utils/lazyLoader";
-
-// Lazy load admin components together
-const AdminPage = lazyLoad("adminpage", { withAutoNav: true });
-const BackupPage = lazyLoad("backuppage");
 const CheckInsTable = lazyLoad("checkinstable", {
   withAutoNav: true,
   path: "/",
@@ -35,8 +31,6 @@ function HomeContent() {
 
   const [showChecklist, setShowChecklist] = useState(false);
   const [showCheckins, setShowCheckins] = useState(false);
-  const [showAdminPage, setShowAdminPage] = useState(false);
-  const [showBackupPage, setShowBackupPage] = useState(false);
 
   const shouldFocusCheckInOut = useMemo(() => {
     return !isAuthModalOpen && !isAuthenticated;
@@ -98,34 +92,6 @@ function HomeContent() {
             </>
           )}
 
-          {/* Admin-only sections */}
-          {isAdmin && (
-            <>
-              <Suspense fallback={<div>Loading admin features...</div>}>
-                <ToggleSection
-                  title="Show Admin Page"
-                  isOpen={showAdminPage}
-                  onToggle={() => setShowAdminPage(!showAdminPage)}
-                />
-                {showAdminPage && (
-                  <div className="mt-3 rounded-lg border border-sky-200/70 bg-white/70 p-3 shadow-sm dark:border-sky-700/70 dark:bg-gray-800/50 sm:p-4 md:ml-4">
-                    <AdminPage />
-                  </div>
-                )}
-
-                <ToggleSection
-                  title="Show Backup & Archive"
-                  isOpen={showBackupPage}
-                  onToggle={() => setShowBackupPage(!showBackupPage)}
-                />
-                {showBackupPage && (
-                  <div className="mt-3 rounded-lg border border-sky-200/70 bg-white/70 p-3 shadow-sm dark:border-sky-700/70 dark:bg-gray-800/50 sm:p-4 md:ml-4">
-                    <BackupPage />
-                  </div>
-                )}
-              </Suspense>
-            </>
-          )}
         </div>
       )}
 

@@ -9,10 +9,11 @@ export default function NotAuthorizedPage() {
       <div className="mb-8">
         <img src="/dinosaur.gif" alt="Dinosaur saying no" className="rounded-lg shadow-lg" />
       </div>
-      <Link href="/">
-        <a className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
-          Go back and find the magic word
-        </a>
+      <Link
+        href="/"
+        className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+      >
+        Go back and find the magic word
       </Link>
     </div>
   );
