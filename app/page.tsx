@@ -7,7 +7,7 @@ import { useAuth, AuthProvider } from "@/hooks/authContext";
 import Header from "@/components/header";
 import { Switch } from "@/components/ui/Switch";
 import ToggleSection from "@/components/toggle-section";
-import VisitorRegistration from "@/components/visitorcheck";
+import VisitorPrecheckEmailPrompt from "@/components/visitor-precheck-email-prompt";
 import Screensaver from "@/components/screensaver";
 import { lazyLoad } from "@/utils/lazyLoader";
 const CheckInsTable = lazyLoad("checkinstable", {
@@ -46,7 +46,7 @@ function HomeContent() {
       <div className="mx-auto max-w-3xl">
         <div className="flex flex-col items-center space-y-4">
           <CheckInOutForm shouldFocus={shouldFocusCheckInOut} />
-          <VisitorRegistration />
+          <VisitorPrecheckEmailPrompt />
         </div>
       </div>
 

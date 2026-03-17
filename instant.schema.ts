@@ -56,6 +56,44 @@ const _schema = i.schema({
       totalChecked: i.number(),
       totalPresent: i.number(),
     }),
+    // Visitor pre-check related entities
+    visitors: i.entity({
+      name: i.string(),
+      email: i.string(),
+      barcode: i.string(), // Visitor barcode used for kiosk check-in
+      visitDate: i.number(), // UTC timestamp for scheduled visit start
+      hostName: i.string(), // Who they are visiting (display)
+      reason: i.string(), // Reason for visit (display or free text)
+      otherDetails: i.string(), // Optional free-text details
+      createdAt: i.number(),
+      precheckedAt: i.number(), // When visitor completed pre-check
+    }),
+    visitorInvites: i.entity({
+      email: i.string().indexed(),
+      token: i.string().unique().indexed(),
+      tokenExpiresAt: i.number(),
+      tokenUsedAt: i.number(),
+      status: i.string(), // 'pending', 'completed', 'expired', 'cancelled'
+      visitorId: i.string(), // Link to visitors entity once pre-check done
+      hostOption: i.string(), // Selected "who/whom" option identifier or label
+      reasonOption: i.string(), // Selected "why" option identifier or label
+      visitDate: i.number(), // Scheduled visit date/time (UTC)
+      createdAt: i.number(),
+      lastEmailSentAt: i.number(), // For auditing/resend logic
+    }),
+    visitOptions: i.entity({
+      category: i.string(), // 'who' | 'why'
+      label: i.string(),
+      isActive: i.boolean(),
+      sortOrder: i.number(),
+      createdAt: i.number(),
+    }),
+    auditLogs: i.entity({
+      type: i.string(), // e.g. 'precheck_email_sent', 'precheck_completed', 'kiosk_checkin'
+      message: i.string(),
+      metadata: i.any(),
+      createdAt: i.number(),
+    }),
   },
   links: {
     userDepartment: {
