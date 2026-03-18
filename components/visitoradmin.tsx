@@ -19,6 +19,11 @@ export default function VisitorAdmin() {
     visitOptions: {
       $: {},
     },
+    visitorPrecheckRequests: {
+      $: {
+        where: { status: "pending" },
+      },
+    },
   });
 
   const [label, setLabel] = useState("");
@@ -42,6 +47,36 @@ export default function VisitorAdmin() {
   const whyOptions = options
     .filter((o) => o.category === "why")
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+  const pendingRequests = (data?.visitorPrecheckRequests || []) as Array<{
+    id: string;
+    token: string;
+    email: string;
+    status: string;
+    who: string;
+    reason: string;
+    otherDetails: string;
+    visitDate: number;
+    submittedAt: number;
+  }>;
+
+  const [actionModal, setActionModal] = useState<null | {
+    requestId: string;
+    type: "approve" | "reject";
+  }>(null);
+  const [messageDraft, setMessageDraft] = useState("");
+  const [isActionSending, setIsActionSending] = useState(false);
+
+  const generateVisitorBarcode = () => {
+    const barcodeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let barcode = "";
+    for (let i = 0; i < 12; i++) {
+      barcode += barcodeChars.charAt(
+        Math.floor(Math.random() * barcodeChars.length)
+      );
+    }
+    return barcode;
+  };
 
   const handleAddOption = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -277,6 +312,277 @@ export default function VisitorAdmin() {
             </ul>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
+        <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
+          Visitor Pre-Check Approvals
+        </h2>
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+          Approve or reject visitor requests. On approval, the visitor gets a QR + PDF by
+          email and their badge will be recognized at the kiosk.
+        </p>
+
+        {pendingRequests.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No pending requests right now.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {pendingRequests.map((req) => (
+              <div
+                key={req.id}
+                className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {req.email}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Submitted: {new Date(req.submittedAt).toLocaleString()}
+                    </div>
+                    <div className="mt-2 text-sm text-gray-700 dark:text-gray-200">
+                      <div>
+                        <span className="font-semibold">Who:</span> {req.who || "—"}
+                      </div>
+                      <div>
+                        <span className="font-semibold">Reason:</span>{" "}
+                        {req.reason || "—"}
+                      </div>
+                      <div>
+                        <span className="font-semibold">When:</span>{" "}
+                        {new Date(req.visitDate).toLocaleString()}
+                      </div>
+                      {req.otherDetails?.trim() ? (
+                        <div className="mt-2">
+                          <span className="font-semibold">Details:</span>{" "}
+                          {req.otherDetails}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:items-end">
+                    <Button
+                      type="button"
+                      className="bg-green-600 hover:bg-green-700"
+                      disabled={isActionSending}
+                      onClick={() => {
+                        setMessageDraft("");
+                        setActionModal({ requestId: req.id, type: "approve" });
+                      }}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isActionSending}
+                      onClick={() => {
+                        setMessageDraft("");
+                        setActionModal({ requestId: req.id, type: "reject" });
+                      }}
+                      className="border-red-500 text-red-600 hover:bg-red-50 dark:border-red-500 dark:text-red-300"
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {actionModal ? (
+          <div className="mt-5 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {actionModal.type === "approve" ? "Approve request" : "Reject request"}
+            </h3>
+            <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+              Message is optional. If you leave it blank, we&apos;ll send a default note.
+            </p>
+            <textarea
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              rows={4}
+              placeholder={
+                actionModal.type === "approve"
+                  ? "Optional admin message to include in approval email..."
+                  : "Optional admin rejection message (e.g. schedule another time, not employed here...)..."
+              }
+              value={messageDraft}
+              onChange={(e) => setMessageDraft(e.target.value)}
+              disabled={isActionSending}
+            />
+            <div className="mt-3 flex gap-2">
+              <Button
+                type="button"
+                className={
+                  actionModal.type === "approve"
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-red-600 hover:bg-red-700"
+                }
+                disabled={isActionSending}
+                onClick={async () => {
+                  setIsActionSending(true);
+                  try {
+                    const req = pendingRequests.find(
+                      (r) => r.id === actionModal.requestId
+                    );
+                    if (!req) {
+                      toast.error("Request not found.");
+                      return;
+                    }
+
+                    const now = Date.now();
+
+                    if (actionModal.type === "approve") {
+                      const barcode = generateVisitorBarcode();
+                      const visitorId = id();
+
+                      // Ensure VISITOR department exists
+                      const { data: deptData } = await db.queryOnce({
+                        departments: {
+                          $: {
+                            where: { departmentId: "VISITOR" },
+                          },
+                        },
+                      });
+
+                      let visitorDeptId = "";
+                      if (
+                        !deptData?.departments ||
+                        deptData.departments.length === 0
+                      ) {
+                        visitorDeptId = id();
+                        await db.transact([
+                          tx.departments[visitorDeptId].update({
+                            name: "Visitors",
+                            departmentId: "VISITOR",
+                          }),
+                        ]);
+                      } else {
+                        visitorDeptId = deptData.departments[0].id;
+                      }
+
+                      await db.transact([
+                        tx.users[visitorId].update({
+                          name: req.email,
+                          email: req.email,
+                          barcode,
+                          isAdmin: false,
+                          isAuth: false,
+                          deptId: visitorDeptId,
+                          createdAt: now,
+                          serverCreatedAt: now,
+                          lastLoginAt: now,
+                          laptopSerial: "",
+                          purpose: req.reason,
+                        }),
+                        tx.visitors[visitorId].update({
+                          name: req.email,
+                          email: req.email,
+                          barcode,
+                          visitDate: req.visitDate,
+                          hostName: req.who,
+                          reason: req.reason,
+                          otherDetails: req.otherDetails || "",
+                          createdAt: now,
+                          precheckedAt: now,
+                        }),
+                        tx.visitorPrecheckRequests[req.id].update({
+                          status: "approved",
+                          approvedAt: now,
+                          approvedBy: "admin",
+                          adminMessage: messageDraft || "",
+
+                          visitorBarcode: barcode,
+                          visitorUserId: visitorId,
+                          rejectedAt: 0,
+                          rejectedBy: "",
+                          rejectionMessage: "",
+                          lastUpdatedAt: now,
+                        }),
+                      ]);
+
+                      await fetch(
+                        "/api/visitor/precheck/send-approval-email",
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            email: req.email,
+                            barcode,
+                            who: req.who,
+                            reason: req.reason,
+                            whenTs: req.visitDate,
+                            details: req.otherDetails || "",
+                            adminMessage: messageDraft || "",
+                          }),
+                        }
+                      );
+
+                      toast.success("Approved and email sent.");
+                    } else {
+                      await db.transact([
+                        tx.visitorPrecheckRequests[req.id].update({
+                          status: "rejected",
+                          rejectedAt: now,
+                          rejectedBy: "admin",
+                          rejectionMessage: messageDraft || "",
+
+                          approvedAt: 0,
+                          approvedBy: "",
+                          adminMessage: "",
+
+                          visitorBarcode: "",
+                          visitorUserId: "",
+                          lastUpdatedAt: now,
+                        }),
+                      ]);
+
+                      await fetch(
+                        "/api/visitor/precheck/send-rejection-email",
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            email: req.email,
+                            rejectionMessage: messageDraft || "",
+                            details: req.otherDetails || "",
+                          }),
+                        }
+                      );
+
+                      toast.success("Rejected and email sent.");
+                    }
+
+                    setActionModal(null);
+                    setMessageDraft("");
+                  } catch (err: any) {
+                    console.error(err);
+                    toast.error(err?.message || "Failed to process request.");
+                  } finally {
+                    setIsActionSending(false);
+                  }
+                }}
+              >
+                {actionModal.type === "approve" ? "Approve & Email" : "Reject & Email"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isActionSending}
+                onClick={() => {
+                  setActionModal(null);
+                  setMessageDraft("");
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

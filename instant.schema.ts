@@ -94,6 +94,34 @@ const _schema = i.schema({
       metadata: i.any(),
       createdAt: i.number(),
     }),
+    visitorPrecheckRequests: i.entity({
+      // HMAC-signed token from email link; unique to enforce single submission
+      token: i.string().unique().indexed(),
+      email: i.string().indexed(),
+      status: i.string(), // 'pending' | 'approved' | 'rejected'
+
+      // Visitor-submitted fields
+      who: i.string(),
+      reason: i.string(),
+      otherDetails: i.string(),
+      visitDate: i.number(), // UTC timestamp
+
+      // Lifecycle / admin decision
+      submittedAt: i.number(),
+      approvedAt: i.number(),
+      rejectedAt: i.number(),
+      approvedBy: i.string(),
+      rejectedBy: i.string(),
+      adminMessage: i.string(), // optional message provided by admin on approve
+      rejectionMessage: i.string(), // optional message provided by admin on reject
+
+      // Kiosk barcode is generated at approval time
+      visitorBarcode: i.string(),
+      visitorUserId: i.string(), // created when approved
+
+      createdAt: i.number(),
+      lastUpdatedAt: i.number(),
+    }),
   },
   links: {
     userDepartment: {

@@ -32,7 +32,16 @@ function VisitorPrecheckContent() {
   const [isValidating, setIsValidating] = useState(true);
   const [isValid, setIsValid] = useState(false);
   const [inviteEmail, setInviteEmail] = useState<string | null>(null);
-  const [alreadyUsed, setAlreadyUsed] = useState(false);
+  const [requestStatus, setRequestStatus] = useState<
+    "pending" | "approved" | "rejected" | null
+  >(null);
+  const [requestBarcode, setRequestBarcode] = useState<string | null>(null);
+  const [requestRejectionMessage, setRequestRejectionMessage] = useState<
+    string | null
+  >(null);
+  const [requestAdminMessage, setRequestAdminMessage] = useState<string | null>(
+    null
+  );
 
   const [whoOptions, setWhoOptions] = useState<VisitOption[]>([]);
   const [whyOptions, setWhyOptions] = useState<VisitOption[]>([]);
@@ -73,10 +82,31 @@ function VisitorPrecheckContent() {
 
         const data = await res.json();
         setInviteEmail(data.email);
-        setIsValid(true);
 
-        // 2) Load visit options (non-critical). If this fails, we still let
-        // visitors proceed using the "Other" options.
+        // If token was already used, show pending/approved/rejected state.
+        try {
+          const { data: reqData } = await db.queryOnce({
+            visitorPrecheckRequests: {
+              $: {
+                where: { token },
+              },
+            },
+          });
+
+          const req = reqData?.visitorPrecheckRequests?.[0];
+          if (req) {
+            setRequestStatus(req.status as any);
+            setRequestBarcode(req.visitorBarcode || null);
+            setRequestRejectionMessage(req.rejectionMessage || null);
+            setRequestAdminMessage(req.adminMessage || null);
+            setIsValid(true);
+            return;
+          }
+        } catch (reqErr) {
+          console.error("Failed checking precheck request; proceeding.", reqErr);
+        }
+
+        // Token not used yet -> load visit options (non-critical).
         try {
           const { data: optionsData } = await db.queryOnce({
             visitOptions: {
@@ -102,24 +132,7 @@ function VisitorPrecheckContent() {
           setWhyOptions([]);
         }
 
-        // 3) Best-effort: if this email already has a visitor record, treat link as used
-        try {
-          if (data.email) {
-            const { data: visitorData } = await db.queryOnce({
-              visitors: {
-                $: {
-                  where: { email: data.email },
-                },
-              },
-            });
-            const visitors = visitorData?.visitors || [];
-            if (visitors.length > 0) {
-              setAlreadyUsed(true);
-            }
-          }
-        } catch (err2) {
-          console.error("Failed checking existing visitors; proceeding.", err2);
-        }
+        setIsValid(true);
       } catch (err) {
         console.error("Token validate failed", err);
         setIsValid(false);
@@ -131,11 +144,10 @@ function VisitorPrecheckContent() {
     validate();
   }, [token]);
 
-  const [completedBarcode, setCompletedBarcode] = useState<string | null>(null);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail) return;
+    if (requestStatus) return;
 
     if (!who || !why || !visitDate || !visitTime) {
       toast.error("Please complete all required fields.");
@@ -151,71 +163,59 @@ function VisitorPrecheckContent() {
     setIsSubmitting(true);
 
     try {
-      const finalWho = who === "Other" ? whoOther || "Other" : who;
-      const finalWhy = why === "Other" ? whyOther || "Other" : why;
-      const visitTimestamp = when.getTime();
-      const createdAt = Date.now();
-
-      // Ensure VISITOR department exists and create backing user+visitor
-      const { data: deptData } = await db.queryOnce({
-        departments: {
+      // Prevent double submit for same token
+      const { data: existingReqData } = await db.queryOnce({
+        visitorPrecheckRequests: {
           $: {
-            where: { departmentId: "VISITOR" },
+            where: { token },
           },
         },
       });
-
-      let visitorDeptId = "";
-      if (!deptData?.departments || deptData.departments.length === 0) {
-        visitorDeptId = id();
-        await db.transact([
-          tx.departments[visitorDeptId].update({
-            name: "Visitors",
-            departmentId: "VISITOR",
-          }),
-        ]);
-      } else {
-        visitorDeptId = deptData.departments[0].id;
+      const existing = existingReqData?.visitorPrecheckRequests?.[0];
+      if (existing) {
+        setRequestStatus(existing.status as any);
+        setRequestBarcode(existing.visitorBarcode || null);
+        setRequestRejectionMessage(existing.rejectionMessage || null);
+        setRequestAdminMessage(existing.adminMessage || null);
+        toast.error("This token was already used.");
+        return;
       }
 
-      const barcodeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-      let barcode = "";
-      for (let i = 0; i < 12; i++) {
-        barcode += barcodeChars.charAt(
-          Math.floor(Math.random() * barcodeChars.length)
-        );
-      }
+      const finalWho = who === "Other" ? whoOther || "Other" : who;
+      const finalWhy = why === "Other" ? whyOther || "Other" : why;
+      const visitTimestamp = when.getTime();
+      const now = Date.now();
 
-      const visitorId = id();
-
+      const reqId = id();
       await db.transact([
-        tx.users[visitorId].update({
-          name: inviteEmail,
+        tx.visitorPrecheckRequests[reqId].update({
+          token,
           email: inviteEmail,
-          barcode,
-          isAdmin: false,
-          isAuth: false,
-          deptId: visitorDeptId,
-          createdAt,
-          serverCreatedAt: createdAt,
-          laptopSerial: undefined,
-          purpose: finalWhy,
-        }),
-        tx.visitors[visitorId].update({
-          name: inviteEmail,
-          email: inviteEmail,
-          barcode,
-          visitDate: visitTimestamp,
-          hostName: finalWho,
+          status: "pending",
+
+          who: finalWho,
           reason: finalWhy,
           otherDetails: details || "",
-          createdAt,
-          precheckedAt: createdAt,
+          visitDate: visitTimestamp,
+
+          submittedAt: now,
+          approvedAt: 0,
+          rejectedAt: 0,
+          approvedBy: "",
+          rejectedBy: "",
+          adminMessage: "",
+          rejectionMessage: "",
+
+          visitorBarcode: "",
+          visitorUserId: "",
+
+          createdAt: now,
+          lastUpdatedAt: now,
         }),
       ]);
 
-      setCompletedBarcode(barcode);
-      toast.success("Pre-check completed! Use your pass at the kiosk.");
+      setRequestStatus("pending");
+      toast.success("Request submitted. Waiting for admin approval.");
     } finally {
       setIsSubmitting(false);
     }
@@ -248,26 +248,45 @@ function VisitorPrecheckContent() {
     );
   }
 
-  if (alreadyUsed) {
+  if (requestStatus === "pending") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
         <div className="max-w-md rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800">
           <h1 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
-            Link already used
+            Request received
           </h1>
           <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
-            This visitor pre-check link has already been used to submit details.
+            Your visitor pre-check is waiting for admin approval. You&apos;ll receive an email once approved.
           </p>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Please contact your host if you need to update your information or request a new
-            invitation.
+            This link can only be used once.
           </p>
         </div>
       </div>
     );
   }
 
-  if (completedBarcode) {
+  if (requestStatus === "rejected") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <div className="max-w-md rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800">
+          <h1 className="mb-2 text-xl font-semibold text-red-600 dark:text-red-400">
+            Request not approved
+          </h1>
+          <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
+            Your request wasn&apos;t approved. Please contact the company administrator.
+          </p>
+          {requestRejectionMessage ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Note from admin: {requestRejectionMessage}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (requestStatus === "approved") {
     return (
       <div className="min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
         <Toaster position="top-right" />
@@ -284,22 +303,22 @@ function VisitorPrecheckContent() {
               Visitor Code
             </p>
             <p className="mb-3 select-all text-lg font-mono font-semibold text-gray-900 dark:text-white">
-              {completedBarcode}
+              {requestBarcode}
             </p>
             <div className="mx-auto inline-block rounded-md bg-white p-3 dark:bg-gray-800">
-              <QRCode
-                value={completedBarcode}
-                size={164}
-                bgColor="transparent"
-                fgColor="#111827"
-              />
+              <QRCode value={requestBarcode || ""} size={164} bgColor="transparent" fgColor="#111827" />
             </div>
           </div>
 
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            You can screenshot or print this page. The same code is stored in our system and will
-            be recognized by the kiosk scanner.
-          </p>
+          {requestAdminMessage ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Admin note: {requestAdminMessage}
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              You can screenshot or print this page. The same code is stored in our system and will be recognized by the kiosk scanner.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -314,7 +333,8 @@ function VisitorPrecheckContent() {
         </h1>
         <p className="mb-6 text-sm text-gray-700 dark:text-gray-300">
           Complete this form before your visit. Your link is valid for 24 hours from when the
-          email was sent. You&apos;ll receive a code you can use to check in at the kiosk.
+          email was sent. After submission, admin approval is required; you&apos;ll receive your
+          visitor code (QR + PDF) by email after approval.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
