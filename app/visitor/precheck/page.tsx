@@ -13,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+// @ts-ignore - react-qr-code types are declared manually
+import QRCode from "react-qr-code";
 import toast, { Toaster } from "react-hot-toast";
 
 interface VisitOption {
@@ -30,6 +32,7 @@ function VisitorPrecheckContent() {
   const [isValidating, setIsValidating] = useState(true);
   const [isValid, setIsValid] = useState(false);
   const [inviteEmail, setInviteEmail] = useState<string | null>(null);
+  const [alreadyUsed, setAlreadyUsed] = useState(false);
 
   const [whoOptions, setWhoOptions] = useState<VisitOption[]>([]);
   const [whyOptions, setWhyOptions] = useState<VisitOption[]>([]);
@@ -52,6 +55,8 @@ function VisitorPrecheckContent() {
       }
 
       try {
+        // 1) Validate token first. If this succeeds, keep isValid=true
+        // even if option loading fails for some reason.
         const res = await fetch("/api/visitor/precheck/validate", {
           method: "POST",
           headers: {
@@ -70,20 +75,53 @@ function VisitorPrecheckContent() {
         setInviteEmail(data.email);
         setIsValid(true);
 
-        // Load visit options from InstantDB on client
-        const { data: optionsData } = await db.queryOnce({
-          visitOptions: {
-            $: {
-              where: { isActive: true },
-              order: { sortOrder: "asc" },
+        // 2) Load visit options (non-critical). If this fails, we still let
+        // visitors proceed using the "Other" options.
+        try {
+          const { data: optionsData } = await db.queryOnce({
+            visitOptions: {
+              $: {
+                where: { isActive: true },
+              },
             },
-          },
-        });
+          });
 
-        const options = (optionsData?.visitOptions || []) as VisitOption[];
-        setWhoOptions(options.filter((o) => o.category === "who"));
-        setWhyOptions(options.filter((o) => o.category === "why"));
+          const options = (optionsData?.visitOptions || []) as VisitOption[];
+          const who = options
+            .filter((o) => o.category === "who")
+            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+          const why = options
+            .filter((o) => o.category === "why")
+            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+          setWhoOptions(who);
+          setWhyOptions(why);
+        } catch (optErr) {
+          console.error("Failed loading visitOptions; proceeding.", optErr);
+          setWhoOptions([]);
+          setWhyOptions([]);
+        }
+
+        // 3) Best-effort: if this email already has a visitor record, treat link as used
+        try {
+          if (data.email) {
+            const { data: visitorData } = await db.queryOnce({
+              visitors: {
+                $: {
+                  where: { email: data.email },
+                },
+              },
+            });
+            const visitors = visitorData?.visitors || [];
+            if (visitors.length > 0) {
+              setAlreadyUsed(true);
+            }
+          }
+        } catch (err2) {
+          console.error("Failed checking existing visitors; proceeding.", err2);
+        }
       } catch (err) {
+        console.error("Token validate failed", err);
         setIsValid(false);
       } finally {
         setIsValidating(false);
@@ -92,6 +130,8 @@ function VisitorPrecheckContent() {
 
     validate();
   }, [token]);
+
+  const [completedBarcode, setCompletedBarcode] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,6 +214,7 @@ function VisitorPrecheckContent() {
         }),
       ]);
 
+      setCompletedBarcode(barcode);
       toast.success("Pre-check completed! Use your pass at the kiosk.");
     } finally {
       setIsSubmitting(false);
@@ -207,6 +248,63 @@ function VisitorPrecheckContent() {
     );
   }
 
+  if (alreadyUsed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <div className="max-w-md rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800">
+          <h1 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
+            Link already used
+          </h1>
+          <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
+            This visitor pre-check link has already been used to submit details.
+          </p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Please contact your host if you need to update your information or request a new
+            invitation.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (completedBarcode) {
+    return (
+      <div className="min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
+        <Toaster position="top-right" />
+        <div className="mx-auto max-w-md rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800 text-center space-y-4">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            You&apos;re all set!
+          </h1>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            Show this code or QR at the kiosk to check in.
+          </p>
+
+          <div className="rounded-lg border border-dashed border-gray-400 bg-gray-50 px-4 py-4 dark:border-gray-600 dark:bg-gray-900">
+            <p className="mb-2 text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Visitor Code
+            </p>
+            <p className="mb-3 select-all text-lg font-mono font-semibold text-gray-900 dark:text-white">
+              {completedBarcode}
+            </p>
+            <div className="mx-auto inline-block rounded-md bg-white p-3 dark:bg-gray-800">
+              <QRCode
+                value={completedBarcode}
+                size={164}
+                bgColor="transparent"
+                fgColor="#111827"
+              />
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            You can screenshot or print this page. The same code is stored in our system and will
+            be recognized by the kiosk scanner.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
       <Toaster position="top-right" />
@@ -229,13 +327,22 @@ function VisitorPrecheckContent() {
               <SelectTrigger>
                 <SelectValue placeholder="Select who you are visiting" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="border border-border shadow-md rounded-md text-foreground bg-background dark:bg-gray-800 dark:text-gray-100">
                 {whoOptions.map((opt) => (
-                  <SelectItem key={opt.id} value={opt.label}>
+                  <SelectItem
+                    key={opt.id}
+                    value={opt.label}
+                    className="hover:bg-accent hover:text-accent-foreground dark:hover:bg-gray-700 dark:hover:text-white"
+                  >
                     {opt.label}
                   </SelectItem>
                 ))}
-                <SelectItem value="Other">Other</SelectItem>
+                <SelectItem
+                  value="Other"
+                  className="hover:bg-accent hover:text-accent-foreground dark:hover:bg-gray-700 dark:hover:text-white"
+                >
+                  Other
+                </SelectItem>
               </SelectContent>
             </Select>
             {who === "Other" && (
@@ -257,9 +364,9 @@ function VisitorPrecheckContent() {
               <SelectTrigger>
                 <SelectValue placeholder="Select reason for visit" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="border border-border shadow-md rounded-md text-foreground bg-background dark:bg-gray-800 dark:text-gray-100">
                 {whyOptions.map((opt) => (
-                  <SelectItem key={opt.id} value={opt.label}>
+                  <SelectItem key={opt.id} value={opt.label} className="hover:bg-accent hover:text-accent-foreground dark:hover:bg-gray-700 dark:hover:text-white">
                     {opt.label}
                   </SelectItem>
                 ))}

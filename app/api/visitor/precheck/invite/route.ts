@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       token
     )}`;
 
-    const expires = new Date(expiresAt).toLocaleString(undefined);
+    const expires = new Date(expiresAt).toLocaleString('en-US', { timeZone: 'America/Denver' });
 
     const html = `
       <html>

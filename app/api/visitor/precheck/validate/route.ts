@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ email: payload.email });
+    return NextResponse.json({ email: payload.email, iat: issuedAt });
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "Unexpected error validating token." },

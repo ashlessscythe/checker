@@ -4,13 +4,14 @@
 import React, { useState } from "react";
 import AdminPage from "@/components/adminpage";
 import BackupPage from "@/components/backuppage";
+import VisitorAdmin from "@/components/visitoradmin";
 import NotAuthorizedPage from "@/components/notauthorizedpage";
 import { AuthProvider, useAuth } from "@/hooks/authContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import toast, { Toaster } from "react-hot-toast";
 
-type AdminTab = "users" | "backups" | "email";
+type AdminTab = "users" | "backups" | "visitors" | "email";
 
 function AdminContent() {
   const { isAdmin } = useAuth();
@@ -91,6 +92,17 @@ function AdminContent() {
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab("visitors")}
+            className={`rounded-md px-3 py-2 text-sm font-medium ${
+              activeTab === "visitors"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+            }`}
+          >
+            Visitors
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab("email")}
             className={`rounded-md px-3 py-2 text-sm font-medium ${
               activeTab === "email"
@@ -111,6 +123,12 @@ function AdminContent() {
         {activeTab === "backups" && (
           <div className="-mx-4 -mb-4 sm:mx-0 sm:mb-0">
             <BackupPage />
+          </div>
+        )}
+
+        {activeTab === "visitors" && (
+          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
+            <VisitorAdmin />
           </div>
         )}
 
