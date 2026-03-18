@@ -1,14 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import toast from "react-hot-toast";
+
+const MODAL_TIMEOUT_SECONDS = 30;
 
 export default function VisitorPrecheckEmailPrompt() {
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(MODAL_TIMEOUT_SECONDS);
+
+  const emailInputRef = useRef<HTMLInputElement>(null);
+
+  const closeModal = useCallback(() => {
+    setIsOpen(false);
+    setEmail("");
+    setIsSubmitting(false);
+    setTimeLeft(MODAL_TIMEOUT_SECONDS);
+  }, []);
+
+  // Auto-focus the email input and auto-dismiss the modal after a timeout.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setTimeLeft(MODAL_TIMEOUT_SECONDS);
+
+    const focusTimer = window.setTimeout(() => {
+      emailInputRef.current?.focus();
+    }, 100);
+
+    const interval = window.setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(interval);
+          closeModal();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.clearInterval(interval);
+    };
+  }, [isOpen, closeModal]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,8 +73,7 @@ export default function VisitorPrecheckEmailPrompt() {
       }
 
       toast.success("Invite email sent. Check your inbox.");
-      setEmail("");
-      setIsOpen(false);
+      closeModal();
     } catch (err: any) {
       toast.error(err?.message || "Failed to send invite email.");
     } finally {
@@ -63,11 +101,18 @@ export default function VisitorPrecheckEmailPrompt() {
         Enter your email and we&apos;ll send you a link to complete visitor pre-check
         before you arrive.
       </p>
+
+      <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        Auto-closes in {Math.floor(timeLeft / 60)}:
+        {String(timeLeft % 60).padStart(2, "0")}
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-3">
         <Input
           type="email"
           placeholder="you@example.com"
           value={email}
+          ref={emailInputRef}
           onChange={(e) => setEmail(e.target.value)}
         />
         <div className="flex gap-2">
@@ -83,8 +128,7 @@ export default function VisitorPrecheckEmailPrompt() {
             variant="outline"
             className="flex-1"
             onClick={() => {
-              setIsOpen(false);
-              setEmail("");
+              closeModal();
             }}
             disabled={isSubmitting}
           >
