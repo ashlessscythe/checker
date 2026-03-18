@@ -577,7 +577,7 @@ export default function BackupPage() {
       const transactions = restoreData.data.map((item) => {
         const tx_id = item.id || id();
         // Only restore direct fields
-        const itemData = { ...item };
+        const itemData: any = { ...item };
         delete itemData.punches;
         delete itemData.department;
         delete itemData.users;
@@ -585,6 +585,22 @@ export default function BackupPage() {
         // Remove local timestamp fields before restore
         delete itemData.timestampLocal;
         delete itemData.lastLoginLocal;
+
+        // Ensure required fields exist for users table to satisfy current schema
+        if (selectedTable === "users") {
+          const now = Date.now();
+          if (itemData.createdAt == null) itemData.createdAt = now;
+          if (itemData.serverCreatedAt == null) itemData.serverCreatedAt = now;
+          if (itemData.deptId == null) itemData.deptId = "UNKNOWN";
+          if (itemData.barcode == null) itemData.barcode = `RESTORED_${tx_id}`;
+          if (itemData.isAdmin == null) itemData.isAdmin = false;
+          if (itemData.isAuth == null) itemData.isAuth = false;
+          if (itemData.lastLoginAt == null) itemData.lastLoginAt = 0;
+          if (itemData.name == null) itemData.name = "Restored User";
+          if (itemData.email == null)
+            itemData.email = `restored_${tx_id}@example.invalid`;
+        }
+
         return tx[selectedTable][tx_id].update(itemData);
       });
 

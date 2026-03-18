@@ -371,7 +371,13 @@ export default function AdminPage() {
                   setShowCreateForm(false);
                   toast.success("User created successfully");
                 } catch (err) {
-                  toast.error("Failed to create user");
+                  toast.error(
+                    typeof err === "string"
+                      ? err
+                      : err instanceof Error
+                      ? err.message
+                      : "Failed to create user"
+                  );
                 }
               }}
               disabled={
