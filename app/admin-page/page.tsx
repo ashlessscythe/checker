@@ -63,9 +63,21 @@ function AdminContent() {
     <div className="min-h-screen bg-gray-100 px-4 py-6 dark:bg-gray-900">
       <Toaster position="top-right" />
       <div className="mx-auto max-w-6xl rounded-lg bg-white p-4 shadow-sm dark:bg-gray-800 sm:p-6">
-        <h1 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white sm:mb-6 sm:text-3xl">
-          Admin Panel
-        </h1>
+        <div className="mb-4 flex flex-col items-start justify-between gap-2 sm:mb-6 sm:flex-row sm:items-center">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
+            Admin Panel
+          </h1>
+          <Button
+            type="button"
+            variant="outline"
+            className="text-sm"
+            onClick={() => {
+              window.location.href = "/";
+            }}
+          >
+            Back to Kiosk
+          </Button>
+        </div>
 
         <div className="mb-6 flex flex-wrap gap-2 border-b border-gray-200 pb-2 dark:border-gray-700">
           <button
