@@ -25,6 +25,20 @@ interface VisitOption {
   sortOrder: number;
 }
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function toDateInputValue(ts: number) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function toTimeInputValue(ts: number) {
+  const d = new Date(ts);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
 function VisitorPrecheckContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
@@ -35,6 +49,9 @@ function VisitorPrecheckContent() {
   const [requestStatus, setRequestStatus] = useState<
     "pending" | "approved" | "rejected" | null
   >(null);
+  // If token maps to an existing pending request, we hide the form after submit
+  // and require "Edit again" to modify fields.
+  const [showEditForm, setShowEditForm] = useState(true);
   const [requestBarcode, setRequestBarcode] = useState<string | null>(null);
   const [requestRejectionMessage, setRequestRejectionMessage] = useState<
     string | null
@@ -42,6 +59,7 @@ function VisitorPrecheckContent() {
   const [requestAdminMessage, setRequestAdminMessage] = useState<string | null>(
     null
   );
+  const [emailRateLimited, setEmailRateLimited] = useState(false);
 
   const [whoOptions, setWhoOptions] = useState<VisitOption[]>([]);
   const [whyOptions, setWhyOptions] = useState<VisitOption[]>([]);
@@ -83,7 +101,8 @@ function VisitorPrecheckContent() {
         const data = await res.json();
         setInviteEmail(data.email);
 
-        // If token was already used, show pending/approved/rejected state.
+        // Load any existing request for this token
+        let req: any | null = null;
         try {
           const { data: reqData } = await db.queryOnce({
             visitorPrecheckRequests: {
@@ -92,21 +111,14 @@ function VisitorPrecheckContent() {
               },
             },
           });
-
-          const req = reqData?.visitorPrecheckRequests?.[0];
-          if (req) {
-            setRequestStatus(req.status as any);
-            setRequestBarcode(req.visitorBarcode || null);
-            setRequestRejectionMessage(req.rejectionMessage || null);
-            setRequestAdminMessage(req.adminMessage || null);
-            setIsValid(true);
-            return;
-          }
+          req = reqData?.visitorPrecheckRequests?.[0] ?? null;
         } catch (reqErr) {
           console.error("Failed checking precheck request; proceeding.", reqErr);
         }
 
-        // Token not used yet -> load visit options (non-critical).
+        // Always load visit options (needed to pre-select who/why labels)
+        let who: VisitOption[] = [];
+        let why: VisitOption[] = [];
         try {
           const { data: optionsData } = await db.queryOnce({
             visitOptions: {
@@ -117,19 +129,55 @@ function VisitorPrecheckContent() {
           });
 
           const options = (optionsData?.visitOptions || []) as VisitOption[];
-          const who = options
+          who = options
             .filter((o) => o.category === "who")
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-          const why = options
+          why = options
             .filter((o) => o.category === "why")
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-
-          setWhoOptions(who);
-          setWhyOptions(why);
         } catch (optErr) {
           console.error("Failed loading visitOptions; proceeding.", optErr);
-          setWhoOptions([]);
-          setWhyOptions([]);
+        }
+
+        setWhoOptions(who);
+        setWhyOptions(why);
+
+        if (req) {
+          setRequestStatus(req.status as any);
+          setRequestBarcode(req.visitorBarcode || null);
+          setRequestRejectionMessage(req.rejectionMessage || null);
+          setRequestAdminMessage(req.adminMessage || null);
+
+          // If pending, pre-fill form so visitor can edit.
+          if (req.status === "pending") {
+            const matchedWho = who.find((o) => o.label === req.who)?.label;
+            if (matchedWho) {
+              setWho(matchedWho);
+              setWhoOther("");
+            } else {
+              setWho("Other");
+              setWhoOther(req.who || "");
+            }
+
+            const matchedWhy = why.find((o) => o.label === req.reason)?.label;
+            if (matchedWhy) {
+              setWhy(matchedWhy);
+              setWhyOther("");
+            } else {
+              setWhy("Other");
+              setWhyOther(req.reason || "");
+            }
+
+            if (typeof req.visitDate === "number" && req.visitDate > 0) {
+              setVisitDate(toDateInputValue(req.visitDate));
+              setVisitTime(toTimeInputValue(req.visitDate));
+            }
+            setDetails(req.otherDetails || "");
+
+            // Hide form by default when request already exists pending.
+            setShowEditForm(false);
+            setEmailRateLimited(false);
+          }
         }
 
         setIsValid(true);
@@ -147,7 +195,7 @@ function VisitorPrecheckContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail) return;
-    if (requestStatus) return;
+    if (requestStatus === "approved" || requestStatus === "rejected") return;
 
     if (!who || !why || !visitDate || !visitTime) {
       toast.error("Please complete all required fields.");
@@ -163,7 +211,14 @@ function VisitorPrecheckContent() {
     setIsSubmitting(true);
 
     try {
-      // Prevent double submit for same token
+      const finalWho = who === "Other" ? whoOther || "Other" : who;
+      const finalWhy = why === "Other" ? whyOther || "Other" : why;
+      const visitTimestamp = when.getTime();
+      const now = Date.now();
+
+      const reqId = id();
+
+      // Upsert the request for this token (pending requests can be edited)
       const { data: existingReqData } = await db.queryOnce({
         visitorPrecheckRequests: {
           $: {
@@ -172,50 +227,87 @@ function VisitorPrecheckContent() {
         },
       });
       const existing = existingReqData?.visitorPrecheckRequests?.[0];
+
+      // Rate limit pending emails to 1 per minute per request token.
+      const RATE_LIMIT_MS = 60 * 1000;
+      const lastEmailCandidateAt =
+        (existing?.lastUpdatedAt as number | undefined) ??
+        (existing?.submittedAt as number | undefined) ??
+        0;
+      const shouldSendPendingEmail = !existing || now - lastEmailCandidateAt >= RATE_LIMIT_MS;
+
       if (existing) {
-        setRequestStatus(existing.status as any);
-        setRequestBarcode(existing.visitorBarcode || null);
-        setRequestRejectionMessage(existing.rejectionMessage || null);
-        setRequestAdminMessage(existing.adminMessage || null);
-        toast.error("This token was already used.");
-        return;
+        if (existing.status !== "pending") {
+          setRequestStatus(existing.status as any);
+          toast.error("This request has already been processed by admin.");
+          return;
+        }
+
+        await db.transact([
+          tx.visitorPrecheckRequests[existing.id].update({
+            who: finalWho,
+            reason: finalWhy,
+            otherDetails: details || "",
+            visitDate: visitTimestamp,
+            submittedAt: existing.submittedAt || now,
+            lastUpdatedAt: now,
+            // keep admin decision fields untouched for pending
+          }),
+        ]);
+      } else {
+        await db.transact([
+          tx.visitorPrecheckRequests[reqId].update({
+            token,
+            email: inviteEmail,
+            status: "pending",
+
+            who: finalWho,
+            reason: finalWhy,
+            otherDetails: details || "",
+            visitDate: visitTimestamp,
+
+            submittedAt: now,
+            approvedAt: 0,
+            rejectedAt: 0,
+            approvedBy: "",
+            rejectedBy: "",
+            adminMessage: "",
+            rejectionMessage: "",
+
+            visitorBarcode: "",
+            visitorUserId: "",
+
+            createdAt: now,
+            lastUpdatedAt: now,
+          }),
+        ]);
       }
 
-      const finalWho = who === "Other" ? whoOther || "Other" : who;
-      const finalWhy = why === "Other" ? whyOther || "Other" : why;
-      const visitTimestamp = when.getTime();
-      const now = Date.now();
+      setEmailRateLimited(!shouldSendPendingEmail);
 
-      const reqId = id();
-      await db.transact([
-        tx.visitorPrecheckRequests[reqId].update({
-          token,
-          email: inviteEmail,
-          status: "pending",
-
-          who: finalWho,
-          reason: finalWhy,
-          otherDetails: details || "",
-          visitDate: visitTimestamp,
-
-          submittedAt: now,
-          approvedAt: 0,
-          rejectedAt: 0,
-          approvedBy: "",
-          rejectedBy: "",
-          adminMessage: "",
-          rejectionMessage: "",
-
-          visitorBarcode: "",
-          visitorUserId: "",
-
-          createdAt: now,
-          lastUpdatedAt: now,
-        }),
-      ]);
+      // Send/update email with the latest details while waiting for approval
+      if (shouldSendPendingEmail) {
+        await fetch("/api/visitor/precheck/send-pending-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: inviteEmail,
+            token,
+            who: finalWho,
+            reason: finalWhy,
+            whenTs: visitTimestamp,
+            details: details || "",
+          }),
+        }).catch(() => null);
+      }
 
       setRequestStatus("pending");
-      toast.success("Request submitted. Waiting for admin approval.");
+      setShowEditForm(false);
+      toast.success(
+        shouldSendPendingEmail
+          ? "Saved! Waiting for admin approval (email sent)."
+          : "Saved! Waiting for admin approval. Email updates are limited to once per minute."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -248,23 +340,7 @@ function VisitorPrecheckContent() {
     );
   }
 
-  if (requestStatus === "pending") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <div className="max-w-md rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800">
-          <h1 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
-            Request received
-          </h1>
-          <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
-            Your visitor pre-check is waiting for admin approval. You&apos;ll receive an email once approved.
-          </p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            This link can only be used once.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // pending/initial states fall through to the editable form below
 
   if (requestStatus === "rejected") {
     return (
@@ -297,6 +373,9 @@ function VisitorPrecheckContent() {
           <p className="text-sm text-gray-700 dark:text-gray-300">
             Show this code or QR at the kiosk to check in.
           </p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Done! you can close this tab or window
+          </p>
 
           <div className="rounded-lg border border-dashed border-gray-400 bg-gray-50 px-4 py-4 dark:border-gray-600 dark:bg-gray-900">
             <p className="mb-2 text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -324,6 +403,50 @@ function VisitorPrecheckContent() {
     );
   }
 
+  // When pending and showEditForm is false, hide the form and show a success message.
+  if (requestStatus === "pending" && !showEditForm) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
+        <div className="max-w-md w-full rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800 space-y-4">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Saved!
+          </h1>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            Your visitor pre-check request is waiting for admin approval. You&apos;ll receive your
+            visitor code by email once approved.
+          </p>
+          {emailRateLimited ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              To prevent email spam, we can only send updated “waiting for approval” emails once per minute.
+              If you need to update again, try again in about a minute.
+            </p>
+          ) : null}
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Done! you can close this tab or window
+          </p>
+          <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-200">
+            <div>
+              <span className="font-semibold">Who:</span> {who}
+            </div>
+            <div>
+              <span className="font-semibold">Reason:</span> {why}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => setShowEditForm(true)}
+            >
+              Edit again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
       <Toaster position="top-right" />
@@ -331,6 +454,12 @@ function VisitorPrecheckContent() {
         <h1 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
           Visitor Pre-Check
         </h1>
+        {requestStatus === "pending" ? (
+          <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-100">
+            Your request is waiting for admin approval. You can edit and resubmit your
+            details if anything needs to change.
+          </div>
+        ) : null}
         <p className="mb-6 text-sm text-gray-700 dark:text-gray-300">
           Complete this form before your visit. Your link is valid for 24 hours from when the
           email was sent. After submission, admin approval is required; you&apos;ll receive your
@@ -445,7 +574,11 @@ function VisitorPrecheckContent() {
             disabled={isSubmitting}
             className="mt-2 w-full"
           >
-            {isSubmitting ? "Submitting..." : "Complete Pre-Check"}
+            {isSubmitting
+              ? "Submitting..."
+              : requestStatus === "pending"
+              ? "Update Pre-Check"
+              : "Complete Pre-Check"}
           </Button>
         </form>
       </div>
