@@ -33,15 +33,31 @@ _The main check-in/check-out interface showing real-time employee status_
 ![Admin Page](docs/images/admin_page.png)
 _Administrative dashboard for managing users, departments, and system settings_
 
+#### Visitor Pre-Check (Email → Form → Admin Approval)
+_Visitors submit a tokenized pre-check request before arriving. Admin approves or rejects, and visitors receive QR + PDF for kiosk check-in._
+
+![Visitor Pre-Check](docs/images/visitor-precheck.png)
+
+![Visitor Approvals](docs/images/visitor-approvals.png)
+
 #### Fire Drill Checklist
 
-![Fire Drill Checklist](docs/images/firedrill_checklist.png)
+![Fire Drill Checklist](docs/images/firedrill_checklist.png)  
 _Emergency fire drill checklist feature for safety compliance_
 
 #### Recent Check-ins
 
-![Recent Check-ins](docs/images/recent_checkins.png)
+![Recent Check-ins](docs/images/recent_checkins.png)  
 _View of recent employee check-ins and check-outs with timestamps_
+
+### 🧾 Visitor Pre-Check Flow
+1. **Admin sends an email invite** to a visitor (tokenized link valid for 24 hours).
+2. **Visitor opens the link** and fills out: _who/whom_, _reason_, and _when_ (with optional details).
+3. **Request is queued** until an admin approves it.
+4. **Admin approves or rejects**:
+   - Approve: admin generates a visitor code and the visitor receives **QR + PDF** by email.
+   - Reject: visitor receives a **rejection email** (default message, with optional admin-provided message).
+5. **Kiosk check-in**: scanning the visitor code/QR completes check-in using the standard process.
 
 ### 🚀 Getting Started
 
@@ -68,6 +84,12 @@ npm install
   NEXT_PUBLIC_ENABLE_AUTO_CLEANUP=false
   NEXT_PUBLIC_STALE_CHECKIN_CLEANUP_HOURS=18
   NEXT_PUBLIC_CLEANUP_INTERVAL_MINUTES=20
+  ```
+
+  Visitor pre-check (email token) settings:
+  ```
+  PRECHECK_TOKEN_SECRET="somethingsupersecret"
+  NEXT_PUBLIC_APP_BASE_URL="http://127.0.0.1:3000"
   ```
 
 4. Run the development server:
