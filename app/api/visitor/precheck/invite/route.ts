@@ -14,8 +14,18 @@ const appBaseUrl =
 const resend =
   resendApiKey && resendFromEmail ? new Resend(resendApiKey) : null;
 
-function signPrecheckToken(email: string, issuedAt: number) {
-  const payload = JSON.stringify({ email, iat: issuedAt });
+function signPrecheckToken({
+  email,
+  name,
+  source,
+  issuedAt,
+}: {
+  email: string;
+  name: string;
+  source: "admin" | "kiosk";
+  issuedAt: number;
+}) {
+  const payload = JSON.stringify({ email, name, source, iat: issuedAt });
   const payloadB64 = Buffer.from(payload, "utf8").toString("base64url");
   const sig = crypto
     .createHmac("sha256", precheckSecret)
@@ -28,6 +38,11 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const email = (body?.email as string | undefined)?.trim().toLowerCase();
+    const nameRaw = (body?.name as string | undefined)?.trim();
+    const name = nameRaw && nameRaw.length > 0 ? nameRaw : email;
+    const sourceRaw = body?.source as string | undefined;
+    const source: "admin" | "kiosk" =
+      sourceRaw === "admin" || sourceRaw === "kiosk" ? sourceRaw : "kiosk";
 
     if (!email || !email.includes("@")) {
       return NextResponse.json(
@@ -38,7 +53,7 @@ export async function POST(req: Request) {
 
     const now = Date.now();
     const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
-    const token = signPrecheckToken(email, now);
+    const token = signPrecheckToken({ email, name, source, issuedAt: now });
 
     const precheckUrl = `${appBaseUrl}/visitor/precheck?token=${encodeURIComponent(
       token
@@ -46,15 +61,24 @@ export async function POST(req: Request) {
 
     const expires = new Date(expiresAt).toLocaleString('en-US', { timeZone: 'America/Denver' });
 
+    const senderLine =
+      source === "admin"
+        ? `admin at <strong>checkin system</strong> sent you a <strong>pre-check link</strong>.`
+        : `kiosk at <strong>checkin system</strong> sent you a <strong>req</strong>.`;
+
     const html = `
       <html>
         <body style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background-color: #f3f4f6; padding: 24px;">
           <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto;">
             <tr>
               <td style="background-color: #ffffff; border-radius: 8px; padding: 24px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
-                <h1 style="font-size: 20px; margin-bottom: 16px; color: #111827;">
+                <h1 style="font-size: 20px; margin-bottom: 12px; color: #111827;">
                   Complete your visitor pre-check
                 </h1>
+                <p style="font-size: 14px; margin: 0 0 16px; color: #374151;">
+                  Hi <strong>${name}</strong>,<br/>
+                  ${senderLine}
+                </p>
                 <p style="font-size: 14px; margin-bottom: 12px; color: #374151;">
                   Please take a moment to complete your visitor pre-check before you arrive. This will speed up your check-in at the kiosk.
                 </p>
@@ -83,7 +107,10 @@ export async function POST(req: Request) {
       const { error } = await resend.emails.send({
         from: resendFromEmail,
         to: email,
-        subject: "Your visitor pre-check link",
+        subject:
+          source === "admin"
+            ? "Your visitor pre-check link"
+            : "Your visitor pre-check request",
         html,
       });
 

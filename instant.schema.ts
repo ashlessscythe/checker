@@ -100,6 +100,12 @@ const _schema = i.schema({
       email: i.string().indexed(),
       status: i.string(), // 'pending' | 'approved' | 'rejected'
 
+      // Where the request came from: admin panel invite vs kiosk/email prompt
+      requestSource: i.string().indexed(), // 'admin' | 'kiosk'
+
+      // Optional personalization name (admin can provide; kiosk defaults to email)
+      invitedName: i.string(),
+
       // Visitor-submitted fields
       who: i.string(),
       reason: i.string(),

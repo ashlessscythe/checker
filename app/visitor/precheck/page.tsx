@@ -46,6 +46,8 @@ function VisitorPrecheckContent() {
   const [isValidating, setIsValidating] = useState(true);
   const [isValid, setIsValid] = useState(false);
   const [inviteEmail, setInviteEmail] = useState<string | null>(null);
+  const [inviteName, setInviteName] = useState<string | null>(null);
+  const [inviteSource, setInviteSource] = useState<"admin" | "kiosk">("kiosk");
   const [requestStatus, setRequestStatus] = useState<
     "pending" | "approved" | "rejected" | null
   >(null);
@@ -100,6 +102,8 @@ function VisitorPrecheckContent() {
 
         const data = await res.json();
         setInviteEmail(data.email);
+        setInviteName(data.name ?? data.email);
+        setInviteSource(data.source === "admin" ? "admin" : "kiosk");
 
         // Load any existing request for this token
         let req: any | null = null;
@@ -252,6 +256,9 @@ function VisitorPrecheckContent() {
             submittedAt: existing.submittedAt || now,
             lastUpdatedAt: now,
             // keep admin decision fields untouched for pending
+            // keep request source/name untouched unless missing (older records)
+            requestSource: existing.requestSource || inviteSource,
+            invitedName: existing.invitedName || inviteName || inviteEmail,
           }),
         ]);
       } else {
@@ -277,6 +284,9 @@ function VisitorPrecheckContent() {
             visitorBarcode: "",
             visitorUserId: "",
 
+            requestSource: inviteSource,
+            invitedName: inviteName || inviteEmail,
+
             createdAt: now,
             lastUpdatedAt: now,
           }),
@@ -297,6 +307,8 @@ function VisitorPrecheckContent() {
             reason: finalWhy,
             whenTs: visitTimestamp,
             details: details || "",
+            requestSource: inviteSource,
+            invitedName: inviteName || inviteEmail,
           }),
         }).catch(() => null);
       }

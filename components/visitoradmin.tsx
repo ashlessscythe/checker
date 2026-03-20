@@ -31,6 +31,7 @@ export default function VisitorAdmin() {
   const [sortOrder, setSortOrder] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
   const [isSendingInvite, setIsSendingInvite] = useState(false);
 
   const options = (data?.visitOptions || []) as Array<{
@@ -53,6 +54,8 @@ export default function VisitorAdmin() {
     token: string;
     email: string;
     status: string;
+    requestSource?: string;
+    invitedName?: string;
     who: string;
     reason: string;
     otherDetails: string;
@@ -133,7 +136,11 @@ export default function VisitorAdmin() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email: inviteEmail }),
+        body: JSON.stringify({
+          email: inviteEmail,
+          name: inviteName,
+          source: "admin",
+        }),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
@@ -142,6 +149,7 @@ export default function VisitorAdmin() {
       }
       toast.success("Pre-check invite sent.");
       setInviteEmail("");
+      setInviteName("");
     } catch (err: any) {
       console.error("Failed sending invite", err);
       toast.error(err?.message || "Failed to send invite.");
@@ -167,13 +175,25 @@ export default function VisitorAdmin() {
           Manually send a visitor pre-check email to any address. The visitor will
           complete their details and receive a code usable at the kiosk.
         </p>
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <div className="flex-1 w-full flex flex-col">
+            <Input
+              type="text"
+              placeholder="Name (optional)"
+              value={inviteName}
+              onChange={(e) => setInviteName(e.target.value)}
+              className="w-full"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              if you leave this blank, we will use the email address.
+            </p>
+          </div>
           <Input
             type="email"
             placeholder="visitor@example.com"
             value={inviteEmail}
             onChange={(e) => setInviteEmail(e.target.value)}
-            className="flex-1"
+            className="flex-1 w-full"
           />
           <Button
             type="button"
@@ -339,6 +359,11 @@ export default function VisitorAdmin() {
                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {req.email}
                     </div>
+                    {req.requestSource === "kiosk" ? (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        kiosk-sent request
+                      </div>
+                    ) : null}
                     <div className="text-xs text-gray-500 dark:text-gray-400">
                       Submitted: {new Date(req.submittedAt).toLocaleString()}
                     </div>
@@ -467,7 +492,7 @@ export default function VisitorAdmin() {
 
                       await db.transact([
                         tx.users[visitorId].update({
-                          name: req.email,
+                          name: req.invitedName || req.email,
                           email: req.email,
                           barcode,
                           isAdmin: false,
@@ -480,7 +505,7 @@ export default function VisitorAdmin() {
                           purpose: req.reason,
                         }),
                         tx.visitors[visitorId].update({
-                          name: req.email,
+                          name: req.invitedName || req.email,
                           email: req.email,
                           barcode,
                           visitDate: req.visitDate,
@@ -501,6 +526,9 @@ export default function VisitorAdmin() {
                           rejectedAt: 0,
                           rejectedBy: "",
                           rejectionMessage: "",
+                          // Keep request metadata for templates/auditing (older records may miss these).
+                          requestSource: req.requestSource || "admin",
+                          invitedName: req.invitedName || req.email,
                           lastUpdatedAt: now,
                         }),
                       ]);
@@ -537,6 +565,9 @@ export default function VisitorAdmin() {
 
                           visitorBarcode: "",
                           visitorUserId: "",
+                          // Keep request metadata for templates/auditing (older records may miss these).
+                          requestSource: req.requestSource || "admin",
+                          invitedName: req.invitedName || req.email,
                           lastUpdatedAt: now,
                         }),
                       ]);

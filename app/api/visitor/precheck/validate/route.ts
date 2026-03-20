@@ -18,7 +18,12 @@ function verifyPrecheckToken(token: string) {
   }
 
   const json = Buffer.from(payloadB64, "base64url").toString("utf8");
-  return JSON.parse(json) as { email: string; iat: number };
+  return JSON.parse(json) as {
+    email: string;
+    name?: string;
+    source?: "admin" | "kiosk";
+    iat: number;
+  };
 }
 
 export async function POST(req: Request) {
@@ -50,7 +55,12 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ email: payload.email, iat: issuedAt });
+    const email = payload.email;
+    const name = payload.name && payload.name.trim().length > 0 ? payload.name : email;
+    const source: "admin" | "kiosk" =
+      payload.source === "admin" || payload.source === "kiosk" ? payload.source : "kiosk";
+
+    return NextResponse.json({ email, name, source, iat: issuedAt });
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "Unexpected error validating token." },

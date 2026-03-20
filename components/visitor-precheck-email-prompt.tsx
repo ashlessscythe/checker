@@ -63,7 +63,7 @@ export default function VisitorPrecheckEmailPrompt() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, source: "kiosk" }),
       });
 
       if (!res.ok) {
