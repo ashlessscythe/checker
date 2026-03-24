@@ -13,6 +13,8 @@ import {
   SelectValue,
 } from "./ui/select";
 import toast from "react-hot-toast";
+import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
+import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
 
 export default function VisitorAdmin() {
   const { data, isLoading, error } = db.useQuery({
@@ -56,6 +58,9 @@ export default function VisitorAdmin() {
     status: string;
     requestSource?: string;
     invitedName?: string;
+    visitorFirstName?: string;
+    visitorLastName?: string;
+    visitorCompanyName?: string;
     who: string;
     reason: string;
     otherDetails: string;
@@ -357,7 +362,18 @@ export default function VisitorAdmin() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {visitorPrecheckDisplayName({
+                        visitorFirstName: req.visitorFirstName,
+                        visitorLastName: req.visitorLastName,
+                        invitedName: req.invitedName,
+                        email: req.email,
+                      })}
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
                       {req.email}
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      Company: {req.visitorCompanyName?.trim() || "—"}
                     </div>
                     {req.requestSource === "kiosk" ? (
                       <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -369,7 +385,8 @@ export default function VisitorAdmin() {
                     </div>
                     <div className="mt-2 text-sm text-gray-700 dark:text-gray-200">
                       <div>
-                        <span className="font-semibold">Who:</span> {req.who || "—"}
+                        <span className="font-semibold">Visiting:</span>{" "}
+                        {req.who || "—"}
                       </div>
                       <div>
                         <span className="font-semibold">Reason:</span>{" "}
@@ -377,7 +394,7 @@ export default function VisitorAdmin() {
                       </div>
                       <div>
                         <span className="font-semibold">When:</span>{" "}
-                        {new Date(req.visitDate).toLocaleString()}
+                        {formatVisitorPrecheckWhen(req.visitDate)}
                       </div>
                       {req.otherDetails?.trim() ? (
                         <div className="mt-2">
@@ -464,6 +481,13 @@ export default function VisitorAdmin() {
                     if (actionModal.type === "approve") {
                       const barcode = generateVisitorBarcode();
                       const visitorId = id();
+                      const approvedVisitorName = visitorPrecheckDisplayName({
+                        visitorFirstName: req.visitorFirstName,
+                        visitorLastName: req.visitorLastName,
+                        invitedName: req.invitedName,
+                        email: req.email,
+                      });
+                      const approvedCompany = (req.visitorCompanyName || "").trim();
 
                       // Ensure VISITOR department exists
                       const { data: deptData } = await db.queryOnce({
@@ -492,7 +516,7 @@ export default function VisitorAdmin() {
 
                       await db.transact([
                         tx.users[visitorId].update({
-                          name: req.invitedName || req.email,
+                          name: approvedVisitorName,
                           email: req.email,
                           barcode,
                           isAdmin: false,
@@ -505,7 +529,7 @@ export default function VisitorAdmin() {
                           purpose: req.reason,
                         }),
                         tx.visitors[visitorId].update({
-                          name: req.invitedName || req.email,
+                          name: approvedVisitorName,
                           email: req.email,
                           barcode,
                           visitDate: req.visitDate,
@@ -541,6 +565,8 @@ export default function VisitorAdmin() {
                           body: JSON.stringify({
                             email: req.email,
                             barcode,
+                            visitorName: approvedVisitorName,
+                            visitorCompany: approvedCompany,
                             who: req.who,
                             reason: req.reason,
                             whenTs: req.visitDate,
@@ -581,6 +607,10 @@ export default function VisitorAdmin() {
                             email: req.email,
                             rejectionMessage: messageDraft || "",
                             details: req.otherDetails || "",
+                            visitorFirstName: req.visitorFirstName || "",
+                            visitorLastName: req.visitorLastName || "",
+                            visitorCompanyName: req.visitorCompanyName || "",
+                            invitedName: req.invitedName || "",
                           }),
                         }
                       );

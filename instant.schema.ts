@@ -107,6 +107,9 @@ const _schema = i.schema({
       invitedName: i.string(),
 
       // Visitor-submitted fields
+      visitorFirstName: i.string(),
+      visitorLastName: i.string(),
+      visitorCompanyName: i.string(), // required on form submit
       who: i.string(),
       reason: i.string(),
       otherDetails: i.string(),

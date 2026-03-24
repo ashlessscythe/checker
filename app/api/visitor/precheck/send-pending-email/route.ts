@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
+import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
 
 export const runtime = "nodejs";
 
@@ -9,14 +11,6 @@ const resendFromEmail = process.env.RESEND_FROM_EMAIL;
 const appBaseUrl =
   process.env.NEXT_PUBLIC_APP_BASE_URL ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-
-function formatWhen(ts: number) {
-  try {
-    return new Date(ts).toLocaleString();
-  } catch {
-    return "";
-  }
-}
 
 export async function POST(req: Request) {
   if (!resendApiKey || !resendFromEmail) {
@@ -33,6 +27,20 @@ export async function POST(req: Request) {
     const reason = body?.reason as string | undefined;
     const whenTs = body?.whenTs as number | undefined;
     const details = (body?.details as string | undefined) ?? "";
+    const visitorFirstName =
+      (body?.visitorFirstName as string | undefined)?.trim() ?? "";
+    const visitorLastName =
+      (body?.visitorLastName as string | undefined)?.trim() ?? "";
+    const visitorCompanyName =
+      (body?.visitorCompanyName as string | undefined)?.trim() ?? "";
+    const invitedName = (body?.invitedName as string | undefined)?.trim();
+
+    const visitorDisplayName = visitorPrecheckDisplayName({
+      visitorFirstName,
+      visitorLastName,
+      invitedName: invitedName || undefined,
+      email,
+    });
 
     if (!email || !token || !who || !reason || !whenTs) {
       return NextResponse.json(
@@ -55,13 +63,16 @@ export async function POST(req: Request) {
                   We received your visitor pre-check request
                 </h1>
                 <p style="font-size: 14px; margin: 0 0 16px; color: #374151;">
+                  Hi <strong>${visitorDisplayName}</strong>,<br/>
                   Admin approval is required before your kiosk check-in can be completed.
                 </p>
 
                 <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 16px 0;">
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Who:</strong> ${who}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visitor:</strong> ${visitorDisplayName}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Company:</strong> ${visitorCompanyName || "—"}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visiting:</strong> ${who}</p>
                   <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Reason:</strong> ${reason}</p>
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>When:</strong> ${formatWhen(
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>When:</strong> ${formatVisitorPrecheckWhen(
                     whenTs
                   )}</p>
                   ${

@@ -2,19 +2,12 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import QRCode from "qrcode";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
 
 export const runtime = "nodejs";
 
 const resendApiKey = process.env.RESEND_API_KEY;
 const resendFromEmail = process.env.RESEND_FROM_EMAIL;
-
-function formatWhen(ts: number) {
-  try {
-    return new Date(ts).toLocaleString();
-  } catch {
-    return "";
-  }
-}
 
 async function makeQrPngBuffer(value: string) {
   const dataUrl = await QRCode.toDataURL(value, { margin: 1, width: 256 });
@@ -24,12 +17,16 @@ async function makeQrPngBuffer(value: string) {
 
 async function makePassPdf({
   barcode,
+  visitorName,
+  visitorCompany,
   who,
   reason,
   whenTs,
   details,
 }: {
   barcode: string;
+  visitorName: string;
+  visitorCompany: string;
   who: string;
   reason: string;
   whenTs: number;
@@ -62,11 +59,25 @@ async function makePassPdf({
   });
 
   y -= 22;
-  page.drawText(`Who: ${who}`, { x: 60, y, size: 12, font });
+  page.drawText(`Visitor: ${visitorName}`, { x: 60, y, size: 12, font });
+  y -= 16;
+  page.drawText(`Company: ${visitorCompany?.trim() || "—"}`, {
+    x: 60,
+    y,
+    size: 12,
+    font,
+  });
+  y -= 16;
+  page.drawText(`Visiting: ${who}`, { x: 60, y, size: 12, font });
   y -= 16;
   page.drawText(`Reason: ${reason}`, { x: 60, y, size: 12, font });
   y -= 16;
-  page.drawText(`When: ${formatWhen(whenTs)}`, { x: 60, y, size: 12, font });
+  page.drawText(`When: ${formatVisitorPrecheckWhen(whenTs)}`, {
+    x: 60,
+    y,
+    size: 12,
+    font,
+  });
 
   if (details?.trim()) {
     y -= 22;
@@ -111,6 +122,9 @@ export async function POST(req: Request) {
     const whenTs = body?.whenTs as number | undefined;
     const details = (body?.details as string | undefined) ?? "";
     const adminMessage = (body?.adminMessage as string | undefined) ?? "";
+    const visitorName = ((body?.visitorName as string | undefined) ?? "").trim() || email;
+    const visitorCompany =
+      (body?.visitorCompany as string | undefined)?.trim() ?? "";
 
     if (!email || !barcode || !who || !reason || !whenTs) {
       return NextResponse.json(
@@ -123,6 +137,8 @@ export async function POST(req: Request) {
 
     const pdfBuffer = await makePassPdf({
       barcode,
+      visitorName,
+      visitorCompany,
       who,
       reason,
       whenTs,
@@ -139,6 +155,7 @@ export async function POST(req: Request) {
                   Your visitor pre-check is approved
                 </h1>
                 <p style="font-size: 14px; margin: 0 0 12px; color: #374151;">
+                  Hi <strong>${visitorName}</strong>,<br/>
                   You&apos;re scheduled for your visit. Show the code below at the kiosk to check in.
                 </p>
 
@@ -154,9 +171,11 @@ export async function POST(req: Request) {
                   </div>
                 </div>
 
-                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Who:</strong> ${who}</p>
+                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Visitor:</strong> ${visitorName}</p>
+                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Company:</strong> ${visitorCompany || "—"}</p>
+                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Visiting:</strong> ${who}</p>
                 <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Reason:</strong> ${reason}</p>
-                <p style="font-size: 14px; margin: 0 0 16px; color: #374151;"><strong>When:</strong> ${formatWhen(
+                <p style="font-size: 14px; margin: 0 0 16px; color: #374151;"><strong>When:</strong> ${formatVisitorPrecheckWhen(
                   whenTs
                 )}</p>
 

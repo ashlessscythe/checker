@@ -66,6 +66,10 @@ function VisitorPrecheckContent() {
   const [whoOptions, setWhoOptions] = useState<VisitOption[]>([]);
   const [whyOptions, setWhyOptions] = useState<VisitOption[]>([]);
 
+  const [visitorFirstName, setVisitorFirstName] = useState("");
+  const [visitorLastName, setVisitorLastName] = useState("");
+  const [visitorCompanyName, setVisitorCompanyName] = useState("");
+
   const [who, setWho] = useState("");
   const [whoOther, setWhoOther] = useState("");
   const [why, setWhy] = useState("");
@@ -177,6 +181,17 @@ function VisitorPrecheckContent() {
               setVisitTime(toTimeInputValue(req.visitDate));
             }
             setDetails(req.otherDetails || "");
+            setVisitorFirstName(
+              typeof req.visitorFirstName === "string" ? req.visitorFirstName : ""
+            );
+            setVisitorLastName(
+              typeof req.visitorLastName === "string" ? req.visitorLastName : ""
+            );
+            setVisitorCompanyName(
+              typeof req.visitorCompanyName === "string"
+                ? req.visitorCompanyName
+                : ""
+            );
 
             // Hide form by default when request already exists pending.
             setShowEditForm(false);
@@ -200,6 +215,18 @@ function VisitorPrecheckContent() {
     e.preventDefault();
     if (!inviteEmail) return;
     if (requestStatus === "approved" || requestStatus === "rejected") return;
+
+    const fn = visitorFirstName.trim();
+    const ln = visitorLastName.trim();
+    const companyTrimmed = visitorCompanyName.trim();
+    if (!fn || !ln) {
+      toast.error("Please enter your first and last name so we know who we're meeting.");
+      return;
+    }
+    if (!companyTrimmed) {
+      toast.error("Please enter your company name.");
+      return;
+    }
 
     if (!who || !why || !visitDate || !visitTime) {
       toast.error("Please complete all required fields.");
@@ -249,6 +276,9 @@ function VisitorPrecheckContent() {
 
         await db.transact([
           tx.visitorPrecheckRequests[existing.id].update({
+            visitorFirstName: fn,
+            visitorLastName: ln,
+            visitorCompanyName: companyTrimmed,
             who: finalWho,
             reason: finalWhy,
             otherDetails: details || "",
@@ -268,6 +298,9 @@ function VisitorPrecheckContent() {
             email: inviteEmail,
             status: "pending",
 
+            visitorFirstName: fn,
+            visitorLastName: ln,
+            visitorCompanyName: companyTrimmed,
             who: finalWho,
             reason: finalWhy,
             otherDetails: details || "",
@@ -303,6 +336,9 @@ function VisitorPrecheckContent() {
           body: JSON.stringify({
             email: inviteEmail,
             token,
+            visitorFirstName: fn,
+            visitorLastName: ln,
+            visitorCompanyName: companyTrimmed,
             who: finalWho,
             reason: finalWhy,
             whenTs: visitTimestamp,
@@ -438,7 +474,15 @@ function VisitorPrecheckContent() {
           </p>
           <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-200">
             <div>
-              <span className="font-semibold">Who:</span> {who}
+              <span className="font-semibold">Visitor:</span>{" "}
+              {visitorFirstName.trim()} {visitorLastName.trim()}
+            </div>
+            <div>
+              <span className="font-semibold">Company:</span>{" "}
+              {visitorCompanyName.trim()}
+            </div>
+            <div>
+              <span className="font-semibold">Visiting:</span> {who}
             </div>
             <div>
               <span className="font-semibold">Reason:</span> {why}
@@ -479,6 +523,48 @@ function VisitorPrecheckContent() {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="rounded-lg border border-blue-100 bg-blue-50/80 p-4 dark:border-blue-900/40 dark:bg-blue-950/30">
+            <p className="mb-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+              Who do we have the pleasure of meeting?{" "}
+              <span className="text-red-500">*</span>
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                  First name
+                </label>
+                <Input
+                  autoComplete="given-name"
+                  placeholder="First name"
+                  value={visitorFirstName}
+                  onChange={(e) => setVisitorFirstName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Last name
+                </label>
+                <Input
+                  autoComplete="family-name"
+                  placeholder="Last name"
+                  value={visitorLastName}
+                  onChange={(e) => setVisitorLastName(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                What company are you with? <span className="text-red-500">*</span>
+              </label>
+              <Input
+                autoComplete="organization"
+                placeholder="Company or organization name"
+                value={visitorCompanyName}
+                onChange={(e) => setVisitorCompanyName(e.target.value)}
+              />
+            </div>
+          </div>
+
           {/* Who / Whom */}
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">

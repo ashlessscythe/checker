@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,20 @@ export async function POST(req: Request) {
     const email = (body?.email as string | undefined)?.trim().toLowerCase();
     const rejectionMessage = (body?.rejectionMessage as string | undefined) ?? "";
     const details = (body?.details as string | undefined) ?? "";
+    const visitorFirstName =
+      (body?.visitorFirstName as string | undefined)?.trim() ?? "";
+    const visitorLastName =
+      (body?.visitorLastName as string | undefined)?.trim() ?? "";
+    const visitorCompanyName =
+      (body?.visitorCompanyName as string | undefined)?.trim() ?? "";
+    const invitedName = (body?.invitedName as string | undefined)?.trim();
+
+    const visitorDisplayName = visitorPrecheckDisplayName({
+      visitorFirstName,
+      visitorLastName,
+      invitedName: invitedName || undefined,
+      email,
+    });
 
     if (!email) {
       return NextResponse.json(
@@ -27,6 +42,9 @@ export async function POST(req: Request) {
     }
 
     const defaultLetter = `
+      <p style="font-size: 14px; margin: 0 0 8px; color: #374151;">
+        Hi <strong>${visitorDisplayName}</strong>,
+      </p>
       <p style="font-size: 14px; margin: 0 0 8px; color: #374151;">
         Your visitor pre-check request wasn&apos;t approved.
       </p>
@@ -50,6 +68,7 @@ export async function POST(req: Request) {
                 </h1>
                 ${defaultLetter}
                 ${customLetter}
+                <p style="font-size: 12px; color: #6b7280; margin: 0 0 6px;"><strong>Company on file:</strong> ${visitorCompanyName || "—"}</p>
                 ${
                   details?.trim()
                     ? `<p style="font-size: 12px; color: #6b7280; margin: 0;">Your submitted details: ${details}</p>`

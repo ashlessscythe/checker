@@ -81,6 +81,7 @@ export async function POST(req: Request) {
                 </p>
                 <p style="font-size: 14px; margin-bottom: 12px; color: #374151;">
                   Please take a moment to complete your visitor pre-check before you arrive. This will speed up your check-in at the kiosk.
+                  You&apos;ll be asked your name, your company, and a few visit details.
                 </p>
                 <p style="font-size: 14px; margin-bottom: 12px; color: #374151;">
                   This link is valid for <strong>24 hours</strong> from when this email was sent. If it expires, you'll need to request a new invitation from your host.
