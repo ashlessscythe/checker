@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { db } from "@/lib/instantdb";
 import { tx, id } from "@instantdb/react";
 import { Input } from "./ui/input";
@@ -15,6 +15,15 @@ import {
 import toast from "react-hot-toast";
 import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
 import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
+
+/** Pending rows older than this after submit are highlighted (admin has not acted). */
+const STALE_PENDING_MS = 24 * 60 * 60 * 1000;
+
+function isStalePendingSubmission(submittedAt: number) {
+  return typeof submittedAt === "number" && submittedAt > 0
+    ? Date.now() - submittedAt > STALE_PENDING_MS
+    : false;
+}
 
 export default function VisitorAdmin() {
   const { data, isLoading, error } = db.useQuery({
@@ -68,12 +77,79 @@ export default function VisitorAdmin() {
     submittedAt: number;
   }>;
 
+  const sortedPendingRequests = useMemo(() => {
+    return [...pendingRequests].sort(
+      (a, b) => (a.submittedAt ?? 0) - (b.submittedAt ?? 0)
+    );
+  }, [pendingRequests]);
+
   const [actionModal, setActionModal] = useState<null | {
     requestId: string;
     type: "approve" | "reject";
   }>(null);
   const [messageDraft, setMessageDraft] = useState("");
   const [isActionSending, setIsActionSending] = useState(false);
+  const [staleDeleteModal, setStaleDeleteModal] = useState<null | {
+    requestId: string;
+  }>(null);
+  const [isStaleDeleteWorking, setIsStaleDeleteWorking] = useState(false);
+
+  const staleDeleteRequest =
+    staleDeleteModal &&
+    pendingRequests.find((r) => r.id === staleDeleteModal.requestId);
+
+  const completeStaleDeleteFlow = async (
+    requestId: string,
+    andResendInvite: boolean
+  ) => {
+    const req = pendingRequests.find((r) => r.id === requestId);
+    if (!req) {
+      toast.error("Request not found.");
+      return;
+    }
+    setIsStaleDeleteWorking(true);
+    try {
+      if (andResendInvite) {
+        const nameForInvite = visitorPrecheckDisplayName({
+          visitorFirstName: req.visitorFirstName,
+          visitorLastName: req.visitorLastName,
+          invitedName: req.invitedName,
+          email: req.email,
+        });
+        const res = await fetch("/api/visitor/precheck/invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: req.email,
+            name: nameForInvite,
+            source: req.requestSource === "kiosk" ? "kiosk" : "admin",
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          toast.error(
+            errData?.error ||
+              "Could not send invite — the request was not removed. Try again."
+          );
+          return;
+        }
+      }
+
+      await db.transact([tx.visitorPrecheckRequests[req.id].delete()]);
+      toast.success(
+        andResendInvite
+          ? "New invite sent and overdue request removed."
+          : "Overdue request removed. Send a new invite from the form above if needed."
+      );
+      setStaleDeleteModal(null);
+    } catch (err: unknown) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "Something went wrong.";
+      toast.error(message);
+    } finally {
+      setIsStaleDeleteWorking(false);
+    }
+  };
 
   const generateVisitorBarcode = () => {
     const barcodeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -345,7 +421,9 @@ export default function VisitorAdmin() {
         </h2>
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
           Approve or reject visitor requests. On approval, the visitor gets a QR + PDF by
-          email and their badge will be recognized at the kiosk.
+          email and their badge will be recognized at the kiosk. Requests still pending more
+          than 24 hours after submission are highlighted so you can prioritize them; the
+          visitor&apos;s original link may have expired by then.
         </p>
 
         {pendingRequests.length === 0 ? (
@@ -354,11 +432,28 @@ export default function VisitorAdmin() {
           </p>
         ) : (
           <div className="space-y-3">
-            {pendingRequests.map((req) => (
+            {sortedPendingRequests.map((req) => {
+              const stale = isStalePendingSubmission(req.submittedAt);
+              return (
               <div
                 key={req.id}
-                className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+                className={`rounded-lg border p-4 ${
+                  stale
+                    ? "border-amber-400 bg-amber-50/80 dark:border-amber-600 dark:bg-amber-950/25"
+                    : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+                }`}
               >
+                {stale ? (
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full border border-amber-500/60 bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-950 dark:border-amber-400/50 dark:bg-amber-900/40 dark:text-amber-100">
+                      Overdue — no approval yet
+                    </span>
+                    <span className="text-xs text-amber-900/90 dark:text-amber-200/90">
+                      Visitor may need a new invite — pre-check links expire 24 hours after
+                      the original email was sent, not when you approve.
+                    </span>
+                  </div>
+                ) : null}
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -409,8 +504,9 @@ export default function VisitorAdmin() {
                     <Button
                       type="button"
                       className="bg-green-600 hover:bg-green-700"
-                      disabled={isActionSending}
+                      disabled={isActionSending || isStaleDeleteWorking}
                       onClick={() => {
+                        setStaleDeleteModal(null);
                         setMessageDraft("");
                         setActionModal({ requestId: req.id, type: "approve" });
                       }}
@@ -420,8 +516,9 @@ export default function VisitorAdmin() {
                     <Button
                       type="button"
                       variant="outline"
-                      disabled={isActionSending}
+                      disabled={isActionSending || isStaleDeleteWorking}
                       onClick={() => {
+                        setStaleDeleteModal(null);
                         setMessageDraft("");
                         setActionModal({ requestId: req.id, type: "reject" });
                       }}
@@ -429,12 +526,99 @@ export default function VisitorAdmin() {
                     >
                       Reject
                     </Button>
+                    {stale ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isActionSending || isStaleDeleteWorking}
+                        onClick={() => {
+                          setActionModal(null);
+                          setMessageDraft("");
+                          setStaleDeleteModal({ requestId: req.id });
+                        }}
+                        className="border-amber-700/40 text-amber-950 hover:bg-amber-100/80 dark:border-amber-500/40 dark:text-amber-100 dark:hover:bg-amber-950/40"
+                      >
+                        Delete request
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
+
+        {staleDeleteModal ? (
+          <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50/90 p-4 shadow-sm dark:border-amber-700 dark:bg-amber-950/35">
+            <h3 className="mb-2 text-lg font-semibold text-amber-950 dark:text-amber-50">
+              Remove this overdue request?
+            </h3>
+            <p className="mb-3 text-sm leading-relaxed text-amber-950/90 dark:text-amber-100/90">
+              Hey — FYI you&apos;ll need to send this visitor another pre-check invite if
+              they still need to check in; their old link may already be expired. Want to
+              send a fresh invite email now?
+            </p>
+            {staleDeleteRequest ? (
+              <p className="mb-4 rounded-md border border-amber-200/80 bg-white/70 px-3 py-2 text-sm font-medium text-amber-950 dark:border-amber-600/50 dark:bg-amber-950/30 dark:text-amber-50">
+                {visitorPrecheckDisplayName({
+                  visitorFirstName: staleDeleteRequest.visitorFirstName,
+                  visitorLastName: staleDeleteRequest.visitorLastName,
+                  invitedName: staleDeleteRequest.invitedName,
+                  email: staleDeleteRequest.email,
+                })}
+                <span className="font-normal text-amber-800/90 dark:text-amber-200/90">
+                  {" "}
+                  · {staleDeleteRequest.email}
+                </span>
+              </p>
+            ) : (
+              <p className="mb-4 text-sm text-amber-800 dark:text-amber-200">
+                This request is no longer in the list — close this dialog.
+              </p>
+            )}
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button
+                type="button"
+                className="order-1 bg-blue-600 px-5 hover:bg-blue-700 sm:order-1"
+                disabled={
+                  isStaleDeleteWorking || !staleDeleteRequest
+                }
+                onClick={() =>
+                  completeStaleDeleteFlow(staleDeleteModal.requestId, true)
+                }
+              >
+                {isStaleDeleteWorking
+                  ? "Please wait..."
+                  : "Yes — send a new invite"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="order-2 border-amber-900/25 bg-white px-5 dark:border-amber-500/30 dark:bg-amber-950/50"
+                disabled={
+                  isStaleDeleteWorking || !staleDeleteRequest
+                }
+                onClick={() =>
+                  completeStaleDeleteFlow(staleDeleteModal.requestId, false)
+                }
+              >
+                {isStaleDeleteWorking
+                  ? "Please wait..."
+                  : "No — just remove"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="order-3 text-amber-900/80 hover:bg-amber-100/80 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                disabled={isStaleDeleteWorking}
+                onClick={() => setStaleDeleteModal(null)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {actionModal ? (
           <div className="mt-5 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
@@ -454,7 +638,7 @@ export default function VisitorAdmin() {
               }
               value={messageDraft}
               onChange={(e) => setMessageDraft(e.target.value)}
-              disabled={isActionSending}
+              disabled={isActionSending || isStaleDeleteWorking}
             />
             <div className="mt-3 flex gap-2">
               <Button
@@ -464,7 +648,7 @@ export default function VisitorAdmin() {
                     ? "bg-green-600 hover:bg-green-700"
                     : "bg-red-600 hover:bg-red-700"
                 }
-                disabled={isActionSending}
+                disabled={isActionSending || isStaleDeleteWorking}
                 onClick={async () => {
                   setIsActionSending(true);
                   try {
@@ -633,7 +817,7 @@ export default function VisitorAdmin() {
               <Button
                 type="button"
                 variant="outline"
-                disabled={isActionSending}
+                disabled={isActionSending || isStaleDeleteWorking}
                 onClick={() => {
                   setActionModal(null);
                   setMessageDraft("");
