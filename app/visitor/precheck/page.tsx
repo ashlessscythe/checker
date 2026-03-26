@@ -48,6 +48,8 @@ function VisitorPrecheckContent() {
   const [inviteEmail, setInviteEmail] = useState<string | null>(null);
   const [inviteName, setInviteName] = useState<string | null>(null);
   const [inviteSource, setInviteSource] = useState<"admin" | "kiosk">("kiosk");
+  const [protocolRequired, setProtocolRequired] = useState(false);
+  const [protocolAcknowledged, setProtocolAcknowledged] = useState(false);
   const [requestStatus, setRequestStatus] = useState<
     "pending" | "approved" | "rejected" | null
   >(null);
@@ -108,6 +110,7 @@ function VisitorPrecheckContent() {
         setInviteEmail(data.email);
         setInviteName(data.name ?? data.email);
         setInviteSource(data.source === "admin" ? "admin" : "kiosk");
+        setProtocolRequired(Boolean(data.protocolRequired));
 
         // Load any existing request for this token
         let req: any | null = null;
@@ -192,6 +195,17 @@ function VisitorPrecheckContent() {
                 ? req.visitorCompanyName
                 : ""
             );
+            const reqProtocolRequired =
+              typeof req.protocolRequired === "boolean"
+                ? req.protocolRequired
+                : Boolean(data.protocolRequired);
+            setProtocolRequired(reqProtocolRequired);
+            setProtocolAcknowledged(
+              reqProtocolRequired
+                ? typeof req.protocolAcknowledgedAt === "number" &&
+                    req.protocolAcknowledgedAt > 0
+                : false
+            );
 
             // Hide form by default when request already exists pending.
             setShowEditForm(false);
@@ -230,6 +244,10 @@ function VisitorPrecheckContent() {
 
     if (!who || !why || !visitDate || !visitTime) {
       toast.error("Please complete all required fields.");
+      return;
+    }
+    if (protocolRequired && !protocolAcknowledged) {
+      toast.error("Please acknowledge read and receipt of the visitor protocol.");
       return;
     }
 
@@ -289,6 +307,11 @@ function VisitorPrecheckContent() {
             // keep request source/name untouched unless missing (older records)
             requestSource: existing.requestSource || inviteSource,
             invitedName: existing.invitedName || inviteName || inviteEmail,
+            protocolRequired:
+              typeof existing.protocolRequired === "boolean"
+                ? existing.protocolRequired
+                : protocolRequired,
+            protocolAcknowledgedAt: protocolRequired ? now : 0,
           }),
         ]);
       } else {
@@ -319,6 +342,8 @@ function VisitorPrecheckContent() {
 
             requestSource: inviteSource,
             invitedName: inviteName || inviteEmail,
+            protocolRequired,
+            protocolAcknowledgedAt: protocolRequired ? now : 0,
 
             createdAt: now,
             lastUpdatedAt: now,
@@ -345,6 +370,7 @@ function VisitorPrecheckContent() {
             details: details || "",
             requestSource: inviteSource,
             invitedName: inviteName || inviteEmail,
+            protocolRequired,
           }),
         }).catch(() => null);
       }
@@ -666,6 +692,23 @@ function VisitorPrecheckContent() {
               onChange={(e) => setDetails(e.target.value)}
             />
           </div>
+
+          {protocolRequired ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20">
+              <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-100">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={protocolAcknowledged}
+                  onChange={(e) => setProtocolAcknowledged(e.target.checked)}
+                />
+                <span>
+                  I acknowledge read and receipt of the visitor protocol document sent with
+                  my invitation.
+                </span>
+              </label>
+            </div>
+          ) : null}
 
           <Button
             type="submit"

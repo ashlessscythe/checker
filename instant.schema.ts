@@ -127,9 +127,20 @@ const _schema = i.schema({
       // Kiosk barcode is generated at approval time
       visitorBarcode: i.string(),
       visitorUserId: i.string(), // created when approved
+      protocolRequired: i.boolean(),
+      protocolAcknowledgedAt: i.number(),
 
       createdAt: i.number(),
       lastUpdatedAt: i.number(),
+    }),
+    visitorProtocolDocuments: i.entity({
+      key: i.string().unique().indexed(),
+      fileName: i.string(),
+      mimeType: i.string(),
+      contentBase64: i.string(),
+      byteSize: i.number(),
+      createdAt: i.number(),
+      updatedAt: i.number(),
     }),
   },
   links: {

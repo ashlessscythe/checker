@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import crypto from "crypto";
+import { requireAdminAPI } from "@/lib/instantdb-admin";
 
 const resendApiKey = process.env.RESEND_API_KEY;
 const resendFromEmail = process.env.RESEND_FROM_EMAIL;
@@ -18,14 +19,22 @@ function signPrecheckToken({
   email,
   name,
   source,
+  protocolRequired,
   issuedAt,
 }: {
   email: string;
   name: string;
   source: "admin" | "kiosk";
+  protocolRequired: boolean;
   issuedAt: number;
 }) {
-  const payload = JSON.stringify({ email, name, source, iat: issuedAt });
+  const payload = JSON.stringify({
+    email,
+    name,
+    source,
+    protocolRequired,
+    iat: issuedAt,
+  });
   const payloadB64 = Buffer.from(payload, "utf8").toString("base64url");
   const sig = crypto
     .createHmac("sha256", precheckSecret)
@@ -36,6 +45,7 @@ function signPrecheckToken({
 
 export async function POST(req: Request) {
   try {
+    const adminAPI = requireAdminAPI();
     const body = await req.json();
     const email = (body?.email as string | undefined)?.trim().toLowerCase();
     const nameRaw = (body?.name as string | undefined)?.trim();
@@ -43,6 +53,7 @@ export async function POST(req: Request) {
     const sourceRaw = body?.source as string | undefined;
     const source: "admin" | "kiosk" =
       sourceRaw === "admin" || sourceRaw === "kiosk" ? sourceRaw : "kiosk";
+    const sendVisitorProtocol = Boolean(body?.sendVisitorProtocol);
 
     if (!email || !email.includes("@")) {
       return NextResponse.json(
@@ -53,7 +64,28 @@ export async function POST(req: Request) {
 
     const now = Date.now();
     const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
-    const token = signPrecheckToken({ email, name, source, issuedAt: now });
+    const protocolData = await adminAPI.query({
+      visitorProtocolDocuments: {
+        $: {
+          where: { key: "default" },
+        },
+      },
+    });
+    const protocol = (protocolData as any)?.visitorProtocolDocuments?.[0];
+    if (sendVisitorProtocol && !protocol) {
+      return NextResponse.json(
+        { error: "No visitor protocol is uploaded yet." },
+        { status: 400 }
+      );
+    }
+    const protocolRequired = source === "admin" && sendVisitorProtocol;
+    const token = signPrecheckToken({
+      email,
+      name,
+      source,
+      protocolRequired,
+      issuedAt: now,
+    });
 
     const precheckUrl = `${appBaseUrl}/visitor/precheck?token=${encodeURIComponent(
       token
@@ -86,6 +118,13 @@ export async function POST(req: Request) {
                 <p style="font-size: 14px; margin-bottom: 12px; color: #374151;">
                   This link is valid for <strong>24 hours</strong> from when this email was sent. If it expires, you'll need to request a new invitation from your host.
                 </p>
+                ${
+                  protocolRequired
+                    ? `<p style="font-size: 14px; margin-bottom: 12px; color: #374151;">
+                  A visitor protocol is attached. You&apos;ll be required to acknowledge read and receipt on the pre-check form.
+                </p>`
+                    : ""
+                }
                 <p style="font-size: 14px; margin-bottom: 20px; color: #374151;">
                   Link expires at: <strong>${expires}</strong>
                 </p>
@@ -113,6 +152,16 @@ export async function POST(req: Request) {
             ? "Your visitor pre-check link"
             : "Your visitor pre-check request",
         html,
+        attachments:
+          protocolRequired && protocol
+            ? [
+                {
+                  filename: protocol.fileName,
+                  content: protocol.contentBase64,
+                  contentType: protocol.mimeType,
+                },
+              ]
+            : undefined,
       });
 
       if (error) {

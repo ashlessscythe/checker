@@ -22,6 +22,7 @@ function verifyPrecheckToken(token: string) {
     email: string;
     name?: string;
     source?: "admin" | "kiosk";
+    protocolRequired?: boolean;
     iat: number;
   };
 }
@@ -59,8 +60,9 @@ export async function POST(req: Request) {
     const name = payload.name && payload.name.trim().length > 0 ? payload.name : email;
     const source: "admin" | "kiosk" =
       payload.source === "admin" || payload.source === "kiosk" ? payload.source : "kiosk";
+    const protocolRequired = Boolean(payload.protocolRequired);
 
-    return NextResponse.json({ email, name, source, iat: issuedAt });
+    return NextResponse.json({ email, name, source, protocolRequired, iat: issuedAt });
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "Unexpected error validating token." },

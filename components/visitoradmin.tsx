@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { db } from "@/lib/instantdb";
 import { tx, id } from "@instantdb/react";
 import { Input } from "./ui/input";
@@ -44,6 +44,20 @@ export default function VisitorAdmin() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [sendVisitorProtocol, setSendVisitorProtocol] = useState(false);
+  const [protocolUpload, setProtocolUpload] = useState<{
+    fileName: string;
+    mimeType: string;
+    contentBase64: string;
+    byteSize: number;
+  } | null>(null);
+  const [savedProtocol, setSavedProtocol] = useState<{
+    fileName: string;
+    mimeType: string;
+    byteSize: number;
+    updatedAt: number;
+  } | null>(null);
+  const [isSavingProtocol, setIsSavingProtocol] = useState(false);
 
   const options = (data?.visitOptions || []) as Array<{
     id: string;
@@ -66,6 +80,7 @@ export default function VisitorAdmin() {
     email: string;
     status: string;
     requestSource?: string;
+    protocolRequired?: boolean;
     invitedName?: string;
     visitorFirstName?: string;
     visitorLastName?: string;
@@ -82,6 +97,20 @@ export default function VisitorAdmin() {
       (a, b) => (a.submittedAt ?? 0) - (b.submittedAt ?? 0)
     );
   }, [pendingRequests]);
+
+  useEffect(() => {
+    const loadProtocol = async () => {
+      try {
+        const res = await fetch("/api/admin/visitor-protocol");
+        if (!res.ok) return;
+        const payload = await res.json();
+        setSavedProtocol(payload?.protocol || null);
+      } catch (_err) {
+        // Optional UI data; no toast needed.
+      }
+    };
+    loadProtocol();
+  }, []);
 
   const [actionModal, setActionModal] = useState<null | {
     requestId: string;
@@ -123,6 +152,8 @@ export default function VisitorAdmin() {
             email: req.email,
             name: nameForInvite,
             source: req.requestSource === "kiosk" ? "kiosk" : "admin",
+            sendVisitorProtocol:
+              req.requestSource === "admin" ? Boolean(req.protocolRequired) : false,
           }),
         });
         if (!res.ok) {
@@ -221,6 +252,7 @@ export default function VisitorAdmin() {
           email: inviteEmail,
           name: inviteName,
           source: "admin",
+          sendVisitorProtocol: sendVisitorProtocol || undefined,
         }),
       });
       if (!res.ok) {
@@ -231,11 +263,95 @@ export default function VisitorAdmin() {
       toast.success("Pre-check invite sent.");
       setInviteEmail("");
       setInviteName("");
+      setSendVisitorProtocol(false);
     } catch (err: any) {
       console.error("Failed sending invite", err);
       toast.error(err?.message || "Failed to send invite.");
     } finally {
       setIsSendingInvite(false);
+    }
+  };
+
+  const handleProtocolFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) {
+      setProtocolUpload(null);
+      return;
+    }
+    const allowedMimeTypes = new Set([
+      "application/pdf",
+      "image/png",
+      "image/jpeg",
+    ]);
+    const maxSizeBytes = 5 * 1024 * 1024;
+    if (!allowedMimeTypes.has(selectedFile.type)) {
+      toast.error("Attachment must be PDF, PNG, or JPG.");
+      e.target.value = "";
+      return;
+    }
+    if (selectedFile.size > maxSizeBytes) {
+      toast.error("Attachment must be 5MB or smaller.");
+      e.target.value = "";
+      return;
+    }
+
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Failed to read attachment file."));
+        reader.readAsDataURL(selectedFile);
+      });
+      const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : "";
+      if (!base64) {
+        throw new Error("Attachment encoding failed.");
+      }
+      setProtocolUpload({
+        fileName: selectedFile.name,
+        mimeType: selectedFile.type,
+        contentBase64: base64,
+        byteSize: selectedFile.size,
+      });
+    } catch (err: any) {
+      console.error("Failed preparing attachment", err);
+      toast.error(err?.message || "Failed to prepare attachment.");
+      e.target.value = "";
+      setProtocolUpload(null);
+    }
+  };
+
+  const handleSaveProtocol = async () => {
+    if (!protocolUpload) {
+      toast.error("Choose a protocol file first.");
+      return;
+    }
+    setIsSavingProtocol(true);
+    try {
+      const res = await fetch("/api/admin/visitor-protocol", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(protocolUpload),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        toast.error(errData?.error || "Failed to save visitor protocol.");
+        return;
+      }
+      toast.success("Visitor protocol saved.");
+      setSavedProtocol({
+        fileName: protocolUpload.fileName,
+        mimeType: protocolUpload.mimeType,
+        byteSize: protocolUpload.byteSize,
+        updatedAt: Date.now(),
+      });
+      setProtocolUpload(null);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Failed to save visitor protocol.");
+    } finally {
+      setIsSavingProtocol(false);
     }
   };
 
@@ -285,6 +401,56 @@ export default function VisitorAdmin() {
             {isSendingInvite ? "Sending..." : "Send Invite"}
           </Button>
         </div>
+        <div className="mt-4 rounded-md border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Reusable visitor protocol attachment
+          </label>
+          <Input
+            type="file"
+            accept=".pdf,image/png,image/jpeg"
+            onChange={handleProtocolFileChange}
+          />
+          {protocolUpload ? (
+            <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+              Ready to save: {protocolUpload.fileName} (
+              {Math.ceil(protocolUpload.byteSize / 1024)} KB)
+            </p>
+          ) : null}
+          {savedProtocol ? (
+            <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+              Current saved protocol: {savedProtocol.fileName} (
+              {Math.ceil(savedProtocol.byteSize / 1024)} KB)
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+              No protocol uploaded yet.
+            </p>
+          )}
+          <div className="mt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleSaveProtocol}
+              disabled={!protocolUpload || isSavingProtocol}
+            >
+              {isSavingProtocol ? "Saving..." : "Save visitor protocol"}
+            </Button>
+          </div>
+        </div>
+
+        <label className="mt-3 inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={sendVisitorProtocol}
+            onChange={(e) => setSendVisitorProtocol(e.target.checked)}
+            disabled={!savedProtocol}
+          />
+          <span>Send visitor protocol</span>
+        </label>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          When checked, the saved protocol is attached to invite/pending emails and the
+          visitor must acknowledge read and receipt during pre-check.
+        </p>
       </div>
 
       <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">

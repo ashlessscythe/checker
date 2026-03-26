@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { serverDb, tx } from "@/lib/instantdb-server";
 import { id } from "@instantdb/react";
+import { requireAdminAPI } from "@/lib/instantdb-admin";
 
 function generateVisitorBarcode() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -13,6 +14,7 @@ function generateVisitorBarcode() {
 
 export async function POST(req: Request) {
   try {
+    const adminAPI = requireAdminAPI();
     const body = await req.json();
     const {
       inviteId,
@@ -32,7 +34,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data } = await serverDb.queryOnce({
+    const data = await adminAPI.query({
       visitorInvites: {
         $: {
           where: { id: inviteId, token },
@@ -40,7 +42,7 @@ export async function POST(req: Request) {
       },
     });
 
-    const invite = data?.visitorInvites?.[0];
+    const invite = (data as any)?.visitorInvites?.[0];
     if (!invite) {
       return NextResponse.json({ error: "Invalid invite." }, { status: 400 });
     }
@@ -62,7 +64,7 @@ export async function POST(req: Request) {
     const createdAt = now;
 
     // Ensure VISITOR department exists
-    const { data: deptData } = await serverDb.queryOnce({
+    const deptData = await adminAPI.query({
       departments: {
         $: {
           where: { departmentId: "VISITOR" },
@@ -71,7 +73,7 @@ export async function POST(req: Request) {
     });
 
     let visitorDeptId = "";
-    if (!deptData?.departments || deptData.departments.length === 0) {
+    if (!(deptData as any)?.departments || (deptData as any).departments.length === 0) {
       visitorDeptId = id();
       await serverDb.transact([
         tx.departments[visitorDeptId].update({
@@ -80,7 +82,7 @@ export async function POST(req: Request) {
         }),
       ]);
     } else {
-      visitorDeptId = deptData.departments[0].id;
+      visitorDeptId = (deptData as any).departments[0].id;
     }
 
     // Create backing user record with dept VISITOR

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
 import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
+import { requireAdminAPI } from "@/lib/instantdb-admin";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    const adminAPI = requireAdminAPI();
     const resend = new Resend(resendApiKey);
     const body = await req.json();
 
@@ -34,6 +36,7 @@ export async function POST(req: Request) {
     const visitorCompanyName =
       (body?.visitorCompanyName as string | undefined)?.trim() ?? "";
     const invitedName = (body?.invitedName as string | undefined)?.trim();
+    const protocolRequired = Boolean(body?.protocolRequired);
 
     const visitorDisplayName = visitorPrecheckDisplayName({
       visitorFirstName,
@@ -86,6 +89,13 @@ export async function POST(req: Request) {
                    style="display: inline-block; padding: 10px 20px; border-radius: 9999px; background-color: #2563eb; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 14px; margin: 8px 0 16px;">
                   Edit my pre-check
                 </a>
+                ${
+                  protocolRequired
+                    ? `<p style="font-size: 13px; color: #374151; margin: 0 0 12px;">
+                  Reminder: your pre-check requires acknowledging read and receipt of the visitor protocol.
+                </p>`
+                    : ""
+                }
 
                 <p style="font-size: 12px; color: #6b7280; margin: 0;">
                   If the button doesn&apos;t work, copy/paste this URL:<br/>
@@ -98,11 +108,42 @@ export async function POST(req: Request) {
       </html>
     `;
 
+    let emailAttachments:
+      | Array<{ filename: string; content: string; contentType: string }>
+      | undefined;
+    try {
+      const attachmentData = await adminAPI.query({
+        visitorProtocolDocuments: {
+          $: {
+            where: { key: "default" },
+          },
+        },
+      });
+      const attachment = (attachmentData as any)?.visitorProtocolDocuments?.[0];
+      if (
+        protocolRequired &&
+        attachment?.fileName &&
+        attachment?.mimeType &&
+        attachment?.contentBase64
+      ) {
+        emailAttachments = [
+          {
+            filename: attachment.fileName,
+            content: attachment.contentBase64,
+            contentType: attachment.mimeType,
+          },
+        ];
+      }
+    } catch (attachmentErr) {
+      console.error("Failed to load visitor protocol attachment for pending email", attachmentErr);
+    }
+
     await resend.emails.send({
       from: resendFromEmail,
       to: email,
       subject: "Pre-check received (edit details if needed)",
       html,
+      attachments: emailAttachments,
     });
 
     return NextResponse.json({ ok: true });
