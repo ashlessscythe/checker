@@ -4,3 +4,6 @@ node_modules/
 .env.local
 schema/
 script/
+
+# TypeScript incremental build cache (local only; not needed for deploy)
+*.tsbuildinfo
