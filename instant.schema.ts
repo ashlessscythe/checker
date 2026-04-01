@@ -94,14 +94,20 @@ const _schema = i.schema({
       metadata: i.any(),
       createdAt: i.number(),
     }),
+    // Tokens invalidated when admin deletes a pre-check row (approved removal or stale pending).
+    revokedPrecheckTokens: i.entity({
+      token: i.string().unique().indexed(),
+      revokedAt: i.number(),
+      reason: i.string(), // e.g. approved_record_removed | pending_request_removed
+    }),
     visitorPrecheckRequests: i.entity({
       // HMAC-signed token from email link; unique to enforce single submission
       token: i.string().unique().indexed(),
       email: i.string().indexed(),
       status: i.string(), // 'pending' | 'approved' | 'rejected'
 
-      // Where the request came from: admin panel invite vs kiosk/email prompt
-      requestSource: i.string().indexed(), // 'admin' | 'kiosk'
+      // Where the request came from: admin invite, kiosk email link, or on-device register
+      requestSource: i.string().indexed(), // 'admin' | 'kiosk_email' | 'kiosk_register' (legacy 'kiosk' = kiosk_email)
 
       // Optional personalization name (admin can provide; kiosk defaults to email)
       invitedName: i.string(),

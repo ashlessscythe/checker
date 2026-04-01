@@ -125,6 +125,7 @@ export default function VisitorAdmin() {
     approvedPrecheckData?.visitorPrecheckRequests || []
   ) as Array<{
     id: string;
+    token: string;
     email: string;
     status: string;
     invitedName?: string;
@@ -191,9 +192,20 @@ export default function VisitorAdmin() {
       return;
     }
     const uid = (req.visitorUserId || "").trim();
+    const precheckToken = (req.token || "").trim();
     setIsRemovingApproved(true);
     try {
-      const ops = [tx.visitorPrecheckRequests[req.id].delete()];
+      const ops = [];
+      if (precheckToken) {
+        ops.push(
+          tx.revokedPrecheckTokens[id()].update({
+            token: precheckToken,
+            revokedAt: Date.now(),
+            reason: "approved_record_removed",
+          })
+        );
+      }
+      ops.push(tx.visitorPrecheckRequests[req.id].delete());
       if (uid) {
         ops.push(tx.visitors[uid].delete());
         ops.push(tx.users[uid].delete());
@@ -238,7 +250,8 @@ export default function VisitorAdmin() {
           body: JSON.stringify({
             email: req.email,
             name: nameForInvite,
-            source: req.requestSource === "kiosk" ? "kiosk" : "admin",
+            source:
+              req.requestSource === "admin" ? "admin" : "kiosk_email",
             sendVisitorProtocol:
               req.requestSource === "admin" ? Boolean(req.protocolRequired) : false,
           }),
@@ -253,7 +266,20 @@ export default function VisitorAdmin() {
         }
       }
 
-      await db.transact([tx.visitorPrecheckRequests[req.id].delete()]);
+      const precheckToken = (req.token || "").trim();
+      const revokeOps = precheckToken
+        ? [
+            tx.revokedPrecheckTokens[id()].update({
+              token: precheckToken,
+              revokedAt: Date.now(),
+              reason: "pending_request_removed",
+            }),
+          ]
+        : [];
+      await db.transact([
+        ...revokeOps,
+        tx.visitorPrecheckRequests[req.id].delete(),
+      ]);
       toast.success(
         andResendInvite
           ? "New invite sent and overdue request removed."
@@ -728,9 +754,18 @@ export default function VisitorAdmin() {
                     <div className="text-xs text-gray-600 dark:text-gray-400">
                       Company: {req.visitorCompanyName?.trim() || "—"}
                     </div>
-                    {req.requestSource === "kiosk" ? (
+                    {req.requestSource === "kiosk_register" ? (
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        kiosk-sent request
+                        kiosk register (on device)
+                      </div>
+                    ) : req.requestSource === "kiosk_email" ||
+                      req.requestSource === "kiosk" ? (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        kiosk link (email)
+                      </div>
+                    ) : req.requestSource === "admin" ? (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        admin invitation
                       </div>
                     ) : null}
                     <div className="text-xs text-gray-500 dark:text-gray-400">

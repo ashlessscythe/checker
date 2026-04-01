@@ -1,42 +1,138 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import toast from "react-hot-toast";
+import { db } from "@/lib/instantdb";
 
-const MODAL_TIMEOUT_SECONDS = 30;
+const EMAIL_MODAL_TIMEOUT_SECONDS = 30;
+const CHOOSE_MODAL_TIMEOUT_SECONDS = 60;
+
+/** Radix Select highlights via data-[highlighted] (mouse + keyboard), not CSS :hover on the row alone */
+const KIOSK_SELECT_ITEM =
+  "cursor-pointer outline-none data-[highlighted]:bg-emerald-100 data-[highlighted]:text-emerald-950 dark:data-[highlighted]:bg-emerald-900/50 dark:data-[highlighted]:text-emerald-50";
+
+type Phase = "closed" | "choose" | "email" | "register";
+
+interface VisitOption {
+  id: string;
+  category: string;
+  label: string;
+  isActive: boolean;
+  sortOrder: number;
+}
 
 export default function VisitorPrecheckEmailPrompt() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [phase, setPhase] = useState<Phase>("closed");
   const [email, setEmail] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(MODAL_TIMEOUT_SECONDS);
+  const [isSubmittingEmail, setIsSubmittingEmail] = useState(false);
+  const [emailTimeLeft, setEmailTimeLeft] = useState(EMAIL_MODAL_TIMEOUT_SECONDS);
+  const [chooseTimeLeft, setChooseTimeLeft] = useState(CHOOSE_MODAL_TIMEOUT_SECONDS);
+
+  const [regEmail, setRegEmail] = useState("");
+  const [visitorFirstName, setVisitorFirstName] = useState("");
+  const [visitorLastName, setVisitorLastName] = useState("");
+  const [visitorCompanyName, setVisitorCompanyName] = useState("");
+  const [who, setWho] = useState("");
+  const [whoOther, setWhoOther] = useState("");
+  const [why, setWhy] = useState("");
+  const [whyOther, setWhyOther] = useState("");
+  /** Free-text when admin has not configured "who" visit options */
+  const [whoText, setWhoText] = useState("");
+  /** Free-text when admin has not configured "why" visit options */
+  const [whyText, setWhyText] = useState("");
+  const [details, setDetails] = useState("");
+  const [isSubmittingRegister, setIsSubmittingRegister] = useState(false);
+  const [kioskProtocolRequired, setKioskProtocolRequired] = useState(false);
+  const [protocolAcknowledged, setProtocolAcknowledged] = useState(false);
 
   const emailInputRef = useRef<HTMLInputElement>(null);
 
-  const closeModal = useCallback(() => {
-    setIsOpen(false);
+  // Match visitor admin query shape (`$: {}`); boolean `where` on useQuery can be unreliable.
+  // Filter active options client-side (same result as pre-check page).
+  const { data: optionsData, isLoading: optionsLoading, error: optionsError } =
+    db.useQuery({
+      visitOptions: {
+        $: {},
+      },
+    });
+
+  const { whoOptions, whyOptions } = useMemo(() => {
+    const options = (optionsData?.visitOptions || []) as VisitOption[];
+    const active = options.filter((o) => o.isActive !== false);
+    const who = active
+      .filter((o) => o.category === "who")
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const why = active
+      .filter((o) => o.category === "why")
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    return { whoOptions: who, whyOptions: why };
+  }, [optionsData?.visitOptions]);
+
+  const whoSelectMode = !optionsLoading && whoOptions.length > 0;
+  const whySelectMode = !optionsLoading && whyOptions.length > 0;
+
+  const resetAll = useCallback(() => {
+    setPhase("closed");
     setEmail("");
-    setIsSubmitting(false);
-    setTimeLeft(MODAL_TIMEOUT_SECONDS);
+    setIsSubmittingEmail(false);
+    setEmailTimeLeft(EMAIL_MODAL_TIMEOUT_SECONDS);
+    setChooseTimeLeft(CHOOSE_MODAL_TIMEOUT_SECONDS);
+    setRegEmail("");
+    setVisitorFirstName("");
+    setVisitorLastName("");
+    setVisitorCompanyName("");
+    setWho("");
+    setWhoOther("");
+    setWhy("");
+    setWhyOther("");
+    setWhoText("");
+    setWhyText("");
+    setDetails("");
+    setIsSubmittingRegister(false);
+    setKioskProtocolRequired(false);
+    setProtocolAcknowledged(false);
   }, []);
 
-  // Auto-focus the email input and auto-dismiss the modal after a timeout.
   useEffect(() => {
-    if (!isOpen) return;
+    if (phase !== "choose") return;
 
-    setTimeLeft(MODAL_TIMEOUT_SECONDS);
+    setChooseTimeLeft(CHOOSE_MODAL_TIMEOUT_SECONDS);
+    const interval = window.setInterval(() => {
+      setChooseTimeLeft((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(interval);
+          resetAll();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
+    return () => window.clearInterval(interval);
+  }, [phase, resetAll]);
+
+  useEffect(() => {
+    if (phase !== "email") return;
+
+    setEmailTimeLeft(EMAIL_MODAL_TIMEOUT_SECONDS);
     const focusTimer = window.setTimeout(() => {
       emailInputRef.current?.focus();
     }, 100);
 
     const interval = window.setInterval(() => {
-      setTimeLeft((prev) => {
+      setEmailTimeLeft((prev) => {
         if (prev <= 1) {
           window.clearInterval(interval);
-          closeModal();
+          resetAll();
           return 0;
         }
         return prev - 1;
@@ -47,23 +143,57 @@ export default function VisitorPrecheckEmailPrompt() {
       window.clearTimeout(focusTimer);
       window.clearInterval(interval);
     };
-  }, [isOpen, closeModal]);
+  }, [phase, resetAll]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (phase !== "register") return;
+
+    let cancelled = false;
+    setProtocolAcknowledged(false);
+    (async () => {
+      try {
+        const res = await fetch("/api/visitor/precheck/protocol-status");
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && data?.requiresVisitorProtocol === true) {
+          setKioskProtocolRequired(true);
+        } else {
+          setKioskProtocolRequired(false);
+        }
+      } catch {
+        if (!cancelled) setKioskProtocolRequired(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase === "closed") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") resetAll();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [phase, resetAll]);
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !email.includes("@")) {
       toast.error("Please enter a valid email address.");
       return;
     }
 
-    setIsSubmitting(true);
+    setIsSubmittingEmail(true);
     try {
       const res = await fetch("/api/visitor/precheck/invite", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, source: "kiosk" }),
+        body: JSON.stringify({ email, source: "kiosk_email" }),
       });
 
       if (!res.ok) {
@@ -72,71 +202,386 @@ export default function VisitorPrecheckEmailPrompt() {
         return;
       }
 
-      toast.success("Invite email sent. Check your inbox.");
-      closeModal();
+      toast.success("Link sent. Check your inbox.");
+      resetAll();
     } catch (err: any) {
       toast.error(err?.message || "Failed to send invite email.");
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingEmail(false);
     }
   };
 
-  if (!isOpen) {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const fn = visitorFirstName.trim();
+    const ln = visitorLastName.trim();
+    const company = visitorCompanyName.trim();
+    const em = regEmail.trim().toLowerCase();
+
+    if (!fn || !ln) {
+      toast.error("Please enter your first and last name.");
+      return;
+    }
+    if (!company) {
+      toast.error("Please enter your company name.");
+      return;
+    }
+    if (!em || !em.includes("@")) {
+      toast.error("Please enter a valid email for updates.");
+      return;
+    }
+
+    let finalWho: string;
+    if (whoSelectMode) {
+      if (!who) {
+        toast.error("Please select who you are visiting.");
+        return;
+      }
+      finalWho = who === "Other" ? whoOther.trim() || "Other" : who;
+      if (who === "Other" && !whoOther.trim()) {
+        toast.error("Please enter who you are visiting.");
+        return;
+      }
+    } else {
+      finalWho = whoText.trim();
+      if (!finalWho) {
+        toast.error("Please enter who you are visiting.");
+        return;
+      }
+    }
+
+    let finalWhy: string;
+    if (whySelectMode) {
+      if (!why) {
+        toast.error("Please select the reason for your visit.");
+        return;
+      }
+      finalWhy = why === "Other" ? whyOther.trim() || "Other" : why;
+      if (why === "Other" && !whyOther.trim()) {
+        toast.error("Please enter the reason for your visit.");
+        return;
+      }
+    } else {
+      finalWhy = whyText.trim();
+      if (!finalWhy) {
+        toast.error("Please enter the reason for your visit.");
+        return;
+      }
+    }
+
+    if (kioskProtocolRequired && !protocolAcknowledged) {
+      toast.error("Please acknowledge the visitor protocol.");
+      return;
+    }
+
+    setIsSubmittingRegister(true);
+    try {
+      const res = await fetch("/api/visitor/precheck/kiosk-register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: em,
+          visitorFirstName: fn,
+          visitorLastName: ln,
+          visitorCompanyName: company,
+          who: finalWho,
+          reason: finalWhy,
+          otherDetails: details.trim(),
+          protocolAcknowledged: kioskProtocolRequired ? protocolAcknowledged : false,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        toast.error(errorData?.error || "Registration failed.");
+        return;
+      }
+
+      toast.success(
+        "Request submitted. Check your email to confirm or edit details. Staff must approve before you can check in."
+      );
+      resetAll();
+    } catch (err: any) {
+      toast.error(err?.message || "Registration failed.");
+    } finally {
+      setIsSubmittingRegister(false);
+    }
+  };
+
+  if (phase === "closed") {
     return (
       <Button
-        onClick={() => setIsOpen(true)}
+        onClick={() => setPhase("choose")}
         className="w-full max-w-md bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
       >
-        Visitor? Get Pre-Check Link by Email
+        Visitor? Register here
       </Button>
     );
   }
 
   return (
-    <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
-      <h2 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
-        Send Visitor Pre-Check Link
-      </h2>
-      <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
-        Enter your email and we&apos;ll send you a link to complete visitor pre-check
-        before you arrive.
-      </p>
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="visitor-precheck-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) resetAll();
+      }}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg bg-white p-4 shadow-xl dark:bg-gray-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2
+          id="visitor-precheck-modal-title"
+          className="mb-3 text-lg font-semibold text-gray-900 dark:text-white"
+        >
+          {phase === "choose" && "How would you like to pre-check?"}
+          {phase === "email" && "Get a link by email"}
+          {phase === "register" && "Register on this device"}
+        </h2>
 
-      <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-        Auto-closes in {Math.floor(timeLeft / 60)}:
-        {String(timeLeft % 60).padStart(2, "0")}
+        {phase === "choose" && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Choose one: we can email you a link to open on your phone, or you can enter your
+              visit details here on this screen. Both require staff approval before check-in.
+            </p>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Auto-closes in {Math.floor(chooseTimeLeft / 60)}:
+              {String(chooseTimeLeft % 60).padStart(2, "0")}
+            </div>
+            <Button
+              type="button"
+              className="w-full bg-green-600 hover:bg-green-700"
+              onClick={() => setPhase("email")}
+            >
+              Get link by email
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full border-green-700 text-green-800 hover:bg-green-50 dark:border-green-600 dark:text-green-200 dark:hover:bg-green-950/40"
+              onClick={() => setPhase("register")}
+            >
+              Register here (this tablet)
+            </Button>
+            <Button type="button" variant="ghost" className="w-full" onClick={resetAll}>
+              Cancel
+            </Button>
+          </div>
+        )}
+
+        {phase === "email" && (
+          <>
+            <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+              We&apos;ll send a link to complete visitor pre-check. The message is different
+              from staff-sent invitations and is meant for the lobby kiosk flow.
+            </p>
+            <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+              Auto-closes in {Math.floor(emailTimeLeft / 60)}:
+              {String(emailTimeLeft % 60).padStart(2, "0")}
+            </div>
+            <form onSubmit={handleEmailSubmit} className="space-y-3">
+              <Input
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                ref={emailInputRef}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <Button type="submit" disabled={isSubmittingEmail} className="flex-1">
+                  {isSubmittingEmail ? "Sending..." : "Send link"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setPhase("choose")}
+                  disabled={isSubmittingEmail}
+                >
+                  Back
+                </Button>
+              </div>
+            </form>
+          </>
+        )}
+
+        {phase === "register" && (
+          <form onSubmit={handleRegisterSubmit} className="space-y-3">
+            {optionsError ? (
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                Could not load visit options. Use the text fields below, or try again.
+              </p>
+            ) : null}
+            {optionsLoading ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Loading visit options… You can fill your name and email while we load.
+              </p>
+            ) : null}
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Your visit time is recorded as <strong>right now</strong> (when you submit). Use
+              the email field for approval updates and your edit link.
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Input
+                placeholder="First name"
+                value={visitorFirstName}
+                onChange={(e) => setVisitorFirstName(e.target.value)}
+                autoComplete="given-name"
+              />
+              <Input
+                placeholder="Last name"
+                value={visitorLastName}
+                onChange={(e) => setVisitorLastName(e.target.value)}
+                autoComplete="family-name"
+              />
+            </div>
+            <Input
+              placeholder="Company"
+              value={visitorCompanyName}
+              onChange={(e) => setVisitorCompanyName(e.target.value)}
+              autoComplete="organization"
+            />
+            <Input
+              type="email"
+              placeholder="Email (for notifications)"
+              value={regEmail}
+              onChange={(e) => setRegEmail(e.target.value)}
+              autoComplete="email"
+            />
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                Who are you visiting?
+              </label>
+              {whoSelectMode ? (
+                <>
+                  <Select value={who} onValueChange={setWho}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent
+                      className="z-[200] border border-border bg-background text-foreground shadow-md dark:bg-gray-800 dark:text-gray-100"
+                      position="popper"
+                    >
+                      {whoOptions.map((opt) => (
+                        <SelectItem
+                          key={opt.id}
+                          value={opt.label}
+                          className={KIOSK_SELECT_ITEM}
+                        >
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="Other" className={KIOSK_SELECT_ITEM}>
+                        Other
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {who === "Other" && (
+                    <Input
+                      className="mt-2"
+                      placeholder="Who (if other)"
+                      value={whoOther}
+                      onChange={(e) => setWhoOther(e.target.value)}
+                    />
+                  )}
+                </>
+              ) : (
+                <Input
+                  placeholder="Name or department you are visiting"
+                  value={whoText}
+                  onChange={(e) => setWhoText(e.target.value)}
+                />
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                Reason for visit
+              </label>
+              {whySelectMode ? (
+                <>
+                  <Select value={why} onValueChange={setWhy}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent
+                      className="z-[200] border border-border bg-background text-foreground shadow-md dark:bg-gray-800 dark:text-gray-100"
+                      position="popper"
+                    >
+                      {whyOptions.map((opt) => (
+                        <SelectItem
+                          key={opt.id}
+                          value={opt.label}
+                          className={KIOSK_SELECT_ITEM}
+                        >
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="Other" className={KIOSK_SELECT_ITEM}>
+                        Other
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {why === "Other" && (
+                    <Input
+                      className="mt-2"
+                      placeholder="Reason (if other)"
+                      value={whyOther}
+                      onChange={(e) => setWhyOther(e.target.value)}
+                    />
+                  )}
+                </>
+              ) : (
+                <Input
+                  placeholder="Reason for your visit"
+                  value={whyText}
+                  onChange={(e) => setWhyText(e.target.value)}
+                />
+              )}
+            </div>
+            <textarea
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+              rows={2}
+              placeholder="Additional details (optional)"
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
+            />
+            {kioskProtocolRequired ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20">
+                <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-100">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={protocolAcknowledged}
+                    onChange={(e) => setProtocolAcknowledged(e.target.checked)}
+                  />
+                  <span>
+                    I acknowledge read and receipt of the visitor protocol. A copy will be
+                    attached to your confirmation email.
+                  </span>
+                </label>
+              </div>
+            ) : null}
+            <div className="flex gap-2">
+              <Button type="submit" disabled={isSubmittingRegister} className="flex-1">
+                {isSubmittingRegister ? "Submitting..." : "Submit for approval"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setPhase("choose")}
+                disabled={isSubmittingRegister}
+              >
+                Back
+              </Button>
+            </div>
+          </form>
+        )}
       </div>
-
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <Input
-          type="email"
-          placeholder="you@example.com"
-          value={email}
-          ref={emailInputRef}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <div className="flex gap-2">
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            className="flex-1"
-          >
-            {isSubmitting ? "Sending..." : "Send Link"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1"
-            onClick={() => {
-              closeModal();
-            }}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-        </div>
-      </form>
     </div>
   );
 }
-

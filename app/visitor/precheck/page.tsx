@@ -16,6 +16,7 @@ import {
 // @ts-ignore - react-qr-code types are declared manually
 import QRCode from "react-qr-code";
 import toast, { Toaster } from "react-hot-toast";
+import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
 
 interface VisitOption {
   id: string;
@@ -39,6 +40,21 @@ function toTimeInputValue(ts: number) {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
+/** Pre-fill visit fields from token `iat`; if `requireFuture`, ensure result passes future-time validation. */
+function visitTimestampFromTokenIat(iat: unknown, requireFuture: boolean): number {
+  let iatMs =
+    typeof iat === "number" && Number.isFinite(iat) && iat > 0 ? iat : NaN;
+  if (Number.isFinite(iatMs) && iatMs < 1e12) {
+    iatMs *= 1000;
+  }
+  const now = Date.now();
+  let ts = Number.isFinite(iatMs) && iatMs > 0 ? iatMs : now;
+  if (requireFuture && ts <= now) {
+    ts = now + 60_000;
+  }
+  return ts;
+}
+
 function VisitorPrecheckContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
@@ -47,7 +63,9 @@ function VisitorPrecheckContent() {
   const [isValid, setIsValid] = useState(false);
   const [inviteEmail, setInviteEmail] = useState<string | null>(null);
   const [inviteName, setInviteName] = useState<string | null>(null);
-  const [inviteSource, setInviteSource] = useState<"admin" | "kiosk">("kiosk");
+  const [inviteSource, setInviteSource] = useState<
+    "admin" | "kiosk_email" | "kiosk_register"
+  >("kiosk_email");
   const [protocolRequired, setProtocolRequired] = useState(false);
   const [protocolAcknowledged, setProtocolAcknowledged] = useState(false);
   const [requestStatus, setRequestStatus] = useState<
@@ -80,10 +98,12 @@ function VisitorPrecheckContent() {
   const [visitTime, setVisitTime] = useState("");
   const [details, setDetails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validateUserMessage, setValidateUserMessage] = useState<string | null>(null);
 
   useEffect(() => {
     async function validate() {
       if (!token) {
+        setValidateUserMessage(null);
         setIsValid(false);
         setIsValidating(false);
         return;
@@ -101,15 +121,26 @@ function VisitorPrecheckContent() {
         });
 
         if (!res.ok) {
+          const errBody = await res.json().catch(() => null);
+          setValidateUserMessage(
+            typeof errBody?.error === "string" ? errBody.error : null
+          );
           setIsValid(false);
           setIsValidating(false);
           return;
         }
 
+        setValidateUserMessage(null);
         const data = await res.json();
         setInviteEmail(data.email);
         setInviteName(data.name ?? data.email);
-        setInviteSource(data.source === "admin" ? "admin" : "kiosk");
+        setInviteSource(
+          data.source === "admin"
+            ? "admin"
+            : data.source === "kiosk_register"
+              ? "kiosk_register"
+              : "kiosk_email"
+        );
         setProtocolRequired(Boolean(data.protocolRequired));
 
         // Load any existing request for this token
@@ -213,9 +244,45 @@ function VisitorPrecheckContent() {
           }
         }
 
+        // Kiosk register: pre-fill visit from server (validate API uses admin read — reliable
+        // even when the visitor client cannot read visitorPrecheckRequests). Fall back to now.
+        if (data.source === "kiosk_register") {
+          const pendingOrNoReq = !req || req.status === "pending";
+          if (pendingOrNoReq) {
+            const fromApi =
+              typeof data.visitRecordAt === "number" && data.visitRecordAt > 0
+                ? data.visitRecordAt
+                : null;
+            const fromReq =
+              req &&
+              typeof req.visitDate === "number" &&
+              req.visitDate > 0
+                ? req.visitDate
+                : null;
+            const n = fromApi ?? fromReq ?? Date.now();
+            setVisitDate(toDateInputValue(n));
+            setVisitTime(toTimeInputValue(n));
+          }
+        }
+
+        // Admin / kiosk email: first visit (no saved row, or pending without visitDate) — pre-fill
+        // date/time from token `iat` so fields aren't blank. Nudge to ~1 min ahead if `iat` is past
+        // so "future visit" validation still passes.
+        const needsVisitDefaultFromToken =
+          data.source !== "kiosk_register" &&
+          (!req ||
+            req.status !== "pending" ||
+            !(typeof req.visitDate === "number" && req.visitDate > 0));
+        if (needsVisitDefaultFromToken) {
+          const ts = visitTimestampFromTokenIat(data.iat, true);
+          setVisitDate(toDateInputValue(ts));
+          setVisitTime(toTimeInputValue(ts));
+        }
+
         setIsValid(true);
       } catch (err) {
         console.error("Token validate failed", err);
+        setValidateUserMessage(null);
         setIsValid(false);
       } finally {
         setIsValidating(false);
@@ -252,7 +319,12 @@ function VisitorPrecheckContent() {
     }
 
     const when = new Date(`${visitDate}T${visitTime}`);
-    if (isNaN(when.getTime()) || when.getTime() < Date.now()) {
+    const visitMs = when.getTime();
+    if (isNaN(visitMs)) {
+      toast.error("Please enter a valid visit date and time.");
+      return;
+    }
+    if (inviteSource !== "kiosk_register" && visitMs < Date.now()) {
       toast.error("Please choose a future visit time.");
       return;
     }
@@ -262,7 +334,7 @@ function VisitorPrecheckContent() {
     try {
       const finalWho = who === "Other" ? whoOther || "Other" : who;
       const finalWhy = why === "Other" ? whyOther || "Other" : why;
-      const visitTimestamp = when.getTime();
+      const visitTimestamp = visitMs;
       const now = Date.now();
 
       const reqId = id();
@@ -403,8 +475,8 @@ function VisitorPrecheckContent() {
             Invalid or expired link
           </h1>
           <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
-            This visitor pre-check link is not valid. It may have expired (links are valid
-            for 24 hours) or has already been used.
+            {validateUserMessage ||
+              "This visitor pre-check link is not valid. It may have expired (links are valid for 24 hours) or is no longer active."}
           </p>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Please contact your host or request a new invitation.
@@ -513,13 +585,28 @@ function VisitorPrecheckContent() {
             <div>
               <span className="font-semibold">Reason:</span> {why}
             </div>
+            {visitDate && visitTime ? (
+              <div>
+                <span className="font-semibold">When:</span>{" "}
+                {formatVisitorPrecheckWhen(
+                  new Date(`${visitDate}T${visitTime}`).getTime()
+                )}
+              </div>
+            ) : null}
           </div>
           <div className="flex gap-2">
             <Button
               type="button"
               variant="outline"
               className="flex-1"
-              onClick={() => setShowEditForm(true)}
+              onClick={() => {
+                setShowEditForm(true);
+                if (inviteSource === "kiosk_register") {
+                  const n = Date.now();
+                  setVisitDate(toDateInputValue(n));
+                  setVisitTime(toTimeInputValue(n));
+                }
+              }}
             >
               Edit again
             </Button>
@@ -543,9 +630,27 @@ function VisitorPrecheckContent() {
           </div>
         ) : null}
         <p className="mb-6 text-sm text-gray-700 dark:text-gray-300">
-          Complete this form before your visit. Your link is valid for 24 hours from when the
-          email was sent. After submission, admin approval is required; you&apos;ll receive your
-          visitor code (QR + PDF) by email after approval.
+          {inviteSource === "kiosk_register" ? (
+            <>
+              You registered at our check-in device. You can update your details below if
+              needed. Your link stays valid for 24 hours from when you registered. After any
+              update, staff approval is still required; you&apos;ll receive your visitor code
+              by email when approved.
+            </>
+          ) : inviteSource === "kiosk_email" ? (
+            <>
+              Complete this form before your visit. Your link is valid for 24 hours from when
+              you requested it at the lobby screen. After submission, admin approval is
+              required; you&apos;ll receive your visitor code (QR + PDF) by email after
+              approval.
+            </>
+          ) : (
+            <>
+              Complete this form before your visit. Your link is valid for 24 hours from when
+              the invitation was sent. After submission, admin approval is required;
+              you&apos;ll receive your visitor code (QR + PDF) by email after approval.
+            </>
+          )}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -657,6 +762,12 @@ function VisitorPrecheckContent() {
           </div>
 
           {/* When */}
+          {inviteSource === "kiosk_register" ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Visit date and time default to <strong>right now</strong> (when you open this
+              page). Change them below if needed.
+            </p>
+          ) : null}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">

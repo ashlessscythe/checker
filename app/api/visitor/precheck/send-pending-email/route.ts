@@ -27,7 +27,13 @@ export async function POST(req: Request) {
     const token = body?.token as string | undefined;
     const who = body?.who as string | undefined;
     const reason = body?.reason as string | undefined;
-    const whenTs = body?.whenTs as number | undefined;
+    const whenTsRaw = body?.whenTs;
+    const whenTs =
+      typeof whenTsRaw === "number"
+        ? whenTsRaw
+        : whenTsRaw != null
+          ? Number(whenTsRaw)
+          : NaN;
     const details = (body?.details as string | undefined) ?? "";
     const visitorFirstName =
       (body?.visitorFirstName as string | undefined)?.trim() ?? "";
@@ -37,6 +43,13 @@ export async function POST(req: Request) {
       (body?.visitorCompanyName as string | undefined)?.trim() ?? "";
     const invitedName = (body?.invitedName as string | undefined)?.trim();
     const protocolRequired = Boolean(body?.protocolRequired);
+    const requestSourceRaw = (body?.requestSource as string | undefined)?.trim();
+    const requestSource =
+      requestSourceRaw === "kiosk_register"
+        ? "kiosk_register"
+        : requestSourceRaw === "admin"
+          ? "admin"
+          : "kiosk_email";
 
     const visitorDisplayName = visitorPrecheckDisplayName({
       visitorFirstName,
@@ -45,7 +58,14 @@ export async function POST(req: Request) {
       email,
     });
 
-    if (!email || !token || !who || !reason || !whenTs) {
+    if (
+      !email ||
+      !token ||
+      !who ||
+      !reason ||
+      !Number.isFinite(whenTs) ||
+      whenTs <= 0
+    ) {
       return NextResponse.json(
         { error: "Missing required fields for pending email." },
         { status: 400 }
@@ -56,6 +76,24 @@ export async function POST(req: Request) {
       token
     )}`;
 
+    const introBySource =
+      requestSource === "kiosk_register"
+        ? `You submitted a visitor request <strong>at our check-in tablet</strong>. Visit time was recorded as the moment you registered.`
+        : requestSource === "admin"
+          ? `We received the details you submitted from your <strong>pre-check invitation</strong>.`
+          : `We received the details you submitted after opening the link from our <strong>lobby check-in screen</strong>.`;
+
+    const subjectBySource =
+      requestSource === "kiosk_register"
+        ? "Visitor request received — waiting for approval (kiosk)"
+        : requestSource === "admin"
+          ? "Pre-check received — waiting for approval"
+          : "Pre-check received — waiting for approval (kiosk link)";
+
+    const whenFormatted = formatVisitorPrecheckWhen(whenTs);
+    const whenDisplay =
+      whenFormatted && whenFormatted.trim().length > 0 ? whenFormatted : "—";
+
     const html = `
       <html>
         <body style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background-color: #f3f4f6; padding: 24px;">
@@ -63,11 +101,11 @@ export async function POST(req: Request) {
             <tr>
               <td style="background-color: #ffffff; border-radius: 8px; padding: 24px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
                 <h1 style="font-size: 20px; margin: 0 0 12px; color: #111827;">
-                  We received your visitor pre-check request
+                  We received your visitor request
                 </h1>
                 <p style="font-size: 14px; margin: 0 0 16px; color: #374151;">
                   Hi <strong>${visitorDisplayName}</strong>,<br/>
-                  Admin approval is required before your kiosk check-in can be completed.
+                  ${introBySource} Staff approval is still required before you can check in at the kiosk.
                 </p>
 
                 <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 16px 0;">
@@ -75,9 +113,7 @@ export async function POST(req: Request) {
                   <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Company:</strong> ${visitorCompanyName || "—"}</p>
                   <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visiting:</strong> ${who}</p>
                   <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Reason:</strong> ${reason}</p>
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>When:</strong> ${formatVisitorPrecheckWhen(
-                    whenTs
-                  )}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>When:</strong> ${whenDisplay}</p>
                   ${
                     details?.trim()
                       ? `<p style="font-size: 13px; margin: 10px 0 0; color: #6b7280;"><strong>Details:</strong> ${details}</p>`
@@ -141,7 +177,7 @@ export async function POST(req: Request) {
     await resend.emails.send({
       from: resendFromEmail,
       to: email,
-      subject: "Pre-check received (edit details if needed)",
+      subject: subjectBySource,
       html,
       attachments: emailAttachments,
     });

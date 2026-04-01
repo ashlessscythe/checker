@@ -1,31 +1,6 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
-
-const precheckSecret = process.env.PRECHECK_TOKEN_SECRET || "dev-precheck-secret";
-
-function verifyPrecheckToken(token: string) {
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
-  const [payloadB64, sig] = parts;
-  const expectedSig = crypto
-    .createHmac("sha256", precheckSecret)
-    .update(payloadB64)
-    .digest("base64url");
-
-  // Simple string comparison is sufficient for this non-auth critical flow
-  if (expectedSig !== sig) {
-    return null;
-  }
-
-  const json = Buffer.from(payloadB64, "base64url").toString("utf8");
-  return JSON.parse(json) as {
-    email: string;
-    name?: string;
-    source?: "admin" | "kiosk";
-    protocolRequired?: boolean;
-    iat: number;
-  };
-}
+import { verifyPrecheckToken } from "@/lib/visitor-precheck-token";
+import { requireAdminAPI } from "@/lib/instantdb-admin";
 
 export async function POST(req: Request) {
   try {
@@ -37,17 +12,12 @@ export async function POST(req: Request) {
     }
 
     const payload = verifyPrecheckToken(token);
-    if (!payload?.email || !payload?.iat) {
+    if (!payload?.email) {
       return NextResponse.json({ error: "Invalid token." }, { status: 400 });
     }
 
     const now = Date.now();
-    // Support both ms and seconds for issued-at to be robust across deployments
-    let issuedAt = payload.iat;
-    if (issuedAt < 1e12) {
-      // Looks like seconds, convert to ms
-      issuedAt = issuedAt * 1000;
-    }
+    const issuedAt = payload.iat;
     const expiresAt = issuedAt + 24 * 60 * 60 * 1000;
     if (now > expiresAt) {
       return NextResponse.json(
@@ -56,13 +26,59 @@ export async function POST(req: Request) {
       );
     }
 
-    const email = payload.email;
-    const name = payload.name && payload.name.trim().length > 0 ? payload.name : email;
-    const source: "admin" | "kiosk" =
-      payload.source === "admin" || payload.source === "kiosk" ? payload.source : "kiosk";
-    const protocolRequired = Boolean(payload.protocolRequired);
+    try {
+      const adminAPI = requireAdminAPI();
+      const revokedData = await adminAPI.query({
+        revokedPrecheckTokens: {
+          $: {
+            where: { token },
+          },
+        },
+      });
+      const revoked = (revokedData as { revokedPrecheckTokens?: unknown[] })
+        ?.revokedPrecheckTokens;
+      if (revoked && revoked.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "This pre-check link is no longer valid. Ask your host for a new invitation if you still need access.",
+          },
+          { status: 400 }
+        );
+      }
+    } catch (revokeCheckErr) {
+      console.error("validate: revoked token lookup failed", revokeCheckErr);
+    }
 
-    return NextResponse.json({ email, name, source, protocolRequired, iat: issuedAt });
+    let visitRecordAt: number | undefined;
+    if (payload.source === "kiosk_register") {
+      try {
+        const adminAPI = requireAdminAPI();
+        const rowData = await adminAPI.query({
+          visitorPrecheckRequests: {
+            $: {
+              where: { token },
+            },
+          },
+        });
+        const row = (rowData as { visitorPrecheckRequests?: Array<{ visitDate?: number }> })
+          ?.visitorPrecheckRequests?.[0];
+        if (typeof row?.visitDate === "number" && row.visitDate > 0) {
+          visitRecordAt = row.visitDate;
+        }
+      } catch (lookupErr) {
+        console.error("validate: kiosk_register visitDate lookup failed", lookupErr);
+      }
+    }
+
+    return NextResponse.json({
+      email: payload.email,
+      name: payload.name,
+      source: payload.source,
+      protocolRequired: payload.protocolRequired,
+      iat: issuedAt,
+      ...(visitRecordAt != null ? { visitRecordAt } : {}),
+    });
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "Unexpected error validating token." },
@@ -70,4 +86,3 @@ export async function POST(req: Request) {
     );
   }
 }
-
