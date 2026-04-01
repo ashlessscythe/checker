@@ -25,6 +25,17 @@ function isStalePendingSubmission(submittedAt: number) {
     : false;
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Relative phrase e.g. "approved 3 days ago" (24h-based day buckets). */
+function formatApprovedDaysAgo(approvedAt: number) {
+  if (typeof approvedAt !== "number" || approvedAt <= 0) return null;
+  const diffDays = Math.floor((Date.now() - approvedAt) / MS_PER_DAY);
+  if (diffDays <= 0) return "approved today";
+  if (diffDays === 1) return "approved yesterday";
+  return `approved ${diffDays} days ago`;
+}
+
 export default function VisitorAdmin() {
   const { data, isLoading, error } = db.useQuery({
     visitOptions: {
@@ -33,6 +44,18 @@ export default function VisitorAdmin() {
     visitorPrecheckRequests: {
       $: {
         where: { status: "pending" },
+      },
+    },
+  });
+
+  const {
+    data: approvedPrecheckData,
+    isLoading: approvedPrecheckLoading,
+    error: approvedPrecheckError,
+  } = db.useQuery({
+    visitorPrecheckRequests: {
+      $: {
+        where: { status: "approved" },
       },
     },
   });
@@ -98,6 +121,32 @@ export default function VisitorAdmin() {
     );
   }, [pendingRequests]);
 
+  const approvedPrecheckRequests = (
+    approvedPrecheckData?.visitorPrecheckRequests || []
+  ) as Array<{
+    id: string;
+    email: string;
+    status: string;
+    invitedName?: string;
+    visitorFirstName?: string;
+    visitorLastName?: string;
+    visitorCompanyName?: string;
+    who: string;
+    reason: string;
+    otherDetails: string;
+    visitDate: number;
+    submittedAt: number;
+    approvedAt: number;
+    visitorBarcode: string;
+    visitorUserId: string;
+  }>;
+
+  const sortedApprovedPrecheckRequests = useMemo(() => {
+    return [...approvedPrecheckRequests].sort(
+      (a, b) => (b.approvedAt ?? 0) - (a.approvedAt ?? 0)
+    );
+  }, [approvedPrecheckRequests]);
+
   useEffect(() => {
     const loadProtocol = async () => {
       try {
@@ -122,10 +171,48 @@ export default function VisitorAdmin() {
     requestId: string;
   }>(null);
   const [isStaleDeleteWorking, setIsStaleDeleteWorking] = useState(false);
+  const [removeApprovedModal, setRemoveApprovedModal] = useState<null | {
+    requestId: string;
+  }>(null);
+  const [isRemovingApproved, setIsRemovingApproved] = useState(false);
 
   const staleDeleteRequest =
     staleDeleteModal &&
     pendingRequests.find((r) => r.id === staleDeleteModal.requestId);
+
+  const removeApprovedRequest =
+    removeApprovedModal &&
+    approvedPrecheckRequests.find((r) => r.id === removeApprovedModal.requestId);
+
+  const removeApprovedPrecheckVisitor = async (requestId: string) => {
+    const req = approvedPrecheckRequests.find((r) => r.id === requestId);
+    if (!req) {
+      toast.error("Record not found.");
+      return;
+    }
+    const uid = (req.visitorUserId || "").trim();
+    setIsRemovingApproved(true);
+    try {
+      const ops = [tx.visitorPrecheckRequests[req.id].delete()];
+      if (uid) {
+        ops.push(tx.visitors[uid].delete());
+        ops.push(tx.users[uid].delete());
+      }
+      await db.transact(ops);
+      toast.success(
+        uid
+          ? "Visitor removed from the database."
+          : "Pre-check record removed (no linked kiosk user was stored)."
+      );
+      setRemoveApprovedModal(null);
+    } catch (err: unknown) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "Something went wrong.";
+      toast.error(message);
+    } finally {
+      setIsRemovingApproved(false);
+    }
+  };
 
   const completeStaleDeleteFlow = async (
     requestId: string,
@@ -355,11 +442,16 @@ export default function VisitorAdmin() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || approvedPrecheckLoading) {
     return <div>Loading visitor settings...</div>;
   }
-  if (error) {
-    return <div>Error loading visitor settings: {error.message}</div>;
+  if (error || approvedPrecheckError) {
+    return (
+      <div>
+        Error loading visitor settings:{" "}
+        {(error || approvedPrecheckError)?.message}
+      </div>
+    );
   }
 
   return (
@@ -988,6 +1080,145 @@ export default function VisitorAdmin() {
                   setActionModal(null);
                   setMessageDraft("");
                 }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
+        <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
+          Pre-checked visitors (approved)
+        </h2>
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+          Visitors who were approved through pre-check have kiosk accounts and barcodes.
+          Remove a row to delete their pre-check record and kiosk user so they can no
+          longer check in with that pass.
+        </p>
+
+        {sortedApprovedPrecheckRequests.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No approved pre-check visitors right now.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {sortedApprovedPrecheckRequests.map((req) => {
+              const approvedDaysAgo = formatApprovedDaysAgo(req.approvedAt);
+              return (
+              <div
+                key={req.id}
+                className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {visitorPrecheckDisplayName({
+                        visitorFirstName: req.visitorFirstName,
+                        visitorLastName: req.visitorLastName,
+                        invitedName: req.invitedName,
+                        email: req.email,
+                      })}
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      {req.email}
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      Company: {req.visitorCompanyName?.trim() || "—"}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Barcode: {req.visitorBarcode?.trim() || "—"}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Approved:{" "}
+                      {req.approvedAt
+                        ? new Date(req.approvedAt).toLocaleString()
+                        : "—"}
+                    </div>
+                    {approvedDaysAgo ? (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {approvedDaysAgo}
+                      </div>
+                    ) : null}
+                    <div className="mt-2 text-sm text-gray-700 dark:text-gray-200">
+                      <div>
+                        <span className="font-semibold">Visiting:</span>{" "}
+                        {req.who || "—"}
+                      </div>
+                      <div>
+                        <span className="font-semibold">Reason:</span>{" "}
+                        {req.reason || "—"}
+                      </div>
+                      <div>
+                        <span className="font-semibold">When:</span>{" "}
+                        {formatVisitorPrecheckWhen(req.visitDate)}
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      isActionSending ||
+                      isStaleDeleteWorking ||
+                      isRemovingApproved
+                    }
+                    onClick={() => setRemoveApprovedModal({ requestId: req.id })}
+                    className="border-red-500 text-red-600 hover:bg-red-50 dark:border-red-500 dark:text-red-300 sm:shrink-0"
+                  >
+                    Remove from database
+                  </Button>
+                </div>
+              </div>
+            );
+            })}
+          </div>
+        )}
+
+        {removeApprovedModal ? (
+          <div className="mt-5 rounded-lg border border-red-200 bg-red-50/90 p-4 shadow-sm dark:border-red-900/60 dark:bg-red-950/35">
+            <h3 className="mb-2 text-lg font-semibold text-red-950 dark:text-red-50">
+              Remove this visitor?
+            </h3>
+            <p className="mb-3 text-sm leading-relaxed text-red-950/90 dark:text-red-100/90">
+              This deletes the approved pre-check record and the kiosk user (and visitor
+              profile) tied to it. Their barcode will stop working at the kiosk.
+            </p>
+            {removeApprovedRequest ? (
+              <p className="mb-4 rounded-md border border-red-200/80 bg-white/70 px-3 py-2 text-sm font-medium text-red-950 dark:border-red-800/50 dark:bg-red-950/30 dark:text-red-50">
+                {visitorPrecheckDisplayName({
+                  visitorFirstName: removeApprovedRequest.visitorFirstName,
+                  visitorLastName: removeApprovedRequest.visitorLastName,
+                  invitedName: removeApprovedRequest.invitedName,
+                  email: removeApprovedRequest.email,
+                })}
+                <span className="font-normal text-red-800/90 dark:text-red-200/90">
+                  {" "}
+                  · {removeApprovedRequest.email}
+                </span>
+              </p>
+            ) : (
+              <p className="mb-4 text-sm text-red-800 dark:text-red-200">
+                This record is no longer in the list — close this dialog.
+              </p>
+            )}
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button
+                type="button"
+                className="bg-red-600 hover:bg-red-700"
+                disabled={isRemovingApproved || !removeApprovedRequest}
+                onClick={() =>
+                  removeApprovedPrecheckVisitor(removeApprovedModal.requestId)
+                }
+              >
+                {isRemovingApproved ? "Removing..." : "Yes, remove"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isRemovingApproved}
+                onClick={() => setRemoveApprovedModal(null)}
               >
                 Cancel
               </Button>
