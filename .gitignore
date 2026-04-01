@@ -7,3 +7,6 @@ script/
 
 # TypeScript incremental build cache (local only; not needed for deploy)
 *.tsbuildinfo
+
+# Next.js auto-generated TypeScript env (next dev / next build recreate it)
+next-env.d.ts
