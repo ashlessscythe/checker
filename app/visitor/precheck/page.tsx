@@ -100,14 +100,18 @@ function PrecheckLanguageBar({
         }}
       >
         <SelectTrigger
-          className="h-9 w-full bg-background/95 text-xs shadow-md backdrop-blur dark:bg-gray-900/95"
+          className="h-9 w-full border-input bg-background text-xs shadow-md dark:bg-gray-900 md:hover:bg-accent md:hover:text-accent-foreground"
           aria-label="Language"
         >
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="rounded-md border border-border bg-background text-foreground shadow-lg dark:bg-gray-900 dark:text-gray-100">
           {PRECHECK_LOCALE_OPTIONS.map((o) => (
-            <SelectItem key={o.value} value={o.value}>
+            <SelectItem
+              key={o.value}
+              value={o.value}
+              className="md:hover:bg-accent md:hover:text-accent-foreground"
+            >
               {o.label}
             </SelectItem>
           ))}
