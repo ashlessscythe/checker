@@ -150,6 +150,13 @@ const _schema = i.schema({
       createdAt: i.number(),
       updatedAt: i.number(),
     }),
+    /** Staff who receive an internal summary email when a visitor pre-check is approved (not the visitor). */
+    visitorApprovalNotifyRecipients: i.entity({
+      email: i.string().unique().indexed(),
+      name: i.string(),
+      sortOrder: i.number(),
+      createdAt: i.number(),
+    }),
   },
   links: {
     userDepartment: {

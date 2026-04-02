@@ -134,6 +134,9 @@ export default function VisitorAdmin() {
         where: { status: "pending" },
       },
     },
+    visitorApprovalNotifyRecipients: {
+      $: {},
+    },
   });
 
   const {
@@ -170,6 +173,9 @@ export default function VisitorAdmin() {
     updatedAt: number;
   } | null>(null);
   const [isSavingProtocol, setIsSavingProtocol] = useState(false);
+  const [notifyName, setNotifyName] = useState("");
+  const [notifyEmail, setNotifyEmail] = useState("");
+  const [isSavingNotifyRecipient, setIsSavingNotifyRecipient] = useState(false);
 
   const options = (data?.visitOptions || []) as Array<{
     id: string;
@@ -210,6 +216,21 @@ export default function VisitorAdmin() {
       (a, b) => (a.submittedAt ?? 0) - (b.submittedAt ?? 0)
     );
   }, [pendingRequests]);
+
+  const approvalNotifyRecipients = (data?.visitorApprovalNotifyRecipients ||
+    []) as Array<{
+    id: string;
+    email: string;
+    name: string;
+    sortOrder: number;
+    createdAt: number;
+  }>;
+
+  const sortedApprovalNotifyRecipients = useMemo(() => {
+    return [...approvalNotifyRecipients].sort(
+      (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+    );
+  }, [approvalNotifyRecipients]);
 
   const approvedPrecheckRequests = (
     approvedPrecheckData?.visitorPrecheckRequests || []
@@ -534,6 +555,52 @@ export default function VisitorAdmin() {
     }
   };
 
+  const handleAddApprovalNotifyRecipient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = notifyEmail.trim().toLowerCase();
+    const name = notifyName.trim();
+    if (!email || !email.includes("@")) {
+      toast.error("Enter a valid email.");
+      return;
+    }
+    setIsSavingNotifyRecipient(true);
+    try {
+      const maxOrder = approvalNotifyRecipients.reduce(
+        (m, r) => Math.max(m, r.sortOrder ?? 0),
+        0
+      );
+      const now = Date.now();
+      await db.transact([
+        tx.visitorApprovalNotifyRecipients[id()].update({
+          email,
+          name: name || email,
+          sortOrder: maxOrder + 1,
+          createdAt: now,
+        }),
+      ]);
+      toast.success("Recipient added.");
+      setNotifyEmail("");
+      setNotifyName("");
+    } catch (err: unknown) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "Failed to add recipient.";
+      toast.error(message);
+    } finally {
+      setIsSavingNotifyRecipient(false);
+    }
+  };
+
+  const removeApprovalNotifyRecipient = async (recipientId: string) => {
+    try {
+      await db.transact([tx.visitorApprovalNotifyRecipients[recipientId].delete()]);
+      toast.success("Recipient removed.");
+    } catch (err: unknown) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "Failed to remove.";
+      toast.error(message);
+    }
+  };
+
   const handleSaveProtocol = async () => {
     if (!protocolUpload) {
       toast.error("Choose a protocol file first.");
@@ -804,6 +871,79 @@ export default function VisitorAdmin() {
 
       <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
         <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
+          Internal approval notifications
+        </h2>
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+          Recipients listed below receive a summary email when a visitor pre-check is{" "}
+          <strong>approved</strong> (after the visitor receives kiosk check-in credentials).
+          They are not notified of pending requests or rejections.
+        </p>
+        <form
+          onSubmit={handleAddApprovalNotifyRecipient}
+          className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
+        >
+          <div className="min-w-0 flex-1 sm:max-w-xs">
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+              Name
+            </label>
+            <Input
+              type="text"
+              value={notifyName}
+              onChange={(e) => setNotifyName(e.target.value)}
+              placeholder="e.g. Security desk"
+              className="text-sm"
+            />
+          </div>
+          <div className="min-w-0 flex-1 sm:max-w-xs">
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+              Email
+            </label>
+            <Input
+              type="email"
+              value={notifyEmail}
+              onChange={(e) => setNotifyEmail(e.target.value)}
+              placeholder="notify@company.com"
+              className="text-sm"
+            />
+          </div>
+          <Button type="submit" disabled={isSavingNotifyRecipient} size="sm">
+            {isSavingNotifyRecipient ? "Adding…" : "Add recipient"}
+          </Button>
+        </form>
+        {sortedApprovalNotifyRecipients.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No recipients configured. Add an email address to enable internal notifications
+            when visits are approved.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {sortedApprovalNotifyRecipients.map((r) => (
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+              >
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">
+                    {r.name || r.email}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">{r.email}</div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => removeApprovalNotifyRecipient(r.id)}
+                >
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
+        <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
           Visitor Pre-Check Approvals
         </h2>
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
@@ -951,7 +1091,7 @@ export default function VisitorAdmin() {
               Remove this overdue request?
             </h3>
             <p className="mb-3 text-sm leading-relaxed text-amber-950/90 dark:text-amber-100/90">
-              Hey — FYI you&apos;ll need to send this visitor another pre-check invite if
+              Note: you&apos;ll need to send this visitor another pre-check invite if
               they still need to check in; their old link may already be expired. Want to
               send a fresh invite email now?
             </p>
@@ -1152,6 +1292,25 @@ export default function VisitorAdmin() {
                             whenTs: req.visitDate,
                             details: req.otherDetails || "",
                             adminMessage: messageDraft || "",
+                          }),
+                        }
+                      );
+
+                      await fetch(
+                        "/api/visitor/precheck/send-approval-internal-notify",
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            visitorName: approvedVisitorName,
+                            visitorEmail: req.email,
+                            visitorCompany: approvedCompany,
+                            who: req.who,
+                            reason: req.reason,
+                            whenTs: req.visitDate,
+                            details: req.otherDetails || "",
+                            requestSource: req.requestSource || "admin",
+                            approvedBy: "admin",
                           }),
                         }
                       );

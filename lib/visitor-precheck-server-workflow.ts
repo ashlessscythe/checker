@@ -140,6 +140,29 @@ export async function approveVisitorPrecheckRequestServer(
     console.error("approveVisitorPrecheckRequestServer: approval email fetch failed", e);
   }
 
+  try {
+    await fetch(`${appBaseUrl}/api/visitor/precheck/send-approval-internal-notify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        visitorName: approvedVisitorName,
+        visitorEmail: requestRow.email,
+        visitorCompany: approvedCompany,
+        who: requestRow.who,
+        reason: requestRow.reason,
+        whenTs: requestRow.visitDate,
+        details: requestRow.otherDetails || "",
+        requestSource: requestRow.requestSource || "admin",
+        approvedBy: opts.actor,
+      }),
+    });
+  } catch (e) {
+    console.error(
+      "approveVisitorPrecheckRequestServer: internal approval notify fetch failed",
+      e
+    );
+  }
+
   return { ok: true };
 }
 
