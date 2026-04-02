@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { db } from "@/lib/instantdb";
 import { tx, id } from "@instantdb/react";
@@ -17,6 +17,13 @@ import {
 import QRCode from "react-qr-code";
 import toast, { Toaster } from "react-hot-toast";
 import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
+import {
+  getPrecheckStrings,
+  isPrecheckLocale,
+  PRECHECK_LOCALE_OPTIONS,
+  PRECHECK_LOCALE_STORAGE_KEY,
+  type PrecheckLocale,
+} from "@/lib/visitor-precheck-i18n";
 
 interface VisitOption {
   id: string;
@@ -55,7 +62,62 @@ function visitTimestampFromTokenIat(iat: unknown, requireFuture: boolean): numbe
   return ts;
 }
 
-function VisitorPrecheckContent() {
+function usePrecheckLocale(): readonly [PrecheckLocale, (l: PrecheckLocale) => void] {
+  const [locale, setLocaleState] = useState<PrecheckLocale>("en-US");
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PRECHECK_LOCALE_STORAGE_KEY);
+      if (raw && isPrecheckLocale(raw)) setLocaleState(raw);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const setLocale = useCallback((l: PrecheckLocale) => {
+    setLocaleState(l);
+    try {
+      localStorage.setItem(PRECHECK_LOCALE_STORAGE_KEY, l);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  return [locale, setLocale] as const;
+}
+
+function PrecheckLanguageBar({
+  locale,
+  setLocale,
+}: {
+  locale: PrecheckLocale;
+  setLocale: (l: PrecheckLocale) => void;
+}) {
+  return (
+    <div className="pointer-events-auto fixed top-4 right-4 z-[100] max-w-[min(11rem,calc(100vw-2rem))]">
+      <Select
+        value={locale}
+        onValueChange={(v) => {
+          if (isPrecheckLocale(v)) setLocale(v);
+        }}
+      >
+        <SelectTrigger
+          className="h-9 w-full bg-background/95 text-xs shadow-md backdrop-blur dark:bg-gray-900/95"
+          aria-label="Language"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {PRECHECK_LOCALE_OPTIONS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
+  const s = getPrecheckStrings(locale);
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
 
@@ -301,31 +363,31 @@ function VisitorPrecheckContent() {
     const ln = visitorLastName.trim();
     const companyTrimmed = visitorCompanyName.trim();
     if (!fn || !ln) {
-      toast.error("Please enter your first and last name so we know who we're meeting.");
+      toast.error(s.toastNameRequired);
       return;
     }
     if (!companyTrimmed) {
-      toast.error("Please enter your company name.");
+      toast.error(s.toastCompanyRequired);
       return;
     }
 
     if (!who || !why || !visitDate || !visitTime) {
-      toast.error("Please complete all required fields.");
+      toast.error(s.toastCompleteRequired);
       return;
     }
     if (protocolRequired && !protocolAcknowledged) {
-      toast.error("Please acknowledge read and receipt of the visitor protocol.");
+      toast.error(s.toastProtocol);
       return;
     }
 
     const when = new Date(`${visitDate}T${visitTime}`);
     const visitMs = when.getTime();
     if (isNaN(visitMs)) {
-      toast.error("Please enter a valid visit date and time.");
+      toast.error(s.toastInvalidWhen);
       return;
     }
     if (inviteSource !== "kiosk_register" && visitMs < Date.now()) {
-      toast.error("Please choose a future visit time.");
+      toast.error(s.toastFutureWhen);
       return;
     }
 
@@ -360,7 +422,7 @@ function VisitorPrecheckContent() {
       if (existing) {
         if (existing.status !== "pending") {
           setRequestStatus(existing.status as any);
-          toast.error("This request has already been processed by admin.");
+          toast.error(s.toastAlreadyProcessed);
           return;
         }
 
@@ -450,9 +512,7 @@ function VisitorPrecheckContent() {
       setRequestStatus("pending");
       setShowEditForm(false);
       toast.success(
-        shouldSendPendingEmail
-          ? "Saved! Waiting for admin approval (email sent)."
-          : "Saved! Waiting for admin approval. Email updates are limited to once per minute."
+        shouldSendPendingEmail ? s.toastSavedEmail : s.toastSavedRateLimit
       );
     } finally {
       setIsSubmitting(false);
@@ -462,7 +522,7 @@ function VisitorPrecheckContent() {
   if (isValidating) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <p className="text-gray-700 dark:text-gray-200">Validating your link...</p>
+        <p className="text-gray-700 dark:text-gray-200">{s.validating}</p>
       </div>
     );
   }
@@ -472,14 +532,13 @@ function VisitorPrecheckContent() {
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
         <div className="max-w-md rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800">
           <h1 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
-            Invalid or expired link
+            {s.invalidTitle}
           </h1>
           <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
-            {validateUserMessage ||
-              "This visitor pre-check link is not valid. It may have expired (links are valid for 24 hours) or is no longer active."}
+            {validateUserMessage || s.invalidDefaultMessage}
           </p>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Please contact your host or request a new invitation.
+            {s.invalidContact}
           </p>
         </div>
       </div>
@@ -493,14 +552,14 @@ function VisitorPrecheckContent() {
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
         <div className="max-w-md rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800">
           <h1 className="mb-2 text-xl font-semibold text-red-600 dark:text-red-400">
-            Request not approved
+            {s.rejectedTitle}
           </h1>
           <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
-            Your request wasn&apos;t approved. Please contact the company administrator.
+            {s.rejectedBody}
           </p>
           {requestRejectionMessage ? (
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Note from admin: {requestRejectionMessage}
+              {s.rejectedNotePrefix} {requestRejectionMessage}
             </p>
           ) : null}
         </div>
@@ -511,21 +570,21 @@ function VisitorPrecheckContent() {
   if (requestStatus === "approved") {
     return (
       <div className="min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
-        <Toaster position="top-right" />
+        <Toaster position="top-left" />
         <div className="mx-auto max-w-md rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800 text-center space-y-4">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            You&apos;re all set!
+            {s.approvedTitle}
           </h1>
           <p className="text-sm text-gray-700 dark:text-gray-300">
-            Show this code or QR at the kiosk to check in.
+            {s.approvedSubtitle}
           </p>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Done! you can close this tab or window
+            {s.approvedDone}
           </p>
 
           <div className="rounded-lg border border-dashed border-gray-400 bg-gray-50 px-4 py-4 dark:border-gray-600 dark:bg-gray-900">
             <p className="mb-2 text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              Visitor Code
+              {s.visitorCode}
             </p>
             <p className="mb-3 select-all text-lg font-mono font-semibold text-gray-900 dark:text-white">
               {requestBarcode}
@@ -537,11 +596,11 @@ function VisitorPrecheckContent() {
 
           {requestAdminMessage ? (
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Admin note: {requestAdminMessage}
+              {s.adminNote} {requestAdminMessage}
             </p>
           ) : (
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              You can screenshot or print this page. The same code is stored in our system and will be recognized by the kiosk scanner.
+              {s.approvedFooterScreenshot}
             </p>
           )}
         </div>
@@ -555,41 +614,40 @@ function VisitorPrecheckContent() {
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
         <div className="max-w-md w-full rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800 space-y-4">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Saved!
+            {s.pendingSavedTitle}
           </h1>
           <p className="text-sm text-gray-700 dark:text-gray-300">
-            Your visitor pre-check request is waiting for admin approval. You&apos;ll receive your
-            visitor code by email once approved.
+            {s.pendingSavedBody}
           </p>
           {emailRateLimited ? (
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              To prevent email spam, we can only send updated “waiting for approval” emails once per minute.
-              If you need to update again, try again in about a minute.
+              {s.pendingSavedRateLimit}
             </p>
           ) : null}
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Done! you can close this tab or window
+            {s.pendingSavedDone}
           </p>
           <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-200">
             <div>
-              <span className="font-semibold">Visitor:</span>{" "}
+              <span className="font-semibold">{s.labelVisitor}</span>{" "}
               {visitorFirstName.trim()} {visitorLastName.trim()}
             </div>
             <div>
-              <span className="font-semibold">Company:</span>{" "}
+              <span className="font-semibold">{s.labelCompany}</span>{" "}
               {visitorCompanyName.trim()}
             </div>
             <div>
-              <span className="font-semibold">Visiting:</span> {who}
+              <span className="font-semibold">{s.labelVisiting}</span> {who}
             </div>
             <div>
-              <span className="font-semibold">Reason:</span> {why}
+              <span className="font-semibold">{s.labelReason}</span> {why}
             </div>
             {visitDate && visitTime ? (
               <div>
-                <span className="font-semibold">When:</span>{" "}
+                <span className="font-semibold">{s.labelWhen}</span>{" "}
                 {formatVisitorPrecheckWhen(
-                  new Date(`${visitDate}T${visitTime}`).getTime()
+                  new Date(`${visitDate}T${visitTime}`).getTime(),
+                  locale
                 )}
               </div>
             ) : null}
@@ -608,7 +666,7 @@ function VisitorPrecheckContent() {
                 }
               }}
             >
-              Edit again
+              {s.editAgain}
             </Button>
           </div>
         </div>
@@ -618,66 +676,49 @@ function VisitorPrecheckContent() {
 
   return (
     <div className="min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
-      <Toaster position="top-right" />
+      <Toaster position="top-left" />
       <div className="mx-auto max-w-md rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800">
         <h1 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
-          Visitor Pre-Check
+          {s.pageTitle}
         </h1>
         {requestStatus === "pending" ? (
           <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-100">
-            Your request is waiting for admin approval. You can edit and resubmit your
-            details if anything needs to change.
+            {s.pendingBanner}
           </div>
         ) : null}
         <p className="mb-6 text-sm text-gray-700 dark:text-gray-300">
-          {inviteSource === "kiosk_register" ? (
-            <>
-              You registered at our check-in device. You can update your details below if
-              needed. Your link stays valid for 24 hours from when you registered. After any
-              update, staff approval is still required; you&apos;ll receive your visitor code
-              by email when approved.
-            </>
-          ) : inviteSource === "kiosk_email" ? (
-            <>
-              Complete this form before your visit. Your link is valid for 24 hours from when
-              you requested it at the lobby screen. After submission, admin approval is
-              required; you&apos;ll receive your visitor code (QR + PDF) by email after
-              approval.
-            </>
-          ) : (
-            <>
-              Complete this form before your visit. Your link is valid for 24 hours from when
-              the invitation was sent. After submission, admin approval is required;
-              you&apos;ll receive your visitor code (QR + PDF) by email after approval.
-            </>
-          )}
+          {inviteSource === "kiosk_register"
+            ? s.introKioskRegister
+            : inviteSource === "kiosk_email"
+              ? s.introKioskEmail
+              : s.introAdmin}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="rounded-lg border border-blue-100 bg-blue-50/80 p-4 dark:border-blue-900/40 dark:bg-blue-950/30">
             <p className="mb-3 text-sm font-medium text-gray-900 dark:text-gray-100">
-              Who do we have the pleasure of meeting?{" "}
-              <span className="text-red-500">*</span>
+              {s.meetingHeader}{" "}
+              <span className="text-red-500">{s.requiredStar}</span>
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                  First name
+                  {s.firstName}
                 </label>
                 <Input
                   autoComplete="given-name"
-                  placeholder="First name"
+                  placeholder={s.firstName}
                   value={visitorFirstName}
                   onChange={(e) => setVisitorFirstName(e.target.value)}
                 />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                  Last name
+                  {s.lastName}
                 </label>
                 <Input
                   autoComplete="family-name"
-                  placeholder="Last name"
+                  placeholder={s.lastName}
                   value={visitorLastName}
                   onChange={(e) => setVisitorLastName(e.target.value)}
                 />
@@ -685,11 +726,11 @@ function VisitorPrecheckContent() {
             </div>
             <div className="mt-3">
               <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                What company are you with? <span className="text-red-500">*</span>
+                {s.companyLabel} <span className="text-red-500">{s.requiredStar}</span>
               </label>
               <Input
                 autoComplete="organization"
-                placeholder="Company or organization name"
+                placeholder={s.companyPlaceholder}
                 value={visitorCompanyName}
                 onChange={(e) => setVisitorCompanyName(e.target.value)}
               />
@@ -699,11 +740,11 @@ function VisitorPrecheckContent() {
           {/* Who / Whom */}
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Who are you visiting? <span className="text-red-500">*</span>
+              {s.whoVisiting} <span className="text-red-500">{s.requiredStar}</span>
             </label>
             <Select value={who} onValueChange={setWho}>
               <SelectTrigger>
-                <SelectValue placeholder="Select who you are visiting" />
+                <SelectValue placeholder={s.whoPlaceholder} />
               </SelectTrigger>
               <SelectContent className="border border-border shadow-md rounded-md text-foreground bg-background dark:bg-gray-800 dark:text-gray-100">
                 {whoOptions.map((opt) => (
@@ -719,14 +760,14 @@ function VisitorPrecheckContent() {
                   value="Other"
                   className="hover:bg-accent hover:text-accent-foreground dark:hover:bg-gray-700 dark:hover:text-white"
                 >
-                  Other
+                  {s.otherOption}
                 </SelectItem>
               </SelectContent>
             </Select>
             {who === "Other" && (
               <Input
                 className="mt-2"
-                placeholder="Enter who you are visiting"
+                placeholder={s.whoOtherPlaceholder}
                 value={whoOther}
                 onChange={(e) => setWhoOther(e.target.value)}
               />
@@ -736,11 +777,11 @@ function VisitorPrecheckContent() {
           {/* Why */}
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Reason for visit <span className="text-red-500">*</span>
+              {s.reasonVisit} <span className="text-red-500">{s.requiredStar}</span>
             </label>
             <Select value={why} onValueChange={setWhy}>
               <SelectTrigger>
-                <SelectValue placeholder="Select reason for visit" />
+                <SelectValue placeholder={s.reasonPlaceholder} />
               </SelectTrigger>
               <SelectContent className="border border-border shadow-md rounded-md text-foreground bg-background dark:bg-gray-800 dark:text-gray-100">
                 {whyOptions.map((opt) => (
@@ -748,13 +789,13 @@ function VisitorPrecheckContent() {
                     {opt.label}
                   </SelectItem>
                 ))}
-                <SelectItem value="Other">Other</SelectItem>
+                <SelectItem value="Other">{s.otherOption}</SelectItem>
               </SelectContent>
             </Select>
             {why === "Other" && (
               <Input
                 className="mt-2"
-                placeholder="Enter reason for visit"
+                placeholder={s.reasonOtherPlaceholder}
                 value={whyOther}
                 onChange={(e) => setWhyOther(e.target.value)}
               />
@@ -764,14 +805,13 @@ function VisitorPrecheckContent() {
           {/* When */}
           {inviteSource === "kiosk_register" ? (
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Visit date and time default to <strong>right now</strong> (when you open this
-              page). Change them below if needed.
+              {s.kioskRegisterDateHint}
             </p>
           ) : null}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Visit date <span className="text-red-500">*</span>
+                {s.visitDate} <span className="text-red-500">{s.requiredStar}</span>
               </label>
               <Input
                 type="date"
@@ -781,7 +821,7 @@ function VisitorPrecheckContent() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Visit time <span className="text-red-500">*</span>
+                {s.visitTime} <span className="text-red-500">{s.requiredStar}</span>
               </label>
               <Input
                 type="time"
@@ -794,7 +834,7 @@ function VisitorPrecheckContent() {
           {/* Details */}
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Additional details (optional)
+              {s.additionalDetails}
             </label>
             <textarea
               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
@@ -813,10 +853,7 @@ function VisitorPrecheckContent() {
                   checked={protocolAcknowledged}
                   onChange={(e) => setProtocolAcknowledged(e.target.checked)}
                 />
-                <span>
-                  I acknowledge read and receipt of the visitor protocol document sent with
-                  my invitation.
-                </span>
+                <span>{s.protocolCheckbox}</span>
               </label>
             </div>
           ) : null}
@@ -827,10 +864,10 @@ function VisitorPrecheckContent() {
             className="mt-2 w-full"
           >
             {isSubmitting
-              ? "Submitting..."
+              ? s.submitting
               : requestStatus === "pending"
-              ? "Update Pre-Check"
-              : "Complete Pre-Check"}
+              ? s.updatePrecheck
+              : s.completePrecheck}
           </Button>
         </form>
       </div>
@@ -839,18 +876,23 @@ function VisitorPrecheckContent() {
 }
 
 export default function VisitorPrecheckPage() {
+  const [locale, setLocale] = usePrecheckLocale();
+  const loadingStrings = getPrecheckStrings(locale);
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-          <p className="text-gray-700 dark:text-gray-200">
-            Loading visitor pre-check...
-          </p>
-        </div>
-      }
-    >
-      <VisitorPrecheckContent />
-    </Suspense>
+    <div className="relative min-h-screen">
+      <PrecheckLanguageBar locale={locale} setLocale={setLocale} />
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+            <p className="text-gray-700 dark:text-gray-200">
+              {loadingStrings.loadingFallback}
+            </p>
+          </div>
+        }
+      >
+        <VisitorPrecheckContent locale={locale} />
+      </Suspense>
+    </div>
   );
 }
 

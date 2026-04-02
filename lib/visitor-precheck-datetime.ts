@@ -8,9 +8,12 @@ const visitorDisplayTimeZone =
   process.env.VISITOR_DISPLAY_TIMEZONE ||
   "America/Denver";
 
-export function formatVisitorPrecheckWhen(ts: number): string {
+export function formatVisitorPrecheckWhen(
+  ts: number,
+  locale: string = "en-US"
+): string {
   try {
-    return new Date(ts).toLocaleString("en-US", {
+    return new Date(ts).toLocaleString(locale, {
       timeZone: visitorDisplayTimeZone,
       dateStyle: "medium",
       timeStyle: "short",
