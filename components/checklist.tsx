@@ -117,11 +117,14 @@ export default React.memo(function CheckList() {
 
   useEffect(() => {
     if (data && data.fireDrillChecks) {
+      // Only "unchecked" is excluded; legacy rows without `status` still count as accounted.
       const checkedMap = new Map(
-        data.fireDrillChecks.map((check) => [
-          check.userId,
-          { status: true, accountedBy: check.accountedBy || "Unknown User" },
-        ])
+        data.fireDrillChecks
+          .filter((check) => check.status !== "unchecked")
+          .map((check) => [
+            check.userId,
+            { status: true, accountedBy: check.accountedBy || "Unknown User" },
+          ])
       );
       setCheckedUsers(checkedMap);
     }
@@ -140,16 +143,18 @@ export default React.memo(function CheckList() {
       const accountedBy = user?.name || user?.email || "Unknown User";
       
       // Get current status from database state, not local state
-      const existingCheck = data.fireDrillChecks.find(
+      const existingCheck = data?.fireDrillChecks?.find(
         (check) => check.userId === userId
       );
-      const isCurrentlyChecked = !!existingCheck;
+      // Rows with status "unchecked" (e.g. from adv-checklist) are not "accounted" in this UI
+      const isCurrentlyChecked =
+        !!existingCheck && existingCheck.status !== "unchecked";
 
       try {
-        if (isCurrentlyChecked) {
-          // Check if current user can unaccount this person
-          const canUnaccount = user?.isAdmin || existingCheck.accountedBy === accountedBy;
-          
+        if (isCurrentlyChecked && existingCheck) {
+          const canUnaccount =
+            user?.isAdmin || existingCheck.accountedBy === accountedBy;
+
           if (!canUnaccount) {
             toast.error("CANNOT UNACCOUNT OTHERS 🛑", {
               duration: 3000,
@@ -161,20 +166,25 @@ export default React.memo(function CheckList() {
             });
             return;
           }
-          
-          // If currently checked, delete the record
+
+          await db.transact([tx.fireDrillChecks[existingCheck.id].delete()]);
+        } else if (existingCheck?.status === "unchecked") {
           await db.transact([
-            tx.fireDrillChecks[existingCheck.id].delete()
+            tx.fireDrillChecks[existingCheck.id].update({
+              status: "checked",
+              timestamp: Date.now(),
+              accountedBy: accountedBy,
+            }),
           ]);
         } else {
-          // If not checked, create a new record
           await db.transact([
             tx.fireDrillChecks[id()].update({
               drillId: drillId,
               userId: userId,
               timestamp: Date.now(),
+              status: "checked",
               accountedBy: accountedBy,
-            })
+            }),
           ]);
         }
         
