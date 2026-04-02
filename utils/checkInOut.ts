@@ -1,3 +1,7 @@
+/**
+ * Punch / check-in-out helpers. performCheckinOut only transacts `punches` on InstantDB.
+ * No visitor pre-check, Resend, or /api/visitor/precheck/* — do not add those here.
+ */
 import { tx, id } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";

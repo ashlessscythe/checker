@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { id, tx } from "@instantdb/admin";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
 import { signPrecheckToken } from "@/lib/visitor-precheck-token";
+import { notifyHostForPrecheckRequestIfConfigured } from "@/lib/visitor-precheck-notify-host";
 
 export const runtime = "nodejs";
 
@@ -139,6 +140,12 @@ export async function POST(req: Request) {
       });
     } catch (e) {
       console.error("kiosk-register: send-pending-email fetch failed", e);
+    }
+
+    try {
+      await notifyHostForPrecheckRequestIfConfigured(reqId, { precheckToken: token });
+    } catch (e) {
+      console.error("kiosk-register: notify-host failed", e);
     }
 
     return NextResponse.json({ ok: true, token });

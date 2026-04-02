@@ -1,5 +1,9 @@
 // components/CheckInOutForm.tsx
 "use client";
+//
+// Kiosk check-in / check-out path: scans `users` + `punches` and writes punches only.
+// It does not call visitor pre-check APIs, pending/host emails, or host-email throttling.
+// Keep it that way so badge flow stays fast and independent of visitor workflows.
 
 import { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { db } from "@/lib/instantdb";

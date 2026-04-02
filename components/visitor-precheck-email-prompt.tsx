@@ -28,6 +28,7 @@ interface VisitOption {
   label: string;
   isActive: boolean;
   sortOrder: number;
+  hostEmail?: string;
 }
 
 export default function VisitorPrecheckEmailPrompt() {

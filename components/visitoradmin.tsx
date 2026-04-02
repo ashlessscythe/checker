@@ -36,6 +36,94 @@ function formatApprovedDaysAgo(approvedAt: number) {
   return `approved ${diffDays} days ago`;
 }
 
+function WhoHostOptionRow({
+  opt,
+  onToggleActive,
+}: {
+  opt: {
+    id: string;
+    label: string;
+    sortOrder: number;
+    isActive: boolean;
+    hostEmail?: string;
+  };
+  onToggleActive: (optionId: string, current: boolean) => void;
+}) {
+  const [emailDraft, setEmailDraft] = useState(opt.hostEmail ?? "");
+  useEffect(() => {
+    setEmailDraft(opt.hostEmail ?? "");
+  }, [opt.id, opt.hostEmail]);
+  const [savingEmail, setSavingEmail] = useState(false);
+
+  const saveHostEmail = async () => {
+    setSavingEmail(true);
+    try {
+      await db.transact([
+        tx.visitOptions[opt.id].update({ hostEmail: emailDraft.trim() }),
+      ]);
+      toast.success("Host notify email saved.");
+    } catch (err: unknown) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "Failed to save.";
+      toast.error(message);
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
+  return (
+    <li
+      className="rounded border border-gray-200 bg-white px-3 py-3 text-sm dark:border-gray-700 dark:bg-gray-800"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="font-medium text-gray-900 dark:text-gray-100">
+            {opt.label}
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            sort: {opt.sortOrder ?? 0} • {opt.isActive ? "active" : "inactive"}
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onToggleActive(opt.id, opt.isActive)}
+        >
+          {opt.isActive ? "Disable" : "Enable"}
+        </Button>
+      </div>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="min-w-0 flex-1">
+          <label className="mb-0.5 block text-xs font-medium text-gray-600 dark:text-gray-400">
+            Notify this host (email)
+          </label>
+          <Input
+            type="email"
+            value={emailDraft}
+            onChange={(e) => setEmailDraft(e.target.value)}
+            placeholder="name@company.com — pre-check review link"
+            className="text-sm"
+          />
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            When a visitor selects this host, they get an email to approve or decline on
+            the web app.
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={savingEmail}
+          onClick={saveHostEmail}
+        >
+          {savingEmail ? "Saving…" : "Save email"}
+        </Button>
+      </div>
+    </li>
+  );
+}
+
 export default function VisitorAdmin() {
   const { data, isLoading, error } = db.useQuery({
     visitOptions: {
@@ -62,6 +150,7 @@ export default function VisitorAdmin() {
 
   const [label, setLabel] = useState("");
   const [category, setCategory] = useState<"who" | "why">("who");
+  const [newOptionHostEmail, setNewOptionHostEmail] = useState("");
   const [sortOrder, setSortOrder] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -88,6 +177,7 @@ export default function VisitorAdmin() {
     category: string;
     sortOrder: number;
     isActive: boolean;
+    hostEmail?: string;
   }>;
 
   const whoOptions = options
@@ -138,6 +228,7 @@ export default function VisitorAdmin() {
     visitDate: number;
     submittedAt: number;
     approvedAt: number;
+    approvedBy?: string;
     visitorBarcode: string;
     visitorUserId: string;
   }>;
@@ -313,6 +404,12 @@ export default function VisitorAdmin() {
       return;
     }
 
+    const hostEmailTrimmed = newOptionHostEmail.trim();
+    if (category === "who" && hostEmailTrimmed && !hostEmailTrimmed.includes("@")) {
+      toast.error("Enter a valid host notify email or leave it blank.");
+      return;
+    }
+
     setIsSaving(true);
     try {
       const optionId = id();
@@ -321,6 +418,7 @@ export default function VisitorAdmin() {
         tx.visitOptions[optionId].update({
           label: label.trim(),
           category,
+          hostEmail: category === "who" ? hostEmailTrimmed : "",
           sortOrder,
           isActive: true,
           createdAt: now,
@@ -328,6 +426,7 @@ export default function VisitorAdmin() {
       ]);
       toast.success("Visitor option added.");
       setLabel("");
+      setNewOptionHostEmail("");
       setSortOrder(0);
     } catch (err: any) {
       console.error("Failed to add visitOption", err);
@@ -597,7 +696,10 @@ export default function VisitorAdmin() {
             </label>
             <Select
               value={category}
-              onValueChange={(v) => setCategory(v as "who" | "why")}
+              onValueChange={(v) => {
+                setCategory(v as "who" | "why");
+                if (v === "why") setNewOptionHostEmail("");
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -618,6 +720,23 @@ export default function VisitorAdmin() {
               onChange={(e) => setSortOrder(parseInt(e.target.value || "0", 10))}
             />
           </div>
+          {category === "who" ? (
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Host notify email (optional)
+              </label>
+              <Input
+                type="email"
+                value={newOptionHostEmail}
+                onChange={(e) => setNewOptionHostEmail(e.target.value)}
+                placeholder="host@company.com"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                This person receives an email to approve or decline when a visitor picks
+                them in pre-check.
+              </p>
+            </div>
+          ) : null}
           <div className="sm:col-span-4">
             <Button type="submit" disabled={isSaving}>
               {isSaving ? "Saving..." : "Add Option"}
@@ -635,29 +754,13 @@ export default function VisitorAdmin() {
                 No options yet. Add some above.
               </p>
             )}
-            <ul className="space-y-2">
+            <ul className="space-y-3">
               {whoOptions.map((opt) => (
-                <li
+                <WhoHostOptionRow
                   key={opt.id}
-                  className="flex items-center justify-between rounded border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
-                >
-                  <div>
-                    <div className="font-medium text-gray-900 dark:text-gray-100">
-                      {opt.label}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      sort: {opt.sortOrder ?? 0} • {opt.isActive ? "active" : "inactive"}
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => toggleActive(opt.id, opt.isActive)}
-                  >
-                    {opt.isActive ? "Disable" : "Enable"}
-                  </Button>
-                </li>
+                  opt={opt}
+                  onToggleActive={toggleActive}
+                />
               ))}
             </ul>
           </div>
@@ -1170,6 +1273,11 @@ export default function VisitorAdmin() {
                       {req.approvedAt
                         ? new Date(req.approvedAt).toLocaleString()
                         : "—"}
+                      {req.approvedBy === "host"
+                        ? " (by host)"
+                        : req.approvedBy === "admin"
+                          ? " (by admin)"
+                          : ""}
                     </div>
                     {approvedDaysAgo ? (
                       <div className="text-xs text-gray-500 dark:text-gray-400">

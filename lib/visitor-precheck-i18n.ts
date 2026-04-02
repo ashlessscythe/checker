@@ -146,7 +146,7 @@ const en: PrecheckStrings = {
   toastAlreadyProcessed: "This request has already been processed by admin.",
   toastSavedEmail: "Saved! Waiting for admin approval (email sent).",
   toastSavedRateLimit:
-    "Saved! Waiting for admin approval. Email updates are limited to once per minute.",
+    "Saved! Waiting for approval. Your confirmation email is limited to once per minute; your host is still notified of this update.",
 };
 
 const es: PrecheckStrings = {
@@ -220,7 +220,7 @@ const es: PrecheckStrings = {
   toastAlreadyProcessed: "Esta solicitud ya fue procesada por el administrador.",
   toastSavedEmail: "¡Guardado! En espera de aprobación (correo enviado).",
   toastSavedRateLimit:
-    "¡Guardado! En espera de aprobación. Las actualizaciones por correo están limitadas a una por minuto.",
+    "¡Guardado! En espera de aprobación. Su correo de confirmación va una vez por minuto; su anfitrión sigue recibiendo aviso de esta actualización.",
 };
 
 const fr: PrecheckStrings = {
@@ -295,7 +295,7 @@ const fr: PrecheckStrings = {
   toastAlreadyProcessed: "Cette demande a déjà été traitée par l'administrateur.",
   toastSavedEmail: "Enregistré ! En attente d'approbation (e-mail envoyé).",
   toastSavedRateLimit:
-    "Enregistré ! En attente d'approbation. Les mises à jour par e-mail sont limitées à une par minute.",
+    "Enregistré ! En attente d'approbation. Votre e-mail de confirmation est limité à une par minute ; votre hôte est quand même averti de cette mise à jour.",
 };
 
 const byLocale: Record<PrecheckLocale, PrecheckStrings> = {

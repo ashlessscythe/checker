@@ -31,6 +31,7 @@ interface VisitOption {
   label: string;
   isActive: boolean;
   sortOrder: number;
+  hostEmail?: string;
 }
 
 function pad2(n: number) {
@@ -508,6 +509,16 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
           }),
         }).catch(() => null);
       }
+
+      const effectiveRequestId = existing?.id ?? reqId;
+      await fetch("/api/visitor/precheck/notify-host", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId: effectiveRequestId,
+          precheckToken: token,
+        }),
+      }).catch(() => null);
 
       setRequestStatus("pending");
       setShowEditForm(false);

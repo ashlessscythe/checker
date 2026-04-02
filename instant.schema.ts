@@ -84,6 +84,8 @@ const _schema = i.schema({
     visitOptions: i.entity({
       category: i.string(), // 'who' | 'why'
       label: i.string(),
+      /** When category is "who", optional email to notify that host for pre-check approvals. */
+      hostEmail: i.string(),
       isActive: i.boolean(),
       sortOrder: i.number(),
       createdAt: i.number(),
