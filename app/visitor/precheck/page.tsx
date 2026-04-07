@@ -152,10 +152,13 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
 
   const [whoOptions, setWhoOptions] = useState<VisitOption[]>([]);
   const [whyOptions, setWhyOptions] = useState<VisitOption[]>([]);
+  const [companyOptions, setCompanyOptions] = useState<VisitOption[]>([]);
 
   const [visitorFirstName, setVisitorFirstName] = useState("");
   const [visitorLastName, setVisitorLastName] = useState("");
   const [visitorCompanyName, setVisitorCompanyName] = useState("");
+  const [company, setCompany] = useState("");
+  const [companyOther, setCompanyOther] = useState("");
 
   const [who, setWho] = useState("");
   const [whoOther, setWhoOther] = useState("");
@@ -228,6 +231,7 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
         // Always load visit options (needed to pre-select who/why labels)
         let who: VisitOption[] = [];
         let why: VisitOption[] = [];
+        let companyOpts: VisitOption[] = [];
         try {
           const { data: optionsData } = await db.queryOnce({
             visitOptions: {
@@ -244,12 +248,16 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
           why = options
             .filter((o) => o.category === "why")
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+          companyOpts = options
+            .filter((o) => o.category === "company")
+            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
         } catch (optErr) {
           console.error("Failed loading visitOptions; proceeding.", optErr);
         }
 
         setWhoOptions(who);
         setWhyOptions(why);
+        setCompanyOptions(companyOpts);
 
         if (req) {
           setRequestStatus(req.status as any);
@@ -288,11 +296,20 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
             setVisitorLastName(
               typeof req.visitorLastName === "string" ? req.visitorLastName : ""
             );
-            setVisitorCompanyName(
-              typeof req.visitorCompanyName === "string"
-                ? req.visitorCompanyName
-                : ""
-            );
+            const existingCompany =
+              typeof req.visitorCompanyName === "string" ? req.visitorCompanyName : "";
+            const matchedCompany = companyOpts.find(
+              (o) => o.label === existingCompany
+            )?.label;
+            if (matchedCompany) {
+              setCompany(matchedCompany);
+              setCompanyOther("");
+              setVisitorCompanyName(matchedCompany);
+            } else {
+              setCompany("Other");
+              setCompanyOther(existingCompany || "");
+              setVisitorCompanyName(existingCompany || "");
+            }
             const reqProtocolRequired =
               typeof req.protocolRequired === "boolean"
                 ? req.protocolRequired
@@ -359,6 +376,14 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
     validate();
   }, [token]);
 
+  useEffect(() => {
+    if (company === "Other") {
+      setVisitorCompanyName(companyOther);
+    } else if (company) {
+      setVisitorCompanyName(company);
+    }
+  }, [company, companyOther]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail) return;
@@ -366,7 +391,8 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
 
     const fn = visitorFirstName.trim();
     const ln = visitorLastName.trim();
-    const companyTrimmed = visitorCompanyName.trim();
+    const finalCompany = company === "Other" ? companyOther : company;
+    const companyTrimmed = (finalCompany || "").trim();
     if (!fn || !ln) {
       toast.error(s.toastNameRequired);
       return;
@@ -491,6 +517,7 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
       }
 
       setEmailRateLimited(!shouldSendPendingEmail);
+      setVisitorCompanyName(companyTrimmed);
 
       // Send/update email with the latest details while waiting for approval
       if (shouldSendPendingEmail) {
@@ -743,12 +770,37 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
               <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
                 {s.companyLabel} <span className="text-red-500">{s.requiredStar}</span>
               </label>
-              <Input
-                autoComplete="organization"
-                placeholder={s.companyPlaceholder}
-                value={visitorCompanyName}
-                onChange={(e) => setVisitorCompanyName(e.target.value)}
-              />
+              <Select value={company} onValueChange={setCompany}>
+                <SelectTrigger>
+                  <SelectValue placeholder={s.companyPlaceholder} />
+                </SelectTrigger>
+                <SelectContent className="border border-border shadow-md rounded-md text-foreground bg-background dark:bg-gray-800 dark:text-gray-100">
+                  {companyOptions.map((opt) => (
+                    <SelectItem
+                      key={opt.id}
+                      value={opt.label}
+                      className="hover:bg-accent hover:text-accent-foreground dark:hover:bg-gray-700 dark:hover:text-white"
+                    >
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                  <SelectItem
+                    value="Other"
+                    className="hover:bg-accent hover:text-accent-foreground dark:hover:bg-gray-700 dark:hover:text-white"
+                  >
+                    {s.otherOption}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {company === "Other" ? (
+                <Input
+                  className="mt-2"
+                  autoComplete="organization"
+                  placeholder={s.companyPlaceholder}
+                  value={companyOther}
+                  onChange={(e) => setCompanyOther(e.target.value)}
+                />
+              ) : null}
             </div>
           </div>
 

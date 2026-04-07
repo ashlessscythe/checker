@@ -42,6 +42,8 @@ export default function VisitorPrecheckEmailPrompt() {
   const [visitorFirstName, setVisitorFirstName] = useState("");
   const [visitorLastName, setVisitorLastName] = useState("");
   const [visitorCompanyName, setVisitorCompanyName] = useState("");
+  const [company, setCompany] = useState("");
+  const [companyOther, setCompanyOther] = useState("");
   const [who, setWho] = useState("");
   const [whoOther, setWhoOther] = useState("");
   const [why, setWhy] = useState("");
@@ -66,7 +68,7 @@ export default function VisitorPrecheckEmailPrompt() {
       },
     });
 
-  const { whoOptions, whyOptions } = useMemo(() => {
+  const { whoOptions, whyOptions, companyOptions } = useMemo(() => {
     const options = (optionsData?.visitOptions || []) as VisitOption[];
     const active = options.filter((o) => o.isActive !== false);
     const who = active
@@ -75,11 +77,15 @@ export default function VisitorPrecheckEmailPrompt() {
     const why = active
       .filter((o) => o.category === "why")
       .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-    return { whoOptions: who, whyOptions: why };
+    const company = active
+      .filter((o) => o.category === "company")
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    return { whoOptions: who, whyOptions: why, companyOptions: company };
   }, [optionsData?.visitOptions]);
 
   const whoSelectMode = !optionsLoading && whoOptions.length > 0;
   const whySelectMode = !optionsLoading && whyOptions.length > 0;
+  const companySelectMode = !optionsLoading && companyOptions.length > 0;
 
   const resetAll = useCallback(() => {
     setPhase("closed");
@@ -91,6 +97,8 @@ export default function VisitorPrecheckEmailPrompt() {
     setVisitorFirstName("");
     setVisitorLastName("");
     setVisitorCompanyName("");
+    setCompany("");
+    setCompanyOther("");
     setWho("");
     setWhoOther("");
     setWhy("");
@@ -102,6 +110,15 @@ export default function VisitorPrecheckEmailPrompt() {
     setKioskProtocolRequired(false);
     setProtocolAcknowledged(false);
   }, []);
+
+  useEffect(() => {
+    if (phase !== "register") return;
+    if (company === "Other") {
+      setVisitorCompanyName(companyOther);
+    } else if (company) {
+      setVisitorCompanyName(company);
+    }
+  }, [phase, company, companyOther]);
 
   useEffect(() => {
     if (phase !== "choose") return;
@@ -216,14 +233,14 @@ export default function VisitorPrecheckEmailPrompt() {
     e.preventDefault();
     const fn = visitorFirstName.trim();
     const ln = visitorLastName.trim();
-    const company = visitorCompanyName.trim();
+    const finalCompany = (company === "Other" ? companyOther : company).trim();
     const em = regEmail.trim().toLowerCase();
 
     if (!fn || !ln) {
       toast.error("Please enter your first and last name.");
       return;
     }
-    if (!company) {
+    if (!finalCompany) {
       toast.error("Please enter your company name.");
       return;
     }
@@ -284,7 +301,7 @@ export default function VisitorPrecheckEmailPrompt() {
           email: em,
           visitorFirstName: fn,
           visitorLastName: ln,
-          visitorCompanyName: company,
+          visitorCompanyName: finalCompany,
           who: finalWho,
           reason: finalWhy,
           otherDetails: details.trim(),
@@ -440,12 +457,48 @@ export default function VisitorPrecheckEmailPrompt() {
                 autoComplete="family-name"
               />
             </div>
-            <Input
-              placeholder="Company"
-              value={visitorCompanyName}
-              onChange={(e) => setVisitorCompanyName(e.target.value)}
-              autoComplete="organization"
-            />
+            {companySelectMode ? (
+              <div>
+                <Select value={company} onValueChange={setCompany}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Company" />
+                  </SelectTrigger>
+                  <SelectContent
+                    className="z-[200] border border-border bg-background text-foreground shadow-md dark:bg-gray-800 dark:text-gray-100"
+                    position="popper"
+                  >
+                    {companyOptions.map((opt) => (
+                      <SelectItem
+                        key={opt.id}
+                        value={opt.label}
+                        className={KIOSK_SELECT_ITEM}
+                      >
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="Other" className={KIOSK_SELECT_ITEM}>
+                      Other
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {company === "Other" ? (
+                  <Input
+                    className="mt-2"
+                    placeholder="Company (if other)"
+                    value={companyOther}
+                    onChange={(e) => setCompanyOther(e.target.value)}
+                    autoComplete="organization"
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <Input
+                placeholder="Company"
+                value={visitorCompanyName}
+                onChange={(e) => setVisitorCompanyName(e.target.value)}
+                autoComplete="organization"
+              />
+            )}
             <Input
               type="email"
               placeholder="Email (for notifications)"

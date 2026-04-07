@@ -82,7 +82,7 @@ const _schema = i.schema({
       lastEmailSentAt: i.number(), // For auditing/resend logic
     }),
     visitOptions: i.entity({
-      category: i.string(), // 'who' | 'why'
+      category: i.string(), // 'who' | 'why' | 'company'
       label: i.string(),
       /** When category is "who", optional email to notify that host for pre-check approvals. */
       hostEmail: i.string(),

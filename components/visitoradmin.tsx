@@ -152,7 +152,7 @@ export default function VisitorAdmin() {
   });
 
   const [label, setLabel] = useState("");
-  const [category, setCategory] = useState<"who" | "why">("who");
+  const [category, setCategory] = useState<"who" | "why" | "company">("who");
   const [newOptionHostEmail, setNewOptionHostEmail] = useState("");
   const [sortOrder, setSortOrder] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
@@ -191,6 +191,9 @@ export default function VisitorAdmin() {
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   const whyOptions = options
     .filter((o) => o.category === "why")
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  const companyOptions = options
+    .filter((o) => o.category === "company")
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
   const pendingRequests = (data?.visitorPrecheckRequests || []) as Array<{
@@ -739,11 +742,11 @@ export default function VisitorAdmin() {
 
       <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
         <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
-          Visitor Options (Who &amp; Why)
+          Visitor Options (Who / Why / Company)
         </h2>
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
-          Manage the dropdown options for who visitors are seeing and why they&apos;re
-          visiting. These appear on the pre-check form.
+          Manage the dropdown options for who visitors are seeing, why they&apos;re visiting,
+          and which company they represent. These appear on the pre-check form.
         </p>
 
         <form onSubmit={handleAddOption} className="mb-6 grid gap-3 sm:grid-cols-4">
@@ -764,8 +767,8 @@ export default function VisitorAdmin() {
             <Select
               value={category}
               onValueChange={(v) => {
-                setCategory(v as "who" | "why");
-                if (v === "why") setNewOptionHostEmail("");
+                setCategory(v as "who" | "why" | "company");
+                if (v !== "who") setNewOptionHostEmail("");
               }}
             >
               <SelectTrigger>
@@ -774,6 +777,7 @@ export default function VisitorAdmin() {
               <SelectContent>
                 <SelectItem value="who">Who (host / whom)</SelectItem>
                 <SelectItem value="why">Why (reason for visit)</SelectItem>
+                <SelectItem value="company">Company</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -811,7 +815,7 @@ export default function VisitorAdmin() {
           </div>
         </form>
 
-        <div className="grid gap-6 sm:grid-cols-2">
+        <div className="grid gap-6 sm:grid-cols-3">
           <div>
             <h3 className="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
               Who (Host / Whom)
@@ -842,6 +846,41 @@ export default function VisitorAdmin() {
             )}
             <ul className="space-y-2">
               {whyOptions.map((opt) => (
+                <li
+                  key={opt.id}
+                  className="flex items-center justify-between rounded border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+                >
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-gray-100">
+                      {opt.label}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      sort: {opt.sortOrder ?? 0} • {opt.isActive ? "active" : "inactive"}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggleActive(opt.id, opt.isActive)}
+                  >
+                    {opt.isActive ? "Disable" : "Enable"}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
+              Company
+            </h3>
+            {companyOptions.length === 0 && (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No options yet. Add some above.
+              </p>
+            )}
+            <ul className="space-y-2">
+              {companyOptions.map((opt) => (
                 <li
                   key={opt.id}
                   className="flex items-center justify-between rounded border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
