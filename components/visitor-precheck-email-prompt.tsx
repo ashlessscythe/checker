@@ -35,8 +35,12 @@ export default function VisitorPrecheckEmailPrompt() {
   const [phase, setPhase] = useState<Phase>("closed");
   const [email, setEmail] = useState("");
   const [isSubmittingEmail, setIsSubmittingEmail] = useState(false);
-  const [emailTimeLeft, setEmailTimeLeft] = useState(EMAIL_MODAL_TIMEOUT_SECONDS);
-  const [chooseTimeLeft, setChooseTimeLeft] = useState(CHOOSE_MODAL_TIMEOUT_SECONDS);
+  const [emailTimeLeft, setEmailTimeLeft] = useState(
+    EMAIL_MODAL_TIMEOUT_SECONDS
+  );
+  const [chooseTimeLeft, setChooseTimeLeft] = useState(
+    CHOOSE_MODAL_TIMEOUT_SECONDS
+  );
 
   const [regEmail, setRegEmail] = useState("");
   const [visitorFirstName, setVisitorFirstName] = useState("");
@@ -61,12 +65,15 @@ export default function VisitorPrecheckEmailPrompt() {
 
   // Match visitor admin query shape (`$: {}`); boolean `where` on useQuery can be unreliable.
   // Filter active options client-side (same result as pre-check page).
-  const { data: optionsData, isLoading: optionsLoading, error: optionsError } =
-    db.useQuery({
-      visitOptions: {
-        $: {},
-      },
-    });
+  const {
+    data: optionsData,
+    isLoading: optionsLoading,
+    error: optionsError,
+  } = db.useQuery({
+    visitOptions: {
+      $: {},
+    },
+  });
 
   const { whoOptions, whyOptions, companyOptions } = useMemo(() => {
     const options = (optionsData?.visitOptions || []) as VisitOption[];
@@ -305,7 +312,9 @@ export default function VisitorPrecheckEmailPrompt() {
           who: finalWho,
           reason: finalWhy,
           otherDetails: details.trim(),
-          protocolAcknowledged: kioskProtocolRequired ? protocolAcknowledged : false,
+          protocolAcknowledged: kioskProtocolRequired
+            ? protocolAcknowledged
+            : false,
         }),
       });
 
@@ -363,8 +372,9 @@ export default function VisitorPrecheckEmailPrompt() {
         {phase === "choose" && (
           <div className="space-y-3">
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              Choose one: we can email you a link to open on your phone, or you can enter your
-              visit details here on this screen. Both require staff approval before check-in.
+              Choose one: we can email you a link to open on your phone, or you
+              can enter your visit details here on this screen. Both require
+              staff approval before check-in.
             </p>
             <div className="text-xs text-gray-500 dark:text-gray-400">
               Auto-closes in {Math.floor(chooseTimeLeft / 60)}:
@@ -383,9 +393,14 @@ export default function VisitorPrecheckEmailPrompt() {
               className="w-full border-green-700 text-green-800 hover:bg-green-50 dark:border-green-600 dark:text-green-200 dark:hover:bg-green-950/40"
               onClick={() => setPhase("register")}
             >
-              Register here (this tablet)
+              Register here (this device)
             </Button>
-            <Button type="button" variant="ghost" className="w-full" onClick={resetAll}>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={resetAll}
+            >
               Cancel
             </Button>
           </div>
@@ -394,8 +409,9 @@ export default function VisitorPrecheckEmailPrompt() {
         {phase === "email" && (
           <>
             <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
-              We&apos;ll send a link to complete visitor pre-check. The message is different
-              from staff-sent invitations and is meant for the lobby kiosk flow.
+              We&apos;ll send a link to complete visitor pre-check. The message
+              is different from staff-sent invitations and is meant for the
+              lobby kiosk flow.
             </p>
             <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
               Auto-closes in {Math.floor(emailTimeLeft / 60)}:
@@ -410,7 +426,11 @@ export default function VisitorPrecheckEmailPrompt() {
                 onChange={(e) => setEmail(e.target.value)}
               />
               <div className="flex gap-2">
-                <Button type="submit" disabled={isSubmittingEmail} className="flex-1">
+                <Button
+                  type="submit"
+                  disabled={isSubmittingEmail}
+                  className="flex-1"
+                >
                   {isSubmittingEmail ? "Sending..." : "Send link"}
                 </Button>
                 <Button
@@ -431,17 +451,20 @@ export default function VisitorPrecheckEmailPrompt() {
           <form onSubmit={handleRegisterSubmit} className="space-y-3">
             {optionsError ? (
               <p className="text-sm text-amber-800 dark:text-amber-200">
-                Could not load visit options. Use the text fields below, or try again.
+                Could not load visit options. Use the text fields below, or try
+                again.
               </p>
             ) : null}
             {optionsLoading ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Loading visit options… You can fill your name and email while we load.
+                Loading visit options… You can fill your name and email while we
+                load.
               </p>
             ) : null}
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              Your visit time is recorded as <strong>right now</strong> (when you submit). Use
-              the email field for approval updates and your edit link.
+              Your visit time is recorded as <strong>right now</strong> (when
+              you submit). Use the email field for approval updates and your
+              edit link.
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Input
@@ -613,14 +636,18 @@ export default function VisitorPrecheckEmailPrompt() {
                     onChange={(e) => setProtocolAcknowledged(e.target.checked)}
                   />
                   <span>
-                    I acknowledge read and receipt of the visitor protocol. A copy will be
-                    attached to your confirmation email.
+                    I acknowledge read and receipt of the visitor protocol. A
+                    copy will be attached to your confirmation email.
                   </span>
                 </label>
               </div>
             ) : null}
             <div className="flex gap-2">
-              <Button type="submit" disabled={isSubmittingRegister} className="flex-1">
+              <Button
+                type="submit"
+                disabled={isSubmittingRegister}
+                className="flex-1"
+              >
                 {isSubmittingRegister ? "Submitting..." : "Submit for approval"}
               </Button>
               <Button
