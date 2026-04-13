@@ -5,7 +5,7 @@ import React, { useMemo, useEffect, useState, useCallback, useRef } from "react"
 import { id, tx } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
 import { useAuth } from "@/hooks/authContext";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import {
   CheckActionType,
   checkInTypes,
@@ -392,16 +392,6 @@ export default React.memo(function CheckList() {
 
   return (
     <div className="w-full min-w-0 max-w-full">
-      <div className="h-16">
-        <Toaster
-          containerStyle={{
-            top: 0,
-          }}
-          toastOptions={{
-            className: "relative top-16",
-          }}
-        />
-      </div>
       <h1 className="text-xl sm:text-2xl font-bold mb-4 break-words text-gray-900 dark:text-white">
         Fire Drill Checklist - {dateTime}
       </h1>
@@ -446,7 +436,7 @@ export default React.memo(function CheckList() {
         </Select>
       </div>
       <div className="w-full min-w-0 overflow-hidden rounded-lg bg-white shadow-md dark:bg-gray-800">
-        <div className="max-h-[600px] overflow-y-auto overflow-x-hidden">
+        <div className="max-h-[600px] overflow-y-auto overflow-x-hidden rounded-b-lg bg-gray-50/80 shadow-[inset_0_2px_8px_rgba(0,0,0,0.08),inset_0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-inset ring-black/5 dark:bg-gray-950/40 dark:shadow-[inset_0_2px_12px_rgba(0,0,0,0.45),inset_0_1px_3px_rgba(0,0,0,0.35)] dark:ring-white/10">
           <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
               <tr>

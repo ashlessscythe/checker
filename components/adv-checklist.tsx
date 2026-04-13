@@ -444,7 +444,7 @@ export default React.memo(function AdvancedChecklist() {
         )}
       </div>
       <div className="w-full min-w-0 overflow-hidden rounded-lg bg-white shadow-md dark:bg-gray-800">
-        <div className="max-h-[600px] overflow-y-auto overflow-x-hidden">
+        <div className="max-h-[600px] overflow-y-auto overflow-x-hidden rounded-b-lg bg-gray-50/80 shadow-[inset_0_2px_8px_rgba(0,0,0,0.08),inset_0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-inset ring-black/5 dark:bg-gray-950/40 dark:shadow-[inset_0_2px_12px_rgba(0,0,0,0.45),inset_0_1px_3px_rgba(0,0,0,0.35)] dark:ring-white/10">
           <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
               <tr>
