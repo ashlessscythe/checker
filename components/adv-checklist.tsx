@@ -323,15 +323,15 @@ export default React.memo(function AdvancedChecklist() {
 
     return (
       <tr className={`${statusClass} ${opacityClass}`}>
-        <td className="px-6 py-4 whitespace-nowrap">
-          <div className="text-sm font-medium text-gray-900 dark:text-white">
+        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
+          <div className="break-words text-sm font-medium text-gray-900 dark:text-white">
             {user.name}
           </div>
         </td>
-        <td className="px-6 py-4 whitespace-nowrap">
+        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
           <button
             onClick={() => onCheck(user.id)}
-            className={`px-3 py-1 rounded-full text-sm font-semibold ${
+            className={`max-w-full whitespace-normal rounded-full px-2 py-1 text-left text-xs font-semibold sm:px-3 sm:text-sm ${
               user.isCheckedIn
                 ? isChecked
                   ? "bg-green-200 text-green-800 dark:bg-green-600 dark:text-green-100"
@@ -346,8 +346,8 @@ export default React.memo(function AdvancedChecklist() {
               : "Checked Out"}
           </button>
         </td>
-        <td className="px-6 py-4 whitespace-nowrap">
-          <div className="text-sm text-gray-500 dark:text-gray-300">
+        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
+          <div className="break-words text-xs text-gray-500 dark:text-gray-300 sm:text-sm">
             {user.isOld ? `${user.timeAgoString} (old)` : user.timeAgoString}
             {user.isCheckedIn ? " (In)" : " (Out)"}
           </div>
@@ -380,11 +380,11 @@ export default React.memo(function AdvancedChecklist() {
   if (error) return <div>Error: {error.message}</div>;
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">
+    <div className="w-full min-w-0 max-w-full">
+      <h1 className="mb-4 break-words text-xl font-bold sm:text-2xl">
         Advanced Checklist - {dateTime}
       </h1>
-      <div className="mb-4 flex flex-wrap space-x-4">
+      <div className="mb-4 flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-4 sm:gap-y-2">
         <input
           type="text"
           placeholder="Filter by name"
@@ -392,10 +392,10 @@ export default React.memo(function AdvancedChecklist() {
           onChange={(e) =>
             setFilters((prev) => ({ ...prev, name: e.target.value }))
           }
-          className="px-2 py-1 border rounded mb-2"
+          className="min-w-0 w-full border px-2 py-1 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded sm:max-w-xs"
         />
 
-        <div className="flex items-center space-x-4 mb-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
           <span className="font-semibold mr-2">Check Status:</span>
           {[
             { label: "All", value: "all" },
@@ -421,7 +421,7 @@ export default React.memo(function AdvancedChecklist() {
         </div>
 
         {filters.checkStatus === "in" && (
-          <div className="flex items-center space-x-4 mb-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             <span className="font-semibold mr-2">Accounted Status:</span>
             {["all", "accounted", "unaccounted"].map((status) => (
               <label key={status} className="flex items-center">
@@ -443,26 +443,24 @@ export default React.memo(function AdvancedChecklist() {
           </div>
         )}
       </div>
-      <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-        <div className="max-h-[600px] overflow-y-auto">
-          {" "}
-          {/* Adjust max-height as needed */}
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+      <div className="w-full min-w-0 overflow-hidden rounded-lg bg-white shadow-md dark:bg-gray-800">
+        <div className="max-h-[600px] overflow-y-auto overflow-x-hidden">
+          <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
               <tr>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                  className="w-[34%] cursor-pointer px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300 sm:w-[32%] sm:px-6 sm:py-3"
                   onClick={() => requestSort("name")}
                 >
                   Name{" "}
                   {sortConfig?.key === "name" &&
                     (sortConfig.direction === "asc" ? "↑" : "↓")}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="w-[38%] px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300 sm:w-[36%] sm:px-6 sm:py-3">
                   Status
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                  className="w-[28%] cursor-pointer px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300 sm:w-[32%] sm:px-6 sm:py-3"
                   onClick={() => requestSort("hoursAgo")}
                 >
                   Last Action{" "}
@@ -485,8 +483,8 @@ export default React.memo(function AdvancedChecklist() {
           </table>
         </div>
       </div>
-      <div className="mt-4 flex flex-col sm:flex-row justify-between items-center">
-        <span className="font-bold mb-2 sm:mb-0">
+      <div className="mt-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="min-w-0 break-words text-sm font-bold sm:mb-0 sm:text-base">
           Accounted: {checkedUsers.size} /{" "}
           {filteredAndSortedUsers.filter((u) => u.isCheckedIn).length} (In) |
           Total: {filteredAndSortedUsers.length}

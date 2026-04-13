@@ -64,15 +64,15 @@ function HomeContent() {
 
               {showChecklist && (
                 <div className="mt-3 rounded-lg border border-sky-200/70 bg-white/70 p-3 shadow-sm dark:border-sky-700/70 dark:bg-gray-800/50 sm:p-4 md:ml-4">
-                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <Suspense fallback={<div>Loading checklist...</div>}>
+                    {React.createElement(getChecklist(isAdvanced))}
+                  </Suspense>
+                  <div className="mt-4 flex flex-col gap-2 border-t border-sky-200/60 pt-4 dark:border-sky-700/50 sm:flex-row sm:items-center sm:gap-3">
                     <span className="font-semibold text-gray-900 dark:text-white">
                       Show Advanced Checklist
                     </span>
                     <Switch isChecked={isAdvanced} onChange={setIsAdvanced} />
                   </div>
-                  <Suspense fallback={<div>Loading checklist...</div>}>
-                    {React.createElement(getChecklist(isAdvanced))}
-                  </Suspense>
                 </div>
               )}
 

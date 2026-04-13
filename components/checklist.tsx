@@ -336,15 +336,15 @@ export default React.memo(function CheckList() {
       ${isPending ? "opacity-60 pointer-events-none" : ""}
     `}
       >
-        <td className="px-6 py-4 whitespace-nowrap">
-          <div className="text-sm font-medirm text-gray-900 dark:text-white">
+        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
+          <div className="break-words text-sm font-medirm text-gray-900 dark:text-white">
             {user.name}
           </div>
         </td>
-        <td className="px-6 py-4 whitespace-nowrap">
+        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
           <button
             onClick={() => onCheck(user.id)}
-            className={`px-3 py-1 rounded-full text-sm font-semibold ${
+            className={`max-w-full whitespace-normal rounded-full px-2 py-1 text-left text-xs font-semibold sm:px-3 sm:text-sm ${
               isChecked
                 ? "bg-green-200 text-green-800 dark:bg-green-600 dark:text-green-100"
                 : "bg-red-200 text-red-800 dark:bg-red-600 dark:text-red-100"
@@ -358,8 +358,8 @@ export default React.memo(function CheckList() {
                 : "Unaccounted"}
           </button>
         </td>
-        <td className="px-6 py-4 whitespace-nowrap">
-          <div className="text-sm text-gray-500 dark:text-gray-300">
+        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
+          <div className="break-words text-xs text-gray-500 dark:text-gray-300 sm:text-sm">
             {isOld ? `${user.timeAgoString} (old)` : user.timeAgoString}
           </div>
         </td>
@@ -391,7 +391,7 @@ export default React.memo(function CheckList() {
   if (error) return <div className="text-red-600 dark:text-red-400">Error: {error.message}</div>;
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="w-full min-w-0 max-w-full">
       <div className="h-16">
         <Toaster
           containerStyle={{
@@ -402,10 +402,10 @@ export default React.memo(function CheckList() {
           }}
         />
       </div>
-      <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
+      <h1 className="text-xl sm:text-2xl font-bold mb-4 break-words text-gray-900 dark:text-white">
         Fire Drill Checklist - {dateTime}
       </h1>
-      <div className="mb-4 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+      <div className="mb-4 flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <input
           type="text"
           placeholder="Filter by name"
@@ -413,14 +413,14 @@ export default React.memo(function CheckList() {
           onChange={(e) =>
             setFilters((prev) => ({ ...prev, name: e.target.value }))
           }
-          className="px-2 py-1 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
+          className="min-w-0 w-full px-2 py-1 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600 sm:max-w-xs"
         />
         <select
           value={filters.status}
           onChange={(e) =>
             setFilters((prev) => ({ ...prev, status: e.target.value }))
           }
-          className="px-2 py-1 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
+          className="w-full px-2 py-1 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600 sm:w-auto sm:min-w-[8rem]"
         >
           <option value="all">All</option>
           <option value="checked">Checked</option>
@@ -432,7 +432,7 @@ export default React.memo(function CheckList() {
             setFilters((prev) => ({ ...prev, deptId: value }))
           }
         >
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-full sm:w-[200px]">
             <SelectValue placeholder="Filter by department" />
           </SelectTrigger>
           <SelectContent className="bg-white dark:bg-gray-800">
@@ -445,26 +445,24 @@ export default React.memo(function CheckList() {
           </SelectContent>
         </Select>
       </div>
-      <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-        <div className="max-h-[600px] overflow-y-auto">
-          {" "}
-          {/* Adjust max-height as needed */}
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+      <div className="w-full min-w-0 overflow-hidden rounded-lg bg-white shadow-md dark:bg-gray-800">
+        <div className="max-h-[600px] overflow-y-auto overflow-x-hidden">
+          <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
               <tr>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                  className="w-[34%] px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300 sm:w-[32%] sm:px-6 sm:py-3 cursor-pointer"
                   onClick={() => requestSort("name")}
                 >
                   Name{" "}
                   {sortConfig?.key === "name" &&
                     (sortConfig.direction === "asc" ? "↑" : "↓")}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="w-[38%] px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300 sm:w-[36%] sm:px-6 sm:py-3">
                   Status
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                  className="w-[28%] px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300 sm:w-[32%] sm:px-6 sm:py-3 cursor-pointer"
                   onClick={() => requestSort("hoursAgo")} // Sorting by checked-in time
                 >
                   Checked In{" "}
@@ -488,8 +486,8 @@ export default React.memo(function CheckList() {
           </table>
         </div>
       </div>
-      <div className="mt-4 flex flex-col sm:flex-row justify-between items-center">
-        <span className="font-bold mb-2 sm:mb-0">
+      <div className="mt-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="min-w-0 break-words text-sm font-bold sm:mb-0 sm:text-base">
           Accounted: {checkedUsers.size} / {filteredAndSortedUsers.length}
           <span className="text-gray-500 dark:text-gray-400 ml-2">
             {" - "}
