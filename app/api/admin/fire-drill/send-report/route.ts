@@ -7,6 +7,38 @@ const resendApiKey = process.env.RESEND_API_KEY;
 const resendFromEmail = process.env.RESEND_FROM_EMAIL;
 const resend = resendApiKey && resendFromEmail ? new Resend(resendApiKey) : null;
 
+/**
+ * IANA zone for fire-drill email / CSV timestamps.
+ * Prefer explicit override, then the same display TZ as visitor UI (`NEXT_PUBLIC_VISITOR_DISPLAY_TIMEZONE`),
+ * then host `TZ`, else UTC.
+ */
+function reportTimeZone(): string {
+  return (
+    process.env.FIRE_DRILL_REPORT_TIMEZONE ||
+    process.env.NEXT_PUBLIC_VISITOR_DISPLAY_TIMEZONE ||
+    process.env.TZ ||
+    "UTC"
+  );
+}
+
+function formatReportInstant(ms: number): string {
+  const timeZone = reportTimeZone();
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZoneName: "short",
+    }).format(new Date(ms));
+  } catch {
+    return new Date(ms).toISOString();
+  }
+}
+
 function escapeCsv(value: unknown): string {
   const s = String(value ?? "");
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -166,7 +198,7 @@ export async function POST(req: Request) {
           email: u?.email ?? "",
           status: a ? "Accounted" : "Unaccounted",
           accountedBy: a?.accountedByName ?? "",
-          accountedAt: a?.timestamp ? new Date(a.timestamp).toLocaleString() : "",
+          accountedAt: a?.timestamp ? formatReportInstant(a.timestamp) : "",
         };
       })
       .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)));
@@ -178,11 +210,12 @@ export async function POST(req: Request) {
     const unaccountedCount = Math.max(0, presentCount - accountedCount);
 
     const startedAt = session?.startedAt
-      ? new Date(session.startedAt).toLocaleString()
+      ? formatReportInstant(session.startedAt)
       : "";
-    const completedAt = session?.completedAt
-      ? new Date(session.completedAt).toLocaleString()
-      : "";
+    const completedAt =
+      session?.completedAt && session.completedAt > 0
+        ? formatReportInstant(session.completedAt)
+        : "";
 
     const subject =
       (subjectOverride && subjectOverride.trim()) ||
@@ -223,7 +256,7 @@ export async function POST(req: Request) {
       </div>
 
       <div style="margin-top:14px;font-size:12px;color:#64748b;">
-        CSV attachment included.
+        CSV attachment included. All times use the <span style="font-family:ui-monospace,monospace;">${reportTimeZone()}</span> time zone.
       </div>
       ${buildHtmlTable(rows)}
       <div style="margin-top:16px;font-size:12px;color:#94a3b8;">

@@ -36,11 +36,6 @@ interface UserWithStatus extends User {
 }
 
 export default React.memo(function AdvancedChecklist() {
-  const [checkedUsers, setCheckedUsers] = useState<
-    Map<string, { status: boolean; accountedBy: string }>
-  >(new Map());
-  const [activeSessionId, setActiveSessionId] = useState<string>("");
-  const [configRowId, setConfigRowId] = useState<string>("");
   const [isClient, setIsClient] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [dateTime, setDateTime] = useState(new Date().toLocaleString());
@@ -74,49 +69,77 @@ export default React.memo(function AdvancedChecklist() {
     return () => clearInterval(timer);
   }, []);
 
-  const { data, isLoading, error } = db.useQuery({
-    users: {
-      $: {
-        where: {}
-      }
-    },
-    punches: {
-      $: {
-        where: {},
-        order: {
-          serverCreatedAt: "desc"
-        }
-      }
-    },
-    fireDrillConfig: {
-      $: {
-        where: { key: FIRE_DRILL_CONFIG_KEY }
-      }
-    },
-    fireDrillSessions: {
-      $: activeSessionId ? { where: { id: activeSessionId } } : { where: { id: "__none__" } }
-    },
-    fireDrillSessionParticipants: {
-      $: activeSessionId
-        ? { where: { sessionId: activeSessionId } }
-        : { where: { sessionId: "__none__" } }
-    },
-    fireDrillAccounts: {
-      $: activeSessionId
-        ? { where: { sessionId: activeSessionId } }
-        : { where: { sessionId: "__none__" } }
-    }
-  });
+  const coreQuery = useMemo(
+    () => ({
+      users: { $: { where: {} } },
+      punches: {
+        $: {
+          where: {},
+          order: { serverCreatedAt: "desc" as const },
+        },
+      },
+      fireDrillConfig: {
+        $: { where: { key: FIRE_DRILL_CONFIG_KEY } },
+      },
+    }),
+    []
+  );
 
-  useEffect(() => {
-    const row = data?.fireDrillConfig?.[0];
-    setConfigRowId(row?.id || "");
-    const nextActiveSessionId = row?.activeSessionId || "";
-    setActiveSessionId(nextActiveSessionId);
-  }, [data?.fireDrillConfig]);
+  const {
+    data: coreData,
+    isLoading: coreIsLoading,
+    error: coreError,
+  } = db.useQuery(coreQuery);
+
+  const activeSessionId =
+    coreData?.fireDrillConfig?.[0]?.activeSessionId ?? "";
+
+  const drillQuery = useMemo(() => {
+    const none = "__none__";
+    const sid = activeSessionId;
+    const sessionFilter = sid ? { where: { id: sid } } : { where: { id: none } };
+    const scoped = { where: { sessionId: sid || none } };
+    return {
+      fireDrillSessions: { $: sessionFilter },
+      fireDrillSessionParticipants: { $: scoped },
+      fireDrillAccounts: { $: scoped },
+    };
+  }, [activeSessionId]);
+
+  const {
+    data: drillData,
+    isLoading: drillIsLoading,
+    error: drillError,
+  } = db.useQuery(drillQuery);
+
+  const data = useMemo(() => {
+    if (coreData == null && drillData == null) return undefined;
+    return { ...(coreData || {}), ...(drillData || {}) } as typeof coreData &
+      typeof drillData;
+  }, [coreData, drillData]);
+
+  const drillNeeded = Boolean(activeSessionId);
+  const isLoading = coreIsLoading || (drillNeeded && drillIsLoading);
+  const error = coreError || drillError;
+
+  const checkedUsers = useMemo(() => {
+    const accounts = data?.fireDrillAccounts;
+    if (!accounts?.length) {
+      return new Map<string, { status: boolean; accountedBy: string }>();
+    }
+    return new Map(
+      accounts
+        .filter((a) => a.status === "accounted")
+        .map((a) => [
+          a.userId,
+          { status: true, accountedBy: a.accountedByName || "Unknown User" },
+        ])
+    );
+  }, [data?.fireDrillAccounts]);
 
   const ensureConfigRow = useCallback(async (): Promise<string> => {
-    if (configRowId) return configRowId;
+    const existingId = data?.fireDrillConfig?.[0]?.id;
+    if (existingId) return existingId;
     const newId = id();
     await db.transact([
       tx.fireDrillConfig[newId].update({
@@ -126,23 +149,7 @@ export default React.memo(function AdvancedChecklist() {
       }),
     ]);
     return newId;
-  }, [configRowId]);
-
-  useEffect(() => {
-    if (!data?.fireDrillAccounts) {
-      setCheckedUsers(new Map());
-      return;
-    }
-    const checkedMap = new Map(
-      data.fireDrillAccounts
-        .filter((a) => a.status === "accounted")
-        .map((a) => [
-          a.userId,
-          { status: true, accountedBy: a.accountedByName || "Unknown User" },
-        ])
-    );
-    setCheckedUsers(checkedMap);
-  }, [data?.fireDrillAccounts]);
+  }, [data?.fireDrillConfig]);
 
   const handleCheckUser = useCallback(
     async (userId: string) => {
@@ -181,8 +188,10 @@ export default React.memo(function AdvancedChecklist() {
     [authUser, activeSessionId, data]
   );
 
-  const handleStartDrill = useCallback(async () => {
-    if (!authUser?.isAdmin) return;
+  const [showStartDrillConfirm, setShowStartDrillConfirm] = useState(false);
+
+  const performStartDrill = useCallback(async () => {
+    if (!authUser?.isAdmin && !authUser?.isAuth) return;
     if (!data?.users || !data?.punches) return;
     if (activeSessionId) return;
 
@@ -452,26 +461,86 @@ export default React.memo(function AdvancedChecklist() {
 
   if (!activeSessionId) {
     return (
-      <div className="w-full min-w-0 max-w-full space-y-4">
-        <h1 className="mb-2 break-words text-xl font-bold sm:text-2xl">
-          Fire Drill
-        </h1>
-        <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-900 shadow-sm dark:bg-yellow-900/30 dark:text-yellow-100">
-          No active drill session.
-        </div>
-        {authUser?.isAdmin ? (
-          <button
-            onClick={handleStartDrill}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
+      <>
+        {showStartDrillConfirm && authUser?.isAuth && !authUser?.isAdmin && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="adv-start-drill-title"
+            aria-describedby="adv-start-drill-desc"
           >
-            Start Drill
-          </button>
-        ) : (
-          <div className="text-sm text-gray-600 dark:text-gray-300">
-            Ask an admin to start a drill.
+            <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-lg dark:bg-gray-800 dark:ring-1 dark:ring-white/10">
+              <h2
+                id="adv-start-drill-title"
+                className="text-lg font-semibold text-gray-900 dark:text-white"
+              >
+                Start a fire drill?
+              </h2>
+              <p
+                id="adv-start-drill-desc"
+                className="mt-3 text-sm text-gray-600 dark:text-gray-300"
+              >
+                Normally an <strong>administrator</strong> starts a fire drill.
+                Starting one here creates an <strong>active drill session</strong>{" "}
+                for this kiosk and any other devices connected to the system, until
+                an admin completes it.
+              </p>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                Only continue if you are supposed to run this drill right now.
+              </p>
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowStartDrillConfirm(false)}
+                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowStartDrillConfirm(false);
+                    await performStartDrill();
+                  }}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                >
+                  Yes, start fire drill
+                </button>
+              </div>
+            </div>
           </div>
         )}
-      </div>
+        <div className="w-full min-w-0 max-w-full space-y-4">
+          <h1 className="mb-2 break-words text-xl font-bold sm:text-2xl">
+            Fire Drill
+          </h1>
+          <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-900 shadow-sm dark:bg-yellow-900/30 dark:text-yellow-100">
+            No active drill session.
+          </div>
+          {authUser?.isAdmin ? (
+            <button
+              type="button"
+              onClick={() => void performStartDrill()}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
+            >
+              Start Drill
+            </button>
+          ) : authUser?.isAuth ? (
+            <button
+              type="button"
+              onClick={() => setShowStartDrillConfirm(true)}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
+            >
+              Start Drill
+            </button>
+          ) : (
+            <div className="text-sm text-gray-600 dark:text-gray-300">
+              Ask an admin to start a drill.
+            </div>
+          )}
+        </div>
+      </>
     );
   }
 
@@ -585,12 +654,23 @@ export default React.memo(function AdvancedChecklist() {
           {filteredAndSortedUsers.filter((u) => u.isCheckedIn).length} (In) |
           Total: {filteredAndSortedUsers.length}
         </span>
-        <button
-          onClick={handleCompleteDrill}
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
-        >
-          Complete Drill
-        </button>
+        {authUser?.isAdmin ? (
+          <button
+            onClick={handleCompleteDrill}
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
+          >
+            Complete Drill
+          </button>
+        ) : authUser?.isAuth ? (
+          <button
+            type="button"
+            disabled
+            className="cursor-not-allowed bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded w-full sm:w-auto dark:bg-gray-700 dark:text-gray-200"
+            title="Admin only"
+          >
+            Complete Drill (admin only)
+          </button>
+        ) : null}
       </div>
     </div>
   );
