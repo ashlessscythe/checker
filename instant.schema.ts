@@ -56,6 +56,57 @@ const _schema = i.schema({
       totalChecked: i.number(),
       totalPresent: i.number(),
     }),
+    /**
+     * Fire drill v2 (session-based).
+     *
+     * Legacy entities (`fireDrillChecks`, `firedrills`) are kept for backwards compatibility.
+     */
+    fireDrillConfig: i.entity({
+      /**
+       * Singleton lookup key.
+       * Instant entity IDs must be UUIDs, so we store a unique key instead of forcing a fixed id.
+       */
+      key: i.string().unique().indexed(),
+      activeSessionId: i.string(),
+      updatedAt: i.number(),
+    }),
+    fireDrillSessions: i.entity({
+      status: i.string(), // 'active' | 'completed' | 'cancelled'
+      startedAt: i.number().indexed(),
+      completedAt: i.number().indexed(),
+      startedByUserId: i.string().indexed(),
+      completedByUserId: i.string().indexed(),
+      notes: i.string(),
+      presentSnapshotAtStart: i.boolean(),
+    }),
+    fireDrillSessionParticipants: i.entity({
+      sessionId: i.string().indexed(),
+      userId: i.string().indexed(),
+      isPresentAtStart: i.boolean(),
+      presentReason: i.string(), // 'checked_in' | 'forced' | 'unknown'
+    }),
+    fireDrillAccounts: i.entity({
+      sessionId: i.string().indexed(),
+      userId: i.string().indexed(),
+      status: i.string(), // 'accounted' | 'unaccounted'
+      timestamp: i.number().indexed(),
+      accountedByUserId: i.string().indexed(),
+      accountedByName: i.string(),
+    }),
+    fireDrillNotificationRecipients: i.entity({
+      email: i.string().unique().indexed(),
+      name: i.string(),
+      isActive: i.boolean(),
+      createdAt: i.number(),
+    }),
+    fireDrillReportSends: i.entity({
+      sessionId: i.string().indexed(),
+      sentAt: i.number().indexed(),
+      sentByUserId: i.string().indexed(),
+      recipientEmails: i.any(), // string[]
+      subject: i.string(),
+      summary: i.any(),
+    }),
     // Visitor pre-check related entities
     visitors: i.entity({
       name: i.string(),
@@ -181,6 +232,66 @@ const _schema = i.schema({
         on: "fireDrillChecks",
         has: "one",
         label: "user",
+      },
+    },
+    fireDrillSessionParticipantsLink: {
+      forward: {
+        on: "fireDrillSessions",
+        has: "many",
+        label: "participants",
+      },
+      reverse: {
+        on: "fireDrillSessionParticipants",
+        has: "one",
+        label: "session",
+      },
+    },
+    fireDrillSessionAccountsLink: {
+      forward: {
+        on: "fireDrillSessions",
+        has: "many",
+        label: "accounts",
+      },
+      reverse: {
+        on: "fireDrillAccounts",
+        has: "one",
+        label: "session",
+      },
+    },
+    fireDrillAccountUserLink: {
+      forward: {
+        on: "users",
+        has: "many",
+        label: "fireDrillAccounts",
+      },
+      reverse: {
+        on: "fireDrillAccounts",
+        has: "one",
+        label: "user",
+      },
+    },
+    fireDrillParticipantUserLink: {
+      forward: {
+        on: "users",
+        has: "many",
+        label: "fireDrillParticipants",
+      },
+      reverse: {
+        on: "fireDrillSessionParticipants",
+        has: "one",
+        label: "user",
+      },
+    },
+    fireDrillSessionReportSendsLink: {
+      forward: {
+        on: "fireDrillSessions",
+        has: "many",
+        label: "reportSends",
+      },
+      reverse: {
+        on: "fireDrillReportSends",
+        has: "one",
+        label: "session",
       },
     },
   },

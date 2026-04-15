@@ -11,6 +11,8 @@ import {
   checkOutTypes,
 } from "@/utils/checkInOut";
 
+const FIRE_DRILL_CONFIG_KEY = "singleton";
+
 interface User {
   id: string;
   name: string;
@@ -37,7 +39,8 @@ export default React.memo(function AdvancedChecklist() {
   const [checkedUsers, setCheckedUsers] = useState<
     Map<string, { status: boolean; accountedBy: string }>
   >(new Map());
-  const [drillId, setDrillId] = useState<string>("");
+  const [activeSessionId, setActiveSessionId] = useState<string>("");
+  const [configRowId, setConfigRowId] = useState<string>("");
   const [isClient, setIsClient] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [dateTime, setDateTime] = useState(new Date().toLocaleString());
@@ -61,19 +64,9 @@ export default React.memo(function AdvancedChecklist() {
   const { user } = useAuth();
   const authUser = user;
 
-  const generateNewDrillId = useCallback(() => {
-    const today = new Date();
-    const newDrillId =
-      today.getFullYear().toString() +
-      (today.getMonth() + 1).toString().padStart(2, "0") +
-      today.getDate().toString().padStart(2, "0");
-    setDrillId(newDrillId);
-  }, []);
-
   useEffect(() => {
     setIsClient(true);
-    generateNewDrillId();
-  }, [generateNewDrillId]);
+  }, []);
 
   // Update current time every minute
   useEffect(() => {
@@ -95,99 +88,177 @@ export default React.memo(function AdvancedChecklist() {
         }
       }
     },
-    fireDrillChecks: {
+    fireDrillConfig: {
       $: {
-        where: { drillId: drillId }
+        where: { key: FIRE_DRILL_CONFIG_KEY }
       }
+    },
+    fireDrillSessions: {
+      $: activeSessionId ? { where: { id: activeSessionId } } : { where: { id: "__none__" } }
+    },
+    fireDrillSessionParticipants: {
+      $: activeSessionId
+        ? { where: { sessionId: activeSessionId } }
+        : { where: { sessionId: "__none__" } }
+    },
+    fireDrillAccounts: {
+      $: activeSessionId
+        ? { where: { sessionId: activeSessionId } }
+        : { where: { sessionId: "__none__" } }
     }
   });
 
   useEffect(() => {
-    if (data && data.fireDrillChecks) {
-      const checkedMap = new Map(
-        data.fireDrillChecks
-          .filter((check) => check.status === "checked")
-          .map((check) => [
-            check.userId,
-            { status: true, accountedBy: check.accountedBy || "Unknown User" },
-          ])
-      );
-      setCheckedUsers(checkedMap);
+    const row = data?.fireDrillConfig?.[0];
+    setConfigRowId(row?.id || "");
+    const nextActiveSessionId = row?.activeSessionId || "";
+    setActiveSessionId(nextActiveSessionId);
+  }, [data?.fireDrillConfig]);
+
+  const ensureConfigRow = useCallback(async (): Promise<string> => {
+    if (configRowId) return configRowId;
+    const newId = id();
+    await db.transact([
+      tx.fireDrillConfig[newId].update({
+        key: FIRE_DRILL_CONFIG_KEY,
+        activeSessionId: "",
+        updatedAt: Date.now(),
+      }),
+    ]);
+    return newId;
+  }, [configRowId]);
+
+  useEffect(() => {
+    if (!data?.fireDrillAccounts) {
+      setCheckedUsers(new Map());
+      return;
     }
-  }, [data]);
+    const checkedMap = new Map(
+      data.fireDrillAccounts
+        .filter((a) => a.status === "accounted")
+        .map((a) => [
+          a.userId,
+          { status: true, accountedBy: a.accountedByName || "Unknown User" },
+        ])
+    );
+    setCheckedUsers(checkedMap);
+  }, [data?.fireDrillAccounts]);
 
   const handleCheckUser = useCallback(
     async (userId: string) => {
+      if (!activeSessionId) return;
       const user = authUser;
-      const accountedBy = user?.name || user?.email || "Unknown User";
-      const isCurrentlyChecked =
-        checkedUsers.has(userId) && checkedUsers.get(userId)!.status;
-      const newStatus = isCurrentlyChecked ? "unchecked" : "checked";
+      const accountedByName = user?.name || user?.email || "Unknown User";
+      const accountedByUserId = user?.id || "";
+      const existingAccount = data.fireDrillAccounts?.find(
+        (a) => a.sessionId === activeSessionId && a.userId === userId
+      );
+      const isCurrentlyChecked = existingAccount?.status === "accounted";
 
       try {
-        // Find existing check for this user in this drill
-        const existingCheck = data.fireDrillChecks.find(
-          (check) => check.userId === userId
-        );
+        if (isCurrentlyChecked && existingAccount) {
+          const canUnaccount =
+            user?.isAdmin || existingAccount.accountedByUserId === accountedByUserId;
+          if (!canUnaccount) return;
+        }
 
+        const rowId = existingAccount?.id || id();
         await db.transact([
-          existingCheck
-            ? tx.fireDrillChecks[existingCheck.id].update({
-                status: newStatus,
-                timestamp: Date.now(),
-                accountedBy: accountedBy,
-              })
-            : tx.fireDrillChecks[id()].update({
-                drillId: drillId,
-                userId: userId,
-                timestamp: Date.now(),
-                status: newStatus,
-                accountedBy: accountedBy,
-              }),
+          tx.fireDrillAccounts[rowId].update({
+            sessionId: activeSessionId,
+            userId,
+            status: isCurrentlyChecked ? "unaccounted" : "accounted",
+            timestamp: Date.now(),
+            accountedByName,
+            accountedByUserId,
+          })
         ]);
 
-        setCheckedUsers((prev) => {
-          const newCheckedUsers = new Map(prev);
-          if (isCurrentlyChecked) {
-            newCheckedUsers.delete(userId);
-          } else {
-            newCheckedUsers.set(userId, { status: true, accountedBy });
-          }
-          return newCheckedUsers;
-        });
       } catch (error) {
         console.error("Error saving fire drill check:", error);
       }
     },
-    [authUser, checkedUsers, drillId, data]
+    [authUser, activeSessionId, data]
   );
 
-  const handleCompleteDrill = useCallback(async () => {
-    if (!data || !data.users) return;
+  const handleStartDrill = useCallback(async () => {
+    if (!authUser?.isAdmin) return;
+    if (!data?.users || !data?.punches) return;
+    if (activeSessionId) return;
 
-    const checkedInUsers = data.users.filter((user) => {
-      const userPunch = data.punches?.find(punch => punch.userId === user.id);
-      return userPunch?.type === "checkin";
-    });
+    const presentUsers = data.users
+      .filter((u) => {
+        const lastPunch = data.punches.find((p) => p.userId === u.id);
+        return lastPunch && checkInTypes.has(lastPunch.type as CheckActionType);
+      })
+      .filter((u) => {
+        const lastPunch = data.punches.find((p) => p.userId === u.id);
+        const checkInTime = lastPunch ? new Date(lastPunch.timestamp).getTime() : 0;
+        const hoursAgo = (currentTime - checkInTime) / (1000 * 60 * 60);
+        return hoursAgo < IS_OLD_HOURS;
+      });
+
+    const newSessionId = id();
+    const configId = await ensureConfigRow();
+    const mutations: any[] = [
+      tx.fireDrillSessions[newSessionId].update({
+        status: "active",
+        startedAt: Date.now(),
+        completedAt: 0,
+        startedByUserId: authUser?.id || "",
+        completedByUserId: "",
+        notes: "",
+        presentSnapshotAtStart: true,
+      }),
+      tx.fireDrillConfig[configId].update({
+        activeSessionId: newSessionId,
+        updatedAt: Date.now(),
+      }),
+    ];
+
+    for (const u of presentUsers) {
+      mutations.push(
+        tx.fireDrillSessionParticipants[id()].update({
+          sessionId: newSessionId,
+          userId: u.id,
+          isPresentAtStart: true,
+          presentReason: "checked_in",
+        })
+      );
+    }
 
     try {
-      const newDrillRecordId = id(); // Generate a new ID for the fire drill record
+      await db.transact(mutations);
+      alert("Fire drill started!");
+    } catch (error) {
+      console.error("Error starting fire drill:", error);
+      alert("Error starting fire drill. Please try again.");
+    }
+  }, [authUser, data, activeSessionId, currentTime, IS_OLD_HOURS, ensureConfigRow]);
+
+  const handleCompleteDrill = useCallback(async () => {
+    if (!authUser?.isAdmin) return;
+    if (!activeSessionId) return;
+
+    try {
+      const configId = await ensureConfigRow();
       await db.transact([
-        tx.firedrills[newDrillRecordId].update({
-          drillId: drillId,
+        tx.fireDrillSessions[activeSessionId].update({
+          status: "completed",
           completedAt: Date.now(),
-          totalChecked: checkedUsers.size,
-          totalPresent: checkedInUsers.length,
+          completedByUserId: authUser?.id || "",
+        }),
+        tx.fireDrillConfig[configId].update({
+          activeSessionId: "",
+          updatedAt: Date.now(),
         }),
       ]);
-      alert("Fire drill completed and saved!");
-      generateNewDrillId(); // Generate a new drill ID for the next drill
-      setCheckedUsers(new Map()); // Reset checked users
+      alert("Fire drill completed!");
     } catch (error) {
       console.error("Error completing fire drill:", error);
-      alert("Error saving fire drill. Please try again.");
+      alert("Error completing fire drill. Please try again.");
     }
-  }, [data, drillId, checkedUsers, generateNewDrillId]);
+  }, [authUser, activeSessionId, ensureConfigRow]);
 
   function isUserCheckedIn(user: any): boolean {
     const lastPunch = user.punches[0];
@@ -378,6 +449,31 @@ export default React.memo(function AdvancedChecklist() {
 
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error.message}</div>;
+
+  if (!activeSessionId) {
+    return (
+      <div className="w-full min-w-0 max-w-full space-y-4">
+        <h1 className="mb-2 break-words text-xl font-bold sm:text-2xl">
+          Fire Drill
+        </h1>
+        <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-900 shadow-sm dark:bg-yellow-900/30 dark:text-yellow-100">
+          No active drill session.
+        </div>
+        {authUser?.isAdmin ? (
+          <button
+            onClick={handleStartDrill}
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
+          >
+            Start Drill
+          </button>
+        ) : (
+          <div className="text-sm text-gray-600 dark:text-gray-300">
+            Ask an admin to start a drill.
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-w-0 max-w-full">

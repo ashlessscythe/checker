@@ -19,6 +19,8 @@ import {
   SelectValue,
 } from "./ui/select";
 
+const FIRE_DRILL_CONFIG_KEY = "singleton";
+
 interface User {
   id: string;
   name: string;
@@ -54,7 +56,8 @@ export default React.memo(function CheckList() {
   const [checkedUsers, setCheckedUsers] = useState<
     Map<string, { status: boolean; accountedBy: string }>
   >(new Map());
-  const [drillId, setDrillId] = useState<string>("");
+  const [activeSessionId, setActiveSessionId] = useState<string>("");
+  const [configRowId, setConfigRowId] = useState<string>("");
   const [isClient, setIsClient] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [dateTime, setDateTime] = useState(new Date().toLocaleString());
@@ -76,19 +79,9 @@ export default React.memo(function CheckList() {
   const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set());
   const pendingUserIdsRef = useRef<Set<string>>(new Set());
 
-  const generateNewDrillId = useCallback(() => {
-    const today = new Date();
-    const newDrillId =
-      today.getFullYear().toString() +
-      (today.getMonth() + 1).toString().padStart(2, "0") +
-      today.getDate().toString().padStart(2, "0");
-    setDrillId(newDrillId);
-  }, []);
-
   useEffect(() => {
     setIsClient(true);
-    generateNewDrillId();
-  }, [generateNewDrillId]);
+  }, []);
 
   // Update current time every minute
   useEffect(() => {
@@ -105,10 +98,23 @@ export default React.memo(function CheckList() {
         order: { serverCreatedAt: "desc" }
       }
     },
-    fireDrillChecks: {
+    fireDrillConfig: {
       $: {
-        where: { drillId }
+        where: { key: FIRE_DRILL_CONFIG_KEY }
       }
+    },
+    fireDrillSessions: {
+      $: activeSessionId ? { where: { id: activeSessionId } } : { where: { id: "__none__" } }
+    },
+    fireDrillSessionParticipants: {
+      $: activeSessionId
+        ? { where: { sessionId: activeSessionId } }
+        : { where: { sessionId: "__none__" } }
+    },
+    fireDrillAccounts: {
+      $: activeSessionId
+        ? { where: { sessionId: activeSessionId } }
+        : { where: { sessionId: "__none__" } }
     },
     departments: {
       $: {}
@@ -116,22 +122,32 @@ export default React.memo(function CheckList() {
   });
 
   useEffect(() => {
-    if (data && data.fireDrillChecks) {
-      // Only "unchecked" is excluded; legacy rows without `status` still count as accounted.
-      const checkedMap = new Map(
-        data.fireDrillChecks
-          .filter((check) => check.status !== "unchecked")
-          .map((check) => [
-            check.userId,
-            { status: true, accountedBy: check.accountedBy || "Unknown User" },
-          ])
-      );
-      setCheckedUsers(checkedMap);
+    const row = data?.fireDrillConfig?.[0];
+    setConfigRowId(row?.id || "");
+    const nextActiveSessionId = row?.activeSessionId || "";
+    setActiveSessionId(nextActiveSessionId);
+  }, [data?.fireDrillConfig]);
+
+  useEffect(() => {
+    if (!data?.fireDrillAccounts) {
+      setCheckedUsers(new Map());
+      return;
     }
-  }, [data]);
+
+    const checkedMap = new Map(
+      data.fireDrillAccounts
+        .filter((a) => a.status === "accounted")
+        .map((a) => [
+          a.userId,
+          { status: true, accountedBy: a.accountedByName || "Unknown User" },
+        ])
+    );
+    setCheckedUsers(checkedMap);
+  }, [data?.fireDrillAccounts]);
 
   const handleCheckUser = useCallback(
     async (userId: string) => {
+      if (!activeSessionId) return;
       // Use ref to track pending operations to avoid stale closures
       if (pendingUserIdsRef.current.has(userId)) return; // Prevent double click
       
@@ -140,20 +156,18 @@ export default React.memo(function CheckList() {
       setPendingUserIds(prev => new Set(prev).add(userId));
       
       const user = authUser;
-      const accountedBy = user?.name || user?.email || "Unknown User";
+      const accountedByName = user?.name || user?.email || "Unknown User";
+      const accountedByUserId = user?.id || "";
       
-      // Get current status from database state, not local state
-      const existingCheck = data?.fireDrillChecks?.find(
-        (check) => check.userId === userId
+      const existingAccount = data?.fireDrillAccounts?.find(
+        (a) => a.sessionId === activeSessionId && a.userId === userId
       );
-      // Rows with status "unchecked" (e.g. from adv-checklist) are not "accounted" in this UI
-      const isCurrentlyChecked =
-        !!existingCheck && existingCheck.status !== "unchecked";
+      const isCurrentlyChecked = existingAccount?.status === "accounted";
 
       try {
-        if (isCurrentlyChecked && existingCheck) {
+        if (isCurrentlyChecked && existingAccount) {
           const canUnaccount =
-            user?.isAdmin || existingCheck.accountedBy === accountedBy;
+            user?.isAdmin || existingAccount.accountedByUserId === accountedByUserId;
 
           if (!canUnaccount) {
             toast.error("CANNOT UNACCOUNT OTHERS 🛑", {
@@ -167,23 +181,24 @@ export default React.memo(function CheckList() {
             return;
           }
 
-          await db.transact([tx.fireDrillChecks[existingCheck.id].delete()]);
-        } else if (existingCheck?.status === "unchecked") {
           await db.transact([
-            tx.fireDrillChecks[existingCheck.id].update({
-              status: "checked",
+            tx.fireDrillAccounts[existingAccount.id].update({
+              status: "unaccounted",
               timestamp: Date.now(),
-              accountedBy: accountedBy,
+              accountedByName,
+              accountedByUserId,
             }),
           ]);
         } else {
+          const rowId = existingAccount?.id || id();
           await db.transact([
-            tx.fireDrillChecks[id()].update({
-              drillId: drillId,
-              userId: userId,
+            tx.fireDrillAccounts[rowId].update({
+              sessionId: activeSessionId,
+              userId,
+              status: "accounted",
               timestamp: Date.now(),
-              status: "checked",
-              accountedBy: accountedBy,
+              accountedByName,
+              accountedByUserId,
             }),
           ]);
         }
@@ -202,35 +217,105 @@ export default React.memo(function CheckList() {
         });
       }
     },
-    [authUser, drillId, data] // Removed checkedUsers from dependencies
+    [authUser, activeSessionId, data] // Removed checkedUsers from dependencies
   );
 
-  const handleCompleteDrill = useCallback(async () => {
-    if (!data || !data.users) return;
+  const ensureConfigRow = useCallback(async (): Promise<string> => {
+    if (configRowId) return configRowId;
+    const newId = id();
+    await db.transact([
+      tx.fireDrillConfig[newId].update({
+        key: FIRE_DRILL_CONFIG_KEY,
+        activeSessionId: "",
+        updatedAt: Date.now(),
+      }),
+    ]);
+    return newId;
+  }, [configRowId]);
 
-    const checkedInUsers = data.users.filter((user) => {
-      const userPunch = data.punches?.find(punch => punch.userId === user.id);
-      return userPunch?.type === "checkin";
-    });
+  const handleStartDrill = useCallback(async () => {
+    if (!authUser?.isAdmin) return;
+    if (!data?.users || !data?.punches) return;
+    if (activeSessionId) return;
+
+    // Snapshot: who is currently checked-in and not "old"
+    const presentUsers = data.users
+      .filter((u) => isUserCheckedIn(u))
+      .filter((u) => {
+        const lastPunch = data.punches.find((p) => p.userId === u.id);
+        const checkInTime = lastPunch ? new Date(lastPunch.timestamp).getTime() : 0;
+        const hoursAgo = (currentTime - checkInTime) / (1000 * 60 * 60);
+        return hoursAgo < IS_OLD_HOURS;
+      });
+
+    const newSessionId = id();
+    const configId = await ensureConfigRow();
+    const mutations: any[] = [
+      tx.fireDrillSessions[newSessionId].update({
+        status: "active",
+        startedAt: Date.now(),
+        completedAt: 0,
+        startedByUserId: authUser?.id || "",
+        completedByUserId: "",
+        notes: "",
+        presentSnapshotAtStart: true,
+      }),
+      tx.fireDrillConfig[configId].update({
+        activeSessionId: newSessionId,
+        updatedAt: Date.now(),
+      }),
+    ];
+
+    for (const u of presentUsers) {
+      mutations.push(
+        tx.fireDrillSessionParticipants[id()].update({
+          sessionId: newSessionId,
+          userId: u.id,
+          isPresentAtStart: true,
+          presentReason: "checked_in",
+        })
+      );
+    }
 
     try {
-      const newDrillRecordId = id(); // Generate a new ID for the fire drill record
+      await db.transact(mutations);
+      toast.success("Fire drill started.");
+    } catch (error) {
+      console.error("Error starting fire drill:", error);
+      toast.error("Error starting fire drill. Please try again.");
+    }
+  }, [
+    authUser,
+    data,
+    activeSessionId,
+    currentTime,
+    IS_OLD_HOURS,
+    ensureConfigRow,
+  ]);
+
+  const handleCompleteDrill = useCallback(async () => {
+    if (!authUser?.isAdmin) return;
+    if (!activeSessionId) return;
+
+    try {
+      const configId = await ensureConfigRow();
       await db.transact([
-        tx.firedrills[newDrillRecordId].update({
-          drillId: drillId,
+        tx.fireDrillSessions[activeSessionId].update({
+          status: "completed",
           completedAt: Date.now(),
-          totalChecked: checkedUsers.size,
-          totalPresent: checkedInUsers.length,
+          completedByUserId: authUser?.id || "",
+        }),
+        tx.fireDrillConfig[configId].update({
+          activeSessionId: "",
+          updatedAt: Date.now(),
         }),
       ]);
-      toast.success("Fire drill completed and saved!");
-      generateNewDrillId(); // Generate a new drill ID for the next drill
-      setCheckedUsers(new Map()); // Reset checked users
+      toast.success("Fire drill completed.");
     } catch (error) {
       console.error("Error completing fire drill:", error);
-      toast.error("Error saving fire drill. Please try again.");
+      toast.error("Error completing fire drill. Please try again.");
     }
-  }, [data, drillId, checkedUsers, generateNewDrillId]);
+  }, [authUser, activeSessionId, ensureConfigRow]);
 
   function isUserCheckedIn(user: User): boolean {
     if (!data?.punches) return false;
@@ -389,6 +474,31 @@ export default React.memo(function CheckList() {
 
   if (isLoading) return <div className="text-gray-700 dark:text-gray-300">Loading...</div>;
   if (error) return <div className="text-red-600 dark:text-red-400">Error: {error.message}</div>;
+
+  if (!activeSessionId) {
+    return (
+      <div className="w-full min-w-0 max-w-full space-y-4">
+        <h1 className="text-xl sm:text-2xl font-bold mb-2 break-words text-gray-900 dark:text-white">
+          Fire Drill
+        </h1>
+        <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-900 shadow-sm dark:bg-yellow-900/30 dark:text-yellow-100">
+          No active drill session. Start a drill to begin accounting.
+        </div>
+        {authUser?.isAdmin ? (
+          <button
+            onClick={handleStartDrill}
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
+          >
+            Start Drill
+          </button>
+        ) : (
+          <div className="text-sm text-gray-600 dark:text-gray-300">
+            Ask an admin to start a drill.
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-w-0 max-w-full">

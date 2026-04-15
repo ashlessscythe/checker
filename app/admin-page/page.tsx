@@ -5,13 +5,14 @@ import React, { useState } from "react";
 import AdminPage from "@/components/adminpage";
 import BackupPage from "@/components/backuppage";
 import VisitorAdmin from "@/components/visitoradmin";
+import FireDrillAdmin from "../../components/firedrill-admin";
 import NotAuthorizedPage from "@/components/notauthorizedpage";
 import { AuthProvider, useAuth } from "@/hooks/authContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import toast, { Toaster } from "react-hot-toast";
 
-type AdminTab = "users" | "backups" | "visitors" | "email";
+type AdminTab = "users" | "backups" | "visitors" | "email" | "firedrill";
 
 function AdminContent() {
   const { isAdmin } = useAuth();
@@ -124,6 +125,17 @@ function AdminContent() {
           >
             Email
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("firedrill")}
+            className={`rounded-md px-3 py-2 text-sm font-medium ${
+              activeTab === "firedrill"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+            }`}
+          >
+            FireDrill
+          </button>
         </div>
 
         {activeTab === "users" && (
@@ -194,6 +206,12 @@ function AdminContent() {
                 </Button>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === "firedrill" && (
+          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
+            <FireDrillAdmin />
           </div>
         )}
       </div>
