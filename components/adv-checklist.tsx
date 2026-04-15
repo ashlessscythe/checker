@@ -13,6 +13,15 @@ import {
 
 const FIRE_DRILL_CONFIG_KEY = "singleton";
 
+function formatLastDrillRelative(completedAt: number, nowMs: number): string | null {
+  if (!completedAt || completedAt <= 0) return null;
+  const diffMs = nowMs - completedAt;
+  if (diffMs < 0 || diffMs > 60 * 60 * 1000) return null;
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "just now";
+  return `${mins} min ago`;
+}
+
 interface User {
   id: string;
   name: string;
@@ -155,12 +164,23 @@ export default React.memo(function AdvancedChecklist() {
   const drillQuery = useMemo(() => {
     const none = "__none__";
     const sid = activeSessionId;
-    const sessionFilter = sid ? { where: { id: sid } } : { where: { id: none } };
-    const scoped = { where: { sessionId: sid || none } };
+    if (sid) {
+      return {
+        fireDrillSessions: { $: { where: { id: sid } } },
+        fireDrillSessionParticipants: { $: { where: { sessionId: sid } } },
+        fireDrillAccounts: { $: { where: { sessionId: sid } } },
+      };
+    }
     return {
-      fireDrillSessions: { $: sessionFilter },
-      fireDrillSessionParticipants: { $: scoped },
-      fireDrillAccounts: { $: scoped },
+      fireDrillSessions: {
+        $: {
+          where: { status: "completed" },
+          order: { completedAt: "desc" as const },
+          limit: 1,
+        },
+      },
+      fireDrillSessionParticipants: { $: { where: { sessionId: none } } },
+      fireDrillAccounts: { $: { where: { sessionId: none } } },
     };
   }, [activeSessionId]);
 
@@ -179,6 +199,31 @@ export default React.memo(function AdvancedChecklist() {
   const drillNeeded = Boolean(activeSessionId);
   const isLoading = coreIsLoading || (drillNeeded && drillIsLoading);
   const error = coreError || drillError;
+
+  const lastIdleDrillLine = useMemo(() => {
+    if (activeSessionId) return null;
+    const row = data?.fireDrillSessions?.[0] as
+      | {
+          status?: string;
+          completedAt?: number;
+          completedByUserId?: string;
+        }
+      | undefined;
+    if (!row || row.status !== "completed") return null;
+    const at = row.completedAt;
+    if (typeof at !== "number" || at <= 0) return null;
+    const rel = formatLastDrillRelative(at, Date.now());
+    if (!rel) return null;
+    const uid = row.completedByUserId?.trim();
+    const users = data?.users ?? [];
+    const u = uid ? users.find((x: User) => x.id === uid) : undefined;
+    const by =
+      (u?.name && String(u.name).trim()) ||
+      u?.email ||
+      uid ||
+      "Unknown";
+    return `Last drill was completed by ${by}, ${rel}.`;
+  }, [activeSessionId, data?.fireDrillSessions, data?.users, dateTime]);
 
   const checkedUsers = useMemo(() => {
     const accounts = data?.fireDrillAccounts;
@@ -507,7 +552,13 @@ export default React.memo(function AdvancedChecklist() {
             Fire Drill
           </h1>
           <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-900 shadow-sm dark:bg-yellow-900/30 dark:text-yellow-100">
-            No active drill session.
+            <p className="font-medium">No active drill session.</p>
+            {lastIdleDrillLine ? (
+              <p className="mt-2 text-xs leading-relaxed opacity-90 dark:text-yellow-100">
+                {lastIdleDrillLine}
+              </p>
+            ) : null}
+            <p className="mt-2">Start a drill to begin accounting.</p>
           </div>
           {authUser?.isAdmin ? (
             <button
