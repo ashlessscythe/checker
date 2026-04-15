@@ -470,6 +470,13 @@ export default React.memo(function CheckList() {
     });
   }, [data?.users, data?.punches, currentTime]);
 
+  /** Matches drill start snapshot: checked in and under stale threshold. */
+  const presentInBuildingCount = useMemo(
+    () =>
+      checkedInUsersWithHours.filter((u) => u.hoursAgo < IS_OLD_HOURS).length,
+    [checkedInUsersWithHours, IS_OLD_HOURS]
+  );
+
   const filteredAndSortedUsers = useMemo(() => {
     // First filter out old users
     let result = checkedInUsersWithHours.filter((user) => {
@@ -592,9 +599,16 @@ export default React.memo(function CheckList() {
           </div>
         )}
         <div className="w-full min-w-0 max-w-full space-y-4">
-          <h1 className="text-xl sm:text-2xl font-bold mb-2 break-words text-gray-900 dark:text-white">
-            Fire Drill
-          </h1>
+          <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="text-xl sm:text-2xl font-bold break-words text-gray-900 dark:text-white">
+              Fire Drill
+            </h1>
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-300 sm:text-base">
+              {presentInBuildingCount}{" "}
+              {presentInBuildingCount === 1 ? "person" : "people"} currently in
+              the building
+            </span>
+          </div>
           <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-900 shadow-sm dark:bg-yellow-900/30 dark:text-yellow-100">
             <p className="font-medium">No active drill session.</p>
             {lastIdleDrillLine ? (
@@ -632,9 +646,16 @@ export default React.memo(function CheckList() {
 
   return (
     <div className="w-full min-w-0 max-w-full">
-      <h1 className="text-xl sm:text-2xl font-bold mb-4 break-words text-gray-900 dark:text-white">
-        Fire Drill Checklist - {dateTime}
-      </h1>
+      <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 className="text-xl sm:text-2xl font-bold break-words text-gray-900 dark:text-white">
+          Fire Drill Checklist - {dateTime}
+        </h1>
+        <span className="text-sm font-medium text-gray-600 dark:text-gray-300 sm:text-base">
+          {presentInBuildingCount}{" "}
+          {presentInBuildingCount === 1 ? "person" : "people"} currently in the
+          building
+        </span>
+      </div>
       <div className="mb-4 flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <input
           type="text"

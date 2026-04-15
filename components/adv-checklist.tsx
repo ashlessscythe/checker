@@ -413,7 +413,16 @@ export default React.memo(function AdvancedChecklist() {
         name,
       };
     });
-  }, [data?.users, currentTime]);
+  }, [data?.users, data?.punches, currentTime]);
+
+  /** Matches drill start snapshot: checked in and under stale threshold. */
+  const presentInBuildingCount = useMemo(
+    () =>
+      (usersWithStatus as UserWithStatus[]).filter(
+        (u) => u.isCheckedIn && !u.isOld
+      ).length,
+    [usersWithStatus]
+  );
 
   const filteredAndSortedUsers = useMemo(() => {
     let result = usersWithStatus as UserWithStatus[];
@@ -548,9 +557,16 @@ export default React.memo(function AdvancedChecklist() {
           </div>
         )}
         <div className="w-full min-w-0 max-w-full space-y-4">
-          <h1 className="mb-2 break-words text-xl font-bold sm:text-2xl">
-            Fire Drill
-          </h1>
+          <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="break-words text-xl font-bold sm:text-2xl">
+              Fire Drill
+            </h1>
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-300 sm:text-base">
+              {presentInBuildingCount}{" "}
+              {presentInBuildingCount === 1 ? "person" : "people"} currently in
+              the building
+            </span>
+          </div>
           <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-900 shadow-sm dark:bg-yellow-900/30 dark:text-yellow-100">
             <p className="font-medium">No active drill session.</p>
             {lastIdleDrillLine ? (
@@ -588,9 +604,16 @@ export default React.memo(function AdvancedChecklist() {
 
   return (
     <div className="w-full min-w-0 max-w-full">
-      <h1 className="mb-4 break-words text-xl font-bold sm:text-2xl">
-        Advanced Checklist - {dateTime}
-      </h1>
+      <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 className="break-words text-xl font-bold sm:text-2xl">
+          Advanced Checklist - {dateTime}
+        </h1>
+        <span className="text-sm font-medium text-gray-600 dark:text-gray-300 sm:text-base">
+          {presentInBuildingCount}{" "}
+          {presentInBuildingCount === 1 ? "person" : "people"} currently in the
+          building
+        </span>
+      </div>
       <div className="mb-4 flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-4 sm:gap-y-2">
         <input
           type="text"
