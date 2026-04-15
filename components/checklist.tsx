@@ -52,6 +52,66 @@ interface UserWithStatus extends User {
   isOld?: boolean;
 }
 
+interface FireDrillBasicRowProps {
+  user: UserWithStatus;
+  isChecked: boolean;
+  accountedBy: string | undefined;
+  onCheck: (userId: string) => Promise<void>;
+  isPending: boolean;
+  thresholdHours: number;
+}
+
+/** Module scope: avoids remounting every row on parent re-render (keeps scroll position). */
+const FireDrillBasicRow = React.memo(function FireDrillBasicRow({
+  user,
+  isChecked,
+  accountedBy,
+  onCheck,
+  isPending,
+  thresholdHours,
+}: FireDrillBasicRowProps) {
+  const isOld = user.hoursAgo >= thresholdHours;
+
+  return (
+    <tr
+      className={`
+      ${isChecked ? "bg-green-100 dark:bg-green-700" : ""}
+      ${isOld ? "opacity-50" : ""}
+      ${isPending ? "opacity-60 pointer-events-none" : ""}
+    `}
+    >
+      <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
+        <div className="break-words text-sm font-medirm text-gray-900 dark:text-white">
+          {user.name}
+        </div>
+      </td>
+      <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
+        <button
+          type="button"
+          onClick={() => onCheck(user.id)}
+          className={`max-w-full whitespace-normal rounded-full px-2 py-1 text-left text-xs font-semibold sm:px-3 sm:text-sm ${
+            isChecked
+              ? "bg-green-200 text-green-800 dark:bg-green-600 dark:text-green-100"
+              : "bg-red-200 text-red-800 dark:bg-red-600 dark:text-red-100"
+          }`}
+          disabled={isPending}
+        >
+          {isPending
+            ? "Syncing..."
+            : isChecked
+              ? `Accounted by ${accountedBy}`
+              : "Unaccounted"}
+        </button>
+      </td>
+      <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
+        <div className="break-words text-xs text-gray-500 dark:text-gray-300 sm:text-sm">
+          {isOld ? `${user.timeAgoString} (old)` : user.timeAgoString}
+        </div>
+      </td>
+    </tr>
+  );
+});
+
 export default React.memo(function CheckList() {
   const [isClient, setIsClient] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -409,56 +469,6 @@ export default React.memo(function CheckList() {
     return result;
   }, [checkedInUsersWithHours, filters, sortConfig, checkedUsers, IS_OLD_HOURS]);
 
-  interface CheckListRowProps {
-    user: UserWithStatus;
-    isChecked: boolean;
-    accountedBy: string | undefined;
-    onCheck: (userId: string) => Promise<void>;
-    isPending: boolean;
-  }
-
-  const CheckListRow: React.FC<CheckListRowProps> = React.memo(({ user, isChecked, accountedBy, onCheck, isPending }) => {
-    const isOld = user.hoursAgo >= IS_OLD_HOURS;
-
-    return (
-      <tr
-        className={`
-      ${isChecked ? "bg-green-100 dark:bg-green-700" : ""}
-      ${isOld ? "opacity-50" : ""}
-      ${isPending ? "opacity-60 pointer-events-none" : ""}
-    `}
-      >
-        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
-          <div className="break-words text-sm font-medirm text-gray-900 dark:text-white">
-            {user.name}
-          </div>
-        </td>
-        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
-          <button
-            onClick={() => onCheck(user.id)}
-            className={`max-w-full whitespace-normal rounded-full px-2 py-1 text-left text-xs font-semibold sm:px-3 sm:text-sm ${
-              isChecked
-                ? "bg-green-200 text-green-800 dark:bg-green-600 dark:text-green-100"
-                : "bg-red-200 text-red-800 dark:bg-red-600 dark:text-red-100"
-            }`}
-            disabled={isPending}
-          >
-            {isPending
-              ? "Syncing..."
-              : isChecked
-                ? `Accounted by ${accountedBy}`
-                : "Unaccounted"}
-          </button>
-        </td>
-        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
-          <div className="break-words text-xs text-gray-500 dark:text-gray-300 sm:text-sm">
-            {isOld ? `${user.timeAgoString} (old)` : user.timeAgoString}
-          </div>
-        </td>
-      </tr>
-    );
-  });
-
   const requestSort = (key: string) => {
     let direction: "asc" | "desc" = "asc";
     if (
@@ -640,13 +650,14 @@ export default React.memo(function CheckList() {
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {filteredAndSortedUsers.map((user) => (
-                <CheckListRow
+                <FireDrillBasicRow
                   key={user.id}
                   user={user}
                   isChecked={checkedUsers.has(user.id)}
                   accountedBy={checkedUsers.get(user.id)?.accountedBy}
                   onCheck={handleCheckUser}
                   isPending={pendingUserIds.has(user.id)}
+                  thresholdHours={IS_OLD_HOURS}
                 />
               ))}
             </tbody>

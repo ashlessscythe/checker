@@ -35,6 +35,64 @@ interface UserWithStatus extends User {
   isOld: boolean;
 }
 
+interface FireDrillAdvRowProps {
+  user: UserWithStatus;
+  isChecked: boolean;
+  accountedBy: string | undefined;
+  onCheck: (userId: string) => Promise<void>;
+}
+
+/** Module scope: avoids remounting every row on parent re-render (keeps scroll position). */
+const FireDrillAdvRow = React.memo(function FireDrillAdvRow({
+  user,
+  isChecked,
+  accountedBy,
+  onCheck,
+}: FireDrillAdvRowProps) {
+  const statusClass = user.isCheckedIn
+    ? isChecked
+      ? "bg-green-100 dark:bg-green-700"
+      : "bg-yellow-100 dark:bg-yellow-700"
+    : "bg-gray-100 dark:bg-gray-600";
+
+  const opacityClass = user.isOld ? "opacity-50" : "";
+
+  return (
+    <tr className={`${statusClass} ${opacityClass}`}>
+      <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
+        <div className="break-words text-sm font-medium text-gray-900 dark:text-white">
+          {user.name}
+        </div>
+      </td>
+      <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
+        <button
+          type="button"
+          onClick={() => onCheck(user.id)}
+          className={`max-w-full whitespace-normal rounded-full px-2 py-1 text-left text-xs font-semibold sm:px-3 sm:text-sm ${
+            user.isCheckedIn
+              ? isChecked
+                ? "bg-green-200 text-green-800 dark:bg-green-600 dark:text-green-100"
+                : "bg-red-200 text-red-800 dark:bg-red-600 dark:text-red-100"
+              : "bg-gray-200 text-gray-800 dark:bg-gray-500 dark:text-gray-100"
+          }`}
+        >
+          {user.isCheckedIn
+            ? isChecked
+              ? `Accounted by ${accountedBy}`
+              : "Unaccounted"
+            : "Checked Out"}
+        </button>
+      </td>
+      <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
+        <div className="break-words text-xs text-gray-500 dark:text-gray-300 sm:text-sm">
+          {user.isOld ? `${user.timeAgoString} (old)` : user.timeAgoString}
+          {user.isCheckedIn ? " (In)" : " (Out)"}
+        </div>
+      </td>
+    </tr>
+  );
+});
+
 export default React.memo(function AdvancedChecklist() {
   const [isClient, setIsClient] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -369,73 +427,6 @@ export default React.memo(function AdvancedChecklist() {
   // Pagination controls
   const totalPages = Math.ceil(filteredAndSortedUsers.length / itemsPerPage);
 
-  interface CheckListRowProps {
-    user: {
-      timeAgoString: string;
-      name: string;
-      id: string;
-      isCheckedIn: boolean;
-      isOld: boolean;
-      email: string;
-      barcode: string;
-      isAdmin: boolean;
-      isAuth: boolean;
-      lastLoginAt: number;
-      createdAt: number;
-      deptId: string;
-      serverCreatedAt: number;
-      laptopSerial: string;
-      purpose: string;
-    };
-    isChecked: boolean;
-    accountedBy: string | undefined;
-    onCheck: (userId: string) => Promise<void>;
-  }
-
-  const CheckListRow: React.FC<CheckListRowProps> = React.memo(({ user, isChecked, accountedBy, onCheck }) => {
-    const statusClass = user.isCheckedIn
-      ? isChecked
-        ? "bg-green-100 dark:bg-green-700"
-        : "bg-yellow-100 dark:bg-yellow-700"
-      : "bg-gray-100 dark:bg-gray-600";
-
-    const opacityClass = user.isOld ? "opacity-50" : "";
-
-    return (
-      <tr className={`${statusClass} ${opacityClass}`}>
-        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
-          <div className="break-words text-sm font-medium text-gray-900 dark:text-white">
-            {user.name}
-          </div>
-        </td>
-        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
-          <button
-            onClick={() => onCheck(user.id)}
-            className={`max-w-full whitespace-normal rounded-full px-2 py-1 text-left text-xs font-semibold sm:px-3 sm:text-sm ${
-              user.isCheckedIn
-                ? isChecked
-                  ? "bg-green-200 text-green-800 dark:bg-green-600 dark:text-green-100"
-                  : "bg-red-200 text-red-800 dark:bg-red-600 dark:text-red-100"
-                : "bg-gray-200 text-gray-800 dark:bg-gray-500 dark:text-gray-100"
-            }`}
-          >
-            {user.isCheckedIn
-              ? isChecked
-                ? `Accounted by ${accountedBy}`
-                : "Unaccounted"
-              : "Checked Out"}
-          </button>
-        </td>
-        <td className="min-w-0 px-2 py-3 align-top sm:px-6 sm:py-4">
-          <div className="break-words text-xs text-gray-500 dark:text-gray-300 sm:text-sm">
-            {user.isOld ? `${user.timeAgoString} (old)` : user.timeAgoString}
-            {user.isCheckedIn ? " (In)" : " (Out)"}
-          </div>
-        </td>
-      </tr>
-    );
-  });
-
   const requestSort = (key: string) => {
     let direction: "asc" | "desc" = "asc";
     if (
@@ -636,7 +627,7 @@ export default React.memo(function AdvancedChecklist() {
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {filteredAndSortedUsers.map((user) => (
-                <CheckListRow
+                <FireDrillAdvRow
                   key={user.id}
                   user={user}
                   isChecked={checkedUsers.has(user.id)}
