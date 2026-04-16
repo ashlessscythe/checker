@@ -8,14 +8,9 @@
 import { id, tx } from "@instantdb/admin";
 import Papa from "papaparse";
 import { generateValidBarcode } from "@/utils/barcodeVerification";
+import { USER_IMPORT_CSV_HEADERS } from "./user-import-csv-columns";
 
-export const USER_IMPORT_CSV_HEADERS = [
-  "name",
-  "email",
-  "barcode",
-  "is_admin",
-  "department_name",
-] as const;
+export { USER_IMPORT_CSV_HEADERS } from "./user-import-csv-columns";
 
 const MAX_CSV_BYTES = 1_000_000;
 

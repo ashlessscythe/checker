@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Switch } from "./ui/Switch";
+import { buildUsersExportCsv } from "@/lib/user-export-csv";
 
 export default function AdminPage() {
   const [userId, setUserId] = useState(null);
@@ -288,6 +289,23 @@ export default function AdminPage() {
     }
   };
 
+  const downloadUsersExportCsv = useCallback(() => {
+    if (!data?.users) {
+      toast.error("No user data loaded yet.");
+      return;
+    }
+    const csv = buildUsersExportCsv(data.users, data.departments ?? []);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const day = new Date().toISOString().slice(0, 10);
+    a.download = `users-export-${day}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${data.users.length} user(s).`);
+  }, [data]);
+
   if (isLoading) return <div className="text-gray-700 dark:text-gray-300">Loading...</div>;
   if (error) return <div className="text-red-600 dark:text-red-400">Error: {error.message}</div>;
 
@@ -424,6 +442,33 @@ export default function AdminPage() {
               )}
             </div>
           )}
+        </div>
+      </details>
+
+      <details className="group mb-6 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-gray-900 dark:text-white [&::-webkit-details-marker]:hidden">
+          <span className="font-semibold">Bulk export users (CSV)</span>
+          <ChevronDown className="h-5 w-5 shrink-0 text-gray-500 transition-transform group-open:rotate-180 dark:text-gray-400" />
+        </summary>
+        <div className="space-y-4 border-t border-gray-200 px-4 pb-4 pt-4 text-sm text-gray-700 dark:border-gray-600 dark:text-gray-300">
+          <p>
+            Download every user currently loaded in this admin view as CSV. Columns match bulk
+            import exactly:{" "}
+            <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">name</code>,{" "}
+            <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">email</code>,{" "}
+            <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">barcode</code>,{" "}
+            <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">is_admin</code>,{" "}
+            <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">department_name</code>.
+            Rows are sorted by email. Use as a backup or round-trip with import (review overwrite /
+            department options before re-importing).
+          </p>
+          <Button
+            type="button"
+            className="bg-slate-700 text-white hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500"
+            onClick={downloadUsersExportCsv}
+          >
+            Download users CSV
+          </Button>
         </div>
       </details>
 
