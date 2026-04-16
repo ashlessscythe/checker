@@ -185,7 +185,7 @@ export default function FireDrillAdmin() {
       await db.transact([
         tx.fireDrillNotificationRecipients[id()].update({
           email,
-          name: name || null,
+          name: name || "",
           isActive: true,
           createdAt: Date.now(),
         }),

@@ -1,13 +1,13 @@
 // components/AdminPage.tsx
 "use client";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { tx, id } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
 import { useCreateUser } from "@/hooks/useCreateUser";
 import toast, { Toaster } from "react-hot-toast";
 import { useAutoNavigate } from "@/hooks/useAutoNavigate";
 import { useAuth } from "@/hooks/authContext";
-import { Eye, EyeOff, Search } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, Search } from "lucide-react";
 import { CheckActionType, performCheckinOut } from "@/utils/checkInOut";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import { Switch } from "./ui/Switch";
 
 export default function AdminPage() {
   const [userId, setUserId] = useState(null);
@@ -43,6 +44,25 @@ export default function AdminPage() {
     isAdmin: false,
     deptId: "", // Add department field
   });
+
+  const [importDryRun, setImportDryRun] = useState(true);
+  const [importOverwrite, setImportOverwrite] = useState(false);
+  const [importGenerateBarcodeIfBlank, setImportGenerateBarcodeIfBlank] =
+    useState(true);
+  const [importCreateDepartmentIfMissing, setImportCreateDepartmentIfMissing] =
+    useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    createdCount: number;
+    updatedCount: number;
+    skippedCount: number;
+    rowErrors: Array<{ line: number; message: string }>;
+    dryRun?: boolean;
+    generateBarcodeIfBlank?: boolean;
+    createDepartmentIfMissing?: boolean;
+    departmentsCreatedCount?: number;
+  } | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const {
     createUser,
@@ -200,6 +220,74 @@ export default function AdminPage() {
 
   useAutoNavigate("/"); // Navigate to home after 5 minutes of inactivity
 
+  const downloadImportTemplate = async () => {
+    try {
+      const res = await fetch("/api/admin/users/import/template");
+      if (!res.ok) {
+        toast.error("Failed to download template.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "users-import-template.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Template downloaded.");
+    } catch {
+      toast.error("Failed to download template.");
+    }
+  };
+
+  const runUserImport = async () => {
+    const file = importFileRef.current?.files?.[0];
+    if (!file) {
+      toast.error("Choose a CSV file first.");
+      return;
+    }
+    try {
+      setImportLoading(true);
+      setImportResult(null);
+      const csvText = await file.text();
+      const res = await fetch("/api/admin/users/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          csvText,
+          dryRun: importDryRun,
+          overwrite: importOverwrite,
+          generateBarcodeIfBlank: importGenerateBarcodeIfBlank,
+          createDepartmentIfMissing: importCreateDepartmentIfMissing,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(data?.error || `Import failed (${res.status})`);
+        return;
+      }
+      setImportResult({
+        createdCount: data.createdCount ?? 0,
+        updatedCount: data.updatedCount ?? 0,
+        skippedCount: data.skippedCount ?? 0,
+        rowErrors: data.rowErrors ?? [],
+        dryRun: data.dryRun,
+        generateBarcodeIfBlank: data.generateBarcodeIfBlank,
+        createDepartmentIfMissing: data.createDepartmentIfMissing,
+        departmentsCreatedCount: data.departmentsCreatedCount ?? 0,
+      });
+      toast.success(
+        importDryRun ? "Dry run finished." : "Import finished."
+      );
+    } catch (e: unknown) {
+      toast.error(
+        e instanceof Error ? e.message : "Import request failed."
+      );
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
   if (isLoading) return <div className="text-gray-700 dark:text-gray-300">Loading...</div>;
   if (error) return <div className="text-red-600 dark:text-red-400">Error: {error.message}</div>;
 
@@ -209,6 +297,136 @@ export default function AdminPage() {
       <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-gray-800 dark:text-white">
         Admin Page
       </h1>
+
+      <details className="group mb-6 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-gray-900 dark:text-white [&::-webkit-details-marker]:hidden">
+          <span className="font-semibold">Bulk import users (CSV)</span>
+          <ChevronDown className="h-5 w-5 shrink-0 text-gray-500 transition-transform group-open:rotate-180 dark:text-gray-400" />
+        </summary>
+        <div className="space-y-4 border-t border-gray-200 px-4 pb-4 pt-4 text-sm text-gray-700 dark:border-gray-600 dark:text-gray-300">
+          <p>
+            Columns:{" "}
+            <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">
+              name
+            </code>
+            ,{" "}
+            <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">
+              email
+            </code>
+            ,{" "}
+            <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">
+              barcode
+            </code>
+            ,{" "}
+            <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">
+              is_admin
+            </code>{" "}
+            (true/false/1/0/yes/no),{" "}
+            <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">
+              department_name
+            </code>{" "}
+            (matches{" "}
+            <span className="font-medium">departments.name</span> case-insensitively). Duplicate
+            emails in one file: last row wins. If{" "}
+            <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">barcode</code> is empty
+            and “Generate barcode when blank” is off, the user is stored with an empty barcode; when
+            it is on, a unique 20-character barcode is assigned (same rules as generated staff
+            barcodes). With{" "}
+            <span className="font-medium">Create department if missing</span> on, each distinct
+            unknown <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">department_name</code>{" "}
+            gets a new department (code like <code className="rounded bg-gray-100 px-1 dark:bg-gray-900">IMP_…</code>).
+          </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
+            <label className="flex items-center gap-2">
+              <Switch
+                isChecked={importDryRun}
+                onChange={(v) => setImportDryRun(v)}
+              />
+              <span>Dry run (validate only, no writes)</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <Switch
+                isChecked={importOverwrite}
+                onChange={(v) => setImportOverwrite(v)}
+              />
+              <span>Overwrite existing users (match by email)</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <Switch
+                isChecked={importGenerateBarcodeIfBlank}
+                onChange={(v) => setImportGenerateBarcodeIfBlank(v)}
+              />
+              <span>Generate barcode when blank</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <Switch
+                isChecked={importCreateDepartmentIfMissing}
+                onChange={(v) => setImportCreateDepartmentIfMissing(v)}
+              />
+              <span>Create department if missing</span>
+            </label>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900"
+              onClick={downloadImportTemplate}
+            >
+              Download template
+            </Button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="text-xs file:mr-2 file:rounded file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-white hover:file:bg-blue-700 sm:text-sm"
+            />
+            <Button
+              type="button"
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              disabled={importLoading}
+              onClick={runUserImport}
+            >
+              {importLoading ? "Running…" : "Run import"}
+            </Button>
+          </div>
+          {importResult && (
+            <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-900/50">
+              <p className="font-medium text-gray-900 dark:text-white">
+                {importResult.dryRun ? "Dry run results" : "Import results"}
+              </p>
+              <ul className="mt-2 list-inside list-disc text-gray-700 dark:text-gray-300">
+                <li>Created: {importResult.createdCount}</li>
+                <li>Updated: {importResult.updatedCount}</li>
+                <li>Skipped: {importResult.skippedCount}</li>
+                <li>Row errors: {importResult.rowErrors.length}</li>
+                <li>
+                  Generate barcode when blank:{" "}
+                  {importResult.generateBarcodeIfBlank ? "yes" : "no"}
+                </li>
+                <li>
+                  Create department if missing:{" "}
+                  {importResult.createDepartmentIfMissing ? "yes" : "no"}
+                </li>
+                <li>
+                  Departments created:{" "}
+                  {importResult.departmentsCreatedCount ?? 0}
+                </li>
+              </ul>
+              {importResult.rowErrors.length > 0 && (
+                <div className="mt-3 max-h-40 overflow-y-auto rounded border border-red-200 bg-white p-2 text-xs text-red-800 dark:border-red-900 dark:bg-gray-950 dark:text-red-200">
+                  {importResult.rowErrors.map((err, i) => (
+                    <div key={i}>
+                      Line {err.line}: {err.message}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </details>
+
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div className="relative w-1/3">
