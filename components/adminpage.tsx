@@ -661,7 +661,7 @@ export default function AdminPage() {
         </div>
       )}
       <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-        <div className="md:hidden p-4 space-y-4">
+        <div className="lg:hidden p-4 space-y-4">
           {paginatedUsers.map((user) => (
             <div
               key={user.id}
@@ -873,10 +873,9 @@ export default function AdminPage() {
             </div>
           ))}
         </div>
-        <div className="hidden md:block">
-          <div className="overflow-x-auto">
-            <div className="max-h-[800px] overflow-y-auto">
-              <table className="min-w-[1100px] divide-y divide-gray-200">
+        <div className="hidden lg:block">
+          <div className="w-full">
+            <table className="w-full table-auto divide-y divide-gray-200">
                 <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
                   <tr>
                     <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -905,8 +904,8 @@ export default function AdminPage() {
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {paginatedUsers.map((user) => (
                     <tr key={user.id}>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        <div className="flex items-center">
+                      <td className="px-4 sm:px-6 py-4 align-top text-sm text-gray-500 dark:text-gray-400">
+                        <div className="flex min-w-0 items-start">
                           {editingBarcode === user.id ? (
                             <input
                               className="border rounded px-2 py-1 w-full mr-2"
@@ -917,7 +916,7 @@ export default function AdminPage() {
                             />
                           ) : (
                             <span
-                              className={`mr-2 cursor-pointer ${
+                              className={`mr-2 min-w-0 cursor-pointer break-all ${
                                 visibleBarcodes[user.id] ? "" : "filter blur-sm"
                               }`}
                               onClick={() => setEditingBarcode(user.id)}
@@ -937,7 +936,7 @@ export default function AdminPage() {
                           </button>
                         </div>
                       </td>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-4 sm:px-6 py-4 align-top text-sm text-gray-500 dark:text-gray-400">
                         {editingEmail === user.id ? (
                           <input
                             className="border rounded px-2 py-1 w-full"
@@ -948,14 +947,14 @@ export default function AdminPage() {
                           />
                         ) : (
                           <span
-                            className="cursor-pointer"
+                            className="cursor-pointer break-all"
                             onClick={() => setEditingEmail(user.id)}
                           >
                             {user.email ?? "N/A"}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 sm:px-6 py-4 align-top">
                         {editingUser === user.id ? (
                           <input
                             className="border rounded px-2 py-1 w-full"
@@ -965,12 +964,12 @@ export default function AdminPage() {
                             }
                           />
                         ) : (
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          <span className="break-words text-sm font-medium text-gray-900 dark:text-white">
                             {user.name ?? "N/A"}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 sm:px-6 py-4 align-top">
                         <span
                           className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                             user.isAdmin
@@ -981,7 +980,7 @@ export default function AdminPage() {
                           {user.isAdmin ? "Yes" : "No"}
                         </span>
                       </td>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 sm:px-6 py-4 align-top">
                         <span
                           className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                             user.isAuth
@@ -992,7 +991,7 @@ export default function AdminPage() {
                           {user.isAuth ? "Authorized" : "Unauthorized"}
                         </span>
                       </td>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 sm:px-6 py-4 align-top">
                         <Select
                           value={user.deptId || ""}
                           onValueChange={async (value) => {
@@ -1007,7 +1006,7 @@ export default function AdminPage() {
                             }
                           }}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full">
                             <SelectValue placeholder="Select Department" />
                           </SelectTrigger>
                           <SelectContent className="bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-sm rounded-md">
@@ -1019,8 +1018,8 @@ export default function AdminPage() {
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex flex-col lg:flex-row gap-2">
+                      <td className="px-4 sm:px-6 py-4 align-top text-sm font-medium">
+                        <div className="flex flex-wrap gap-x-3 gap-y-2">
                           <button
                             onClick={() => setEditingBarcode(user.id)}
                             className="text-indigo-600 hover:text-indigo-900"
@@ -1106,9 +1105,8 @@ export default function AdminPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
-          </div>
+            </table>
+        </div>
         </div>
       </div>
       <div className="mt-4 flex justify-between items-center">
