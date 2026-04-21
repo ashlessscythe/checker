@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getPrecheckStrings } from "@/lib/visitor-precheck-i18n";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import {
@@ -31,6 +32,8 @@ interface VisitOption {
   hostEmail?: string;
 }
 
+const kioskPrecheckStrings = getPrecheckStrings("en-US");
+
 export default function VisitorPrecheckEmailPrompt() {
   const [phase, setPhase] = useState<Phase>("closed");
   const [email, setEmail] = useState("");
@@ -60,6 +63,11 @@ export default function VisitorPrecheckEmailPrompt() {
   const [isSubmittingRegister, setIsSubmittingRegister] = useState(false);
   const [kioskProtocolRequired, setKioskProtocolRequired] = useState(false);
   const [protocolAcknowledged, setProtocolAcknowledged] = useState(false);
+  const [protocolViewTicket, setProtocolViewTicket] = useState<string | null>(null);
+  /** Kiosk protocol link: idle (no protocol), loading, ready (href), or error */
+  const [protocolDocLinkState, setProtocolDocLinkState] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
 
   const emailInputRef = useRef<HTMLInputElement>(null);
 
@@ -116,6 +124,8 @@ export default function VisitorPrecheckEmailPrompt() {
     setIsSubmittingRegister(false);
     setKioskProtocolRequired(false);
     setProtocolAcknowledged(false);
+    setProtocolViewTicket(null);
+    setProtocolDocLinkState("idle");
   }, []);
 
   useEffect(() => {
@@ -171,22 +181,58 @@ export default function VisitorPrecheckEmailPrompt() {
   }, [phase, resetAll]);
 
   useEffect(() => {
-    if (phase !== "register") return;
+    if (phase !== "register") {
+      setKioskProtocolRequired(false);
+      setProtocolAcknowledged(false);
+      setProtocolViewTicket(null);
+      setProtocolDocLinkState("idle");
+      return;
+    }
 
     let cancelled = false;
     setProtocolAcknowledged(false);
+    setProtocolViewTicket(null);
+    setProtocolDocLinkState("loading");
+
     (async () => {
+      let protocolWasRequired = false;
       try {
-        const res = await fetch("/api/visitor/precheck/protocol-status");
-        const data = await res.json().catch(() => ({}));
+        const statusRes = await fetch("/api/visitor/precheck/protocol-status");
+        const statusData = await statusRes.json().catch(() => ({}));
         if (cancelled) return;
-        if (res.ok && data?.requiresVisitorProtocol === true) {
-          setKioskProtocolRequired(true);
-        } else {
+
+        if (!statusRes.ok || statusData?.requiresVisitorProtocol !== true) {
           setKioskProtocolRequired(false);
+          setProtocolDocLinkState("idle");
+          return;
+        }
+
+        protocolWasRequired = true;
+        setKioskProtocolRequired(true);
+
+        const ticketRes = await fetch("/api/visitor/precheck/protocol-view-ticket", {
+          method: "POST",
+        });
+        const ticketData = await ticketRes.json().catch(() => ({}));
+        if (cancelled) return;
+
+        if (ticketRes.ok && typeof ticketData?.ticket === "string") {
+          setProtocolViewTicket(ticketData.ticket);
+          setProtocolDocLinkState("ready");
+        } else {
+          setProtocolViewTicket(null);
+          setProtocolDocLinkState("error");
         }
       } catch {
-        if (!cancelled) setKioskProtocolRequired(false);
+        if (!cancelled) {
+          setProtocolViewTicket(null);
+          if (protocolWasRequired) {
+            setProtocolDocLinkState("error");
+          } else {
+            setKioskProtocolRequired(false);
+            setProtocolDocLinkState("idle");
+          }
+        }
       }
     })();
 
@@ -628,6 +674,26 @@ export default function VisitorPrecheckEmailPrompt() {
             />
             {kioskProtocolRequired ? (
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20">
+                <p className="mb-2 text-sm">
+                  {protocolDocLinkState === "loading" ? (
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Loading visitor protocol link…
+                    </span>
+                  ) : protocolDocLinkState === "error" || !protocolViewTicket ? (
+                    <span className="text-red-700 dark:text-red-400">
+                      Visitor protocol link unavailable. Close this window and try again.
+                    </span>
+                  ) : (
+                    <a
+                      href={`/api/visitor/precheck/protocol-document?ticket=${encodeURIComponent(protocolViewTicket)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-blue-700 underline decoration-blue-700/80 underline-offset-2 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      {kioskPrecheckStrings.protocolViewLink}
+                    </a>
+                  )}
+                </p>
                 <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-100">
                   <input
                     type="checkbox"

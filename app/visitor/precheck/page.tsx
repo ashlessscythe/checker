@@ -913,6 +913,16 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
 
           {protocolRequired ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20">
+              <p className="mb-2 text-sm">
+                <a
+                  href={`/api/visitor/precheck/protocol-document?token=${encodeURIComponent(token)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-blue-700 underline decoration-blue-700/80 underline-offset-2 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  {s.protocolViewLink}
+                </a>
+              </p>
               <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-100">
                 <input
                   type="checkbox"

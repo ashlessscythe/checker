@@ -59,6 +59,7 @@ export type PrecheckStrings = {
   visitDate: string;
   visitTime: string;
   additionalDetails: string;
+  protocolViewLink: string;
   protocolCheckbox: string;
   submitting: string;
   updatePrecheck: string;
@@ -131,6 +132,7 @@ const en: PrecheckStrings = {
   visitDate: "Visit date",
   visitTime: "Visit time",
   additionalDetails: "Additional details (optional)",
+  protocolViewLink: "View visitor protocol (opens in a new tab)",
   protocolCheckbox:
     "I acknowledge read and receipt of the visitor protocol document sent with my invitation.",
   submitting: "Submitting...",
@@ -206,6 +208,7 @@ const es: PrecheckStrings = {
   visitDate: "Fecha de visita",
   visitTime: "Hora de visita",
   additionalDetails: "Detalles adicionales (opcional)",
+  protocolViewLink: "Ver protocolo para visitantes (se abre en una pestaña nueva)",
   protocolCheckbox:
     "Confirmo haber leído y recibido el documento de protocolo para visitantes enviado con mi invitación.",
   submitting: "Enviando...",
@@ -280,6 +283,7 @@ const fr: PrecheckStrings = {
   visitDate: "Date de visite",
   visitTime: "Heure de visite",
   additionalDetails: "Détails supplémentaires (facultatif)",
+  protocolViewLink: "Consulter le protocole visiteur (s'ouvre dans un nouvel onglet)",
   protocolCheckbox:
     "Je confirme avoir lu et reçu le document de protocole visiteur envoyé avec mon invitation.",
   submitting: "Envoi en cours...",

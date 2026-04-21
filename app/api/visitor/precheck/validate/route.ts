@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { verifyPrecheckToken } from "@/lib/visitor-precheck-token";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
+import { assertPrecheckLinkActive } from "@/lib/visitor-precheck-link-validation";
 
 export async function POST(req: Request) {
   try {
@@ -11,44 +11,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing token." }, { status: 400 });
     }
 
-    const payload = verifyPrecheckToken(token);
-    if (!payload?.email) {
-      return NextResponse.json({ error: "Invalid token." }, { status: 400 });
+    const gate = await assertPrecheckLinkActive(token);
+    if (gate.ok === false) {
+      return NextResponse.json({ error: gate.error }, { status: gate.status });
     }
-
-    const now = Date.now();
+    const payload = gate.payload;
     const issuedAt = payload.iat;
-    const expiresAt = issuedAt + 24 * 60 * 60 * 1000;
-    if (now > expiresAt) {
-      return NextResponse.json(
-        { error: "Token expired or already used." },
-        { status: 400 }
-      );
-    }
-
-    try {
-      const adminAPI = requireAdminAPI();
-      const revokedData = await adminAPI.query({
-        revokedPrecheckTokens: {
-          $: {
-            where: { token },
-          },
-        },
-      });
-      const revoked = (revokedData as { revokedPrecheckTokens?: unknown[] })
-        ?.revokedPrecheckTokens;
-      if (revoked && revoked.length > 0) {
-        return NextResponse.json(
-          {
-            error:
-              "This pre-check link is no longer valid. Ask your host for a new invitation if you still need access.",
-          },
-          { status: 400 }
-        );
-      }
-    } catch (revokeCheckErr) {
-      console.error("validate: revoked token lookup failed", revokeCheckErr);
-    }
 
     let visitRecordAt: number | undefined;
     if (payload.source === "kiosk_register") {
