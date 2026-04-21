@@ -1,5 +1,10 @@
 import { id, tx } from "@instantdb/admin";
 import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
+import {
+  sendVisitorPrecheckApprovalEmail,
+  sendVisitorPrecheckApprovalInternalNotify,
+  sendVisitorPrecheckRejectionEmail,
+} from "@/lib/visitor-precheck-email-senders";
 
 function generateVisitorBarcode() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -29,10 +34,6 @@ export type PrecheckRequestRow = {
   visitDate: number;
   token?: string;
 };
-
-const appBaseUrl =
-  process.env.NEXT_PUBLIC_APP_BASE_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
 async function ensureVisitorDepartmentId(adminAPI: AdminAPI): Promise<string> {
   const deptData = await adminAPI.query({
@@ -120,46 +121,43 @@ export async function approveVisitorPrecheckRequestServer(
     }),
   ]);
 
-  try {
-    await fetch(`${appBaseUrl}/api/visitor/precheck/send-approval-email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: requestRow.email,
-        barcode,
-        visitorName: approvedVisitorName,
-        visitorCompany: approvedCompany,
-        who: requestRow.who,
-        reason: requestRow.reason,
-        whenTs: requestRow.visitDate,
-        details: requestRow.otherDetails || "",
-        adminMessage: message,
-      }),
-    });
-  } catch (e) {
-    console.error("approveVisitorPrecheckRequestServer: approval email fetch failed", e);
+  const approvalEmailPayload = {
+    email: requestRow.email,
+    barcode,
+    visitorName: approvedVisitorName,
+    visitorCompany: approvedCompany,
+    who: requestRow.who,
+    reason: requestRow.reason,
+    whenTs: requestRow.visitDate,
+    details: requestRow.otherDetails || "",
+    adminMessage: message,
+  };
+  const approvalEmailResult = await sendVisitorPrecheckApprovalEmail(approvalEmailPayload);
+  if (approvalEmailResult.ok === false) {
+    console.error(
+      "approveVisitorPrecheckRequestServer: approval email failed",
+      approvalEmailResult.error
+    );
   }
 
-  try {
-    await fetch(`${appBaseUrl}/api/visitor/precheck/send-approval-internal-notify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        visitorName: approvedVisitorName,
-        visitorEmail: requestRow.email,
-        visitorCompany: approvedCompany,
-        who: requestRow.who,
-        reason: requestRow.reason,
-        whenTs: requestRow.visitDate,
-        details: requestRow.otherDetails || "",
-        requestSource: requestRow.requestSource || "admin",
-        approvedBy: opts.actor,
-      }),
-    });
-  } catch (e) {
+  const internalNotifyResult = await sendVisitorPrecheckApprovalInternalNotify(
+    adminAPI,
+    {
+      visitorName: approvedVisitorName,
+      visitorEmail: requestRow.email,
+      visitorCompany: approvedCompany,
+      who: requestRow.who,
+      reason: requestRow.reason,
+      whenTs: requestRow.visitDate,
+      details: requestRow.otherDetails || "",
+      requestSource: requestRow.requestSource || "admin",
+      approvedBy: opts.actor,
+    }
+  );
+  if (internalNotifyResult.ok === false) {
     console.error(
-      "approveVisitorPrecheckRequestServer: internal approval notify fetch failed",
-      e
+      "approveVisitorPrecheckRequestServer: internal approval notify failed",
+      internalNotifyResult.error
     );
   }
 
@@ -197,22 +195,20 @@ export async function rejectVisitorPrecheckRequestServer(
     }),
   ]);
 
-  try {
-    await fetch(`${appBaseUrl}/api/visitor/precheck/send-rejection-email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: requestRow.email,
-        rejectionMessage: message,
-        details: requestRow.otherDetails || "",
-        visitorFirstName: requestRow.visitorFirstName || "",
-        visitorLastName: requestRow.visitorLastName || "",
-        visitorCompanyName: requestRow.visitorCompanyName || "",
-        invitedName: requestRow.invitedName || "",
-      }),
-    });
-  } catch (e) {
-    console.error("rejectVisitorPrecheckRequestServer: rejection email fetch failed", e);
+  const rejectionResult = await sendVisitorPrecheckRejectionEmail({
+    email: requestRow.email,
+    rejectionMessage: message,
+    details: requestRow.otherDetails || "",
+    visitorFirstName: requestRow.visitorFirstName || "",
+    visitorLastName: requestRow.visitorLastName || "",
+    visitorCompanyName: requestRow.visitorCompanyName || "",
+    invitedName: requestRow.invitedName || "",
+  });
+  if (rejectionResult.ok === false) {
+    console.error(
+      "rejectVisitorPrecheckRequestServer: rejection email failed",
+      rejectionResult.error
+    );
   }
 
   return { ok: true };
