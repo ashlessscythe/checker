@@ -159,7 +159,7 @@ export default function VisitorAdmin() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [isSendingInvite, setIsSendingInvite] = useState(false);
-  const [sendVisitorProtocol, setSendVisitorProtocol] = useState(false);
+  const [sendVisitorProtocol, setSendVisitorProtocol] = useState(true);
   const [protocolUpload, setProtocolUpload] = useState<{
     fileName: string;
     mimeType: string;
@@ -499,7 +499,7 @@ export default function VisitorAdmin() {
       toast.success("Pre-check invite sent.");
       setInviteEmail("");
       setInviteName("");
-      setSendVisitorProtocol(false);
+      setSendVisitorProtocol(true);
     } catch (err: any) {
       console.error("Failed sending invite", err);
       toast.error(err?.message || "Failed to send invite.");
