@@ -113,7 +113,7 @@ const en: PrecheckStrings = {
     "Complete this form before your visit. Your link is valid for 24 hours from when you requested it at the lobby screen. After submission, admin approval is required; you'll receive your visitor code (QR + PDF) by email after approval.",
   introAdmin:
     "Complete this form before your visit. Your link is valid for 24 hours from when the invitation was sent. After submission, admin approval is required; you'll receive your visitor code (QR + PDF) by email after approval.",
-  meetingHeader: "Who do we have the pleasure of meeting?",
+  meetingHeader: "What is your name?",
   requiredStar: "*",
   firstName: "First name",
   lastName: "Last name",
