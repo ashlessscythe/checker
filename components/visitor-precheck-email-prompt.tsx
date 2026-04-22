@@ -13,6 +13,12 @@ import {
 } from "./ui/select";
 import toast from "react-hot-toast";
 import { db } from "@/lib/instantdb";
+import {
+  TurnstileWidget,
+  type TurnstileWidgetHandle,
+  getTurnstileModeFromEnv,
+  isTurnstileEnabled,
+} from "@/components/turnstile-widget";
 
 const EMAIL_MODAL_TIMEOUT_SECONDS = 30;
 const CHOOSE_MODAL_TIMEOUT_SECONDS = 60;
@@ -70,6 +76,7 @@ export default function VisitorPrecheckEmailPrompt() {
   >("idle");
 
   const emailInputRef = useRef<HTMLInputElement>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
 
   // Match visitor admin query shape (`$: {}`); boolean `where` on useQuery can be unreliable.
   // Filter active options client-side (same result as pre-check page).
@@ -259,12 +266,15 @@ export default function VisitorPrecheckEmailPrompt() {
 
     setIsSubmittingEmail(true);
     try {
+      const turnstileToken = isTurnstileEnabled()
+        ? await turnstileRef.current?.execute()
+        : "";
       const res = await fetch("/api/visitor/precheck/invite", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, source: "kiosk_email" }),
+        body: JSON.stringify({ email, source: "kiosk_email", turnstileToken }),
       });
 
       if (!res.ok) {
@@ -347,6 +357,9 @@ export default function VisitorPrecheckEmailPrompt() {
 
     setIsSubmittingRegister(true);
     try {
+      const turnstileToken = isTurnstileEnabled()
+        ? await turnstileRef.current?.execute()
+        : "";
       const res = await fetch("/api/visitor/precheck/kiosk-register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -361,6 +374,7 @@ export default function VisitorPrecheckEmailPrompt() {
           protocolAcknowledged: kioskProtocolRequired
             ? protocolAcknowledged
             : false,
+          turnstileToken,
         }),
       });
 
@@ -464,6 +478,13 @@ export default function VisitorPrecheckEmailPrompt() {
               {String(emailTimeLeft % 60).padStart(2, "0")}
             </div>
             <form onSubmit={handleEmailSubmit} className="space-y-3">
+              <TurnstileWidget
+                ref={turnstileRef}
+                mode={getTurnstileModeFromEnv()}
+                className={getTurnstileModeFromEnv() === "interactive" ? "" : "hidden"}
+                action="kiosk_email_invite"
+                onError={(m) => toast.error(m)}
+              />
               <Input
                 type="email"
                 placeholder="you@example.com"
@@ -495,6 +516,13 @@ export default function VisitorPrecheckEmailPrompt() {
 
         {phase === "register" && (
           <form onSubmit={handleRegisterSubmit} className="space-y-3">
+            <TurnstileWidget
+              ref={turnstileRef}
+              mode={getTurnstileModeFromEnv()}
+              className={getTurnstileModeFromEnv() === "interactive" ? "" : "hidden"}
+              action="kiosk_register"
+              onError={(m) => toast.error(m)}
+            />
             {optionsError ? (
               <p className="text-sm text-amber-800 dark:text-amber-200">
                 Could not load visit options. Use the text fields below, or try

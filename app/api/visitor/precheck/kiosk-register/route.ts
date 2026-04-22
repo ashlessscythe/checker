@@ -3,12 +3,12 @@ import { id, tx } from "@instantdb/admin";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
 import { signPrecheckToken } from "@/lib/visitor-precheck-token";
 import { notifyHostForPrecheckRequestIfConfigured } from "@/lib/visitor-precheck-notify-host";
+import { verifyTurnstileToken } from "@/lib/turnstile";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 
 export const runtime = "nodejs";
 
-const appBaseUrl =
-  process.env.NEXT_PUBLIC_APP_BASE_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+const appBaseUrl = getAppBaseUrl();
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -16,6 +16,27 @@ export async function POST(req: Request) {
   try {
     const adminAPI = requireAdminAPI();
     const body = await req.json();
+
+    const turnstileToken = (body?.turnstileToken as string | undefined) ?? "";
+    const remoteIp =
+      req.headers.get("CF-Connecting-IP") ||
+      req.headers.get("x-real-ip") ||
+      req.headers.get("x-forwarded-for")?.split(",")?.[0]?.trim() ||
+      null;
+    const turnstile = await verifyTurnstileToken({
+      token: turnstileToken,
+      remoteIp,
+      action: "kiosk_register",
+    });
+    if (!turnstile.ok) {
+      return NextResponse.json(
+        {
+          error: "Anti-bot check failed.",
+          codes: "codes" in turnstile ? turnstile.codes : undefined,
+        },
+        { status: 400 }
+      );
+    }
 
     const email = (body?.email as string | undefined)?.trim().toLowerCase();
     const visitorFirstName =

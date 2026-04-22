@@ -3,15 +3,14 @@ import { Resend } from "resend";
 import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
 import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 
 export const runtime = "nodejs";
 
 const resendApiKey = process.env.RESEND_API_KEY;
 const resendFromEmail = process.env.RESEND_FROM_EMAIL;
 
-const appBaseUrl =
-  process.env.NEXT_PUBLIC_APP_BASE_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+const appBaseUrl = getAppBaseUrl();
 
 export async function POST(req: Request) {
   if (!resendApiKey || !resendFromEmail) {

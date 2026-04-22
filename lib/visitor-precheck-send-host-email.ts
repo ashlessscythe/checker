@@ -3,13 +3,12 @@ import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
 import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
 import { signHostPrecheckReviewToken } from "@/lib/visitor-precheck-host-token";
 import { waitForHostNotifyEmailRateLimit } from "@/lib/visitor-precheck-host-notify-rate-limit";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 
 const resendApiKey = process.env.RESEND_API_KEY;
 const resendFromEmail = process.env.RESEND_FROM_EMAIL;
 
-const appBaseUrl =
-  process.env.NEXT_PUBLIC_APP_BASE_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+const appBaseUrl = getAppBaseUrl();
 
 export type HostNotifyRequestPayload = {
   requestId: string;
@@ -43,7 +42,7 @@ export async function sendHostPrecheckNotificationEmail(
   } = payload;
 
   const reviewToken = signHostPrecheckReviewToken(requestId);
-  const reviewUrl = `${appBaseUrl.replace(/\/$/, "")}/visitor/host-review?t=${encodeURIComponent(reviewToken)}`;
+  const reviewUrl = `${appBaseUrl}/visitor/host-review?t=${encodeURIComponent(reviewToken)}`;
 
   const visitorDisplayName = visitorPrecheckDisplayName({
     visitorFirstName: v.visitorFirstName,

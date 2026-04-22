@@ -24,6 +24,12 @@ import {
   PRECHECK_LOCALE_STORAGE_KEY,
   type PrecheckLocale,
 } from "@/lib/visitor-precheck-i18n";
+import {
+  TurnstileWidget,
+  type TurnstileWidgetHandle,
+  getTurnstileModeFromEnv,
+  isTurnstileEnabled,
+} from "@/components/turnstile-widget";
 
 interface VisitOption {
   id: string;
@@ -169,6 +175,7 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
   const [details, setDetails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validateUserMessage, setValidateUserMessage] = useState<string | null>(null);
+  const turnstileRef = React.useRef<TurnstileWidgetHandle>(null);
 
   useEffect(() => {
     async function validate() {
@@ -425,6 +432,20 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
     setIsSubmitting(true);
 
     try {
+      if (isTurnstileEnabled()) {
+        const turnstileToken = await turnstileRef.current?.execute();
+        const verifyRes = await fetch("/api/turnstile/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: turnstileToken, action: "visitor_precheck_submit" }),
+        });
+        if (!verifyRes.ok) {
+          const body = await verifyRes.json().catch(() => null);
+          toast.error(body?.error || "Anti-bot check failed. Please try again.");
+          return;
+        }
+      }
+
       const finalWho = who === "Other" ? whoOther || "Other" : who;
       const finalWhy = why === "Other" ? whyOther || "Other" : why;
       const visitTimestamp = visitMs;
@@ -737,6 +758,13 @@ function VisitorPrecheckContent({ locale }: { locale: PrecheckLocale }) {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <TurnstileWidget
+            ref={turnstileRef}
+            mode={getTurnstileModeFromEnv()}
+            className={getTurnstileModeFromEnv() === "interactive" ? "" : "hidden"}
+            action="visitor_precheck_submit"
+            onError={(m) => toast.error(m)}
+          />
           <div className="rounded-lg border border-blue-100 bg-blue-50/80 p-4 dark:border-blue-900/40 dark:bg-blue-950/30">
             <p className="mb-3 text-sm font-medium text-gray-900 dark:text-gray-100">
               {s.meetingHeader}{" "}

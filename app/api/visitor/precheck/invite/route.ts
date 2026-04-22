@@ -1,19 +1,17 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 import {
   signPrecheckToken,
   type PrecheckTokenSource,
 } from "@/lib/visitor-precheck-token";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 
 const resendApiKey = process.env.RESEND_API_KEY;
 const resendFromEmail = process.env.RESEND_FROM_EMAIL;
 
-// Prefer explicit public base URL; fall back to Vercel URL; then localhost
-const appBaseUrlRaw =
-  process.env.NEXT_PUBLIC_APP_BASE_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-const appBaseUrl = appBaseUrlRaw.replace(/\/+$/, "");
+const appBaseUrl = getAppBaseUrl();
 
 const resend =
   resendApiKey && resendFromEmail ? new Resend(resendApiKey) : null;
@@ -33,6 +31,27 @@ export async function POST(req: Request) {
     const name = nameRaw && nameRaw.length > 0 ? nameRaw : email;
     const source = parseInviteSource(body?.source as string | undefined);
     const sendVisitorProtocol = Boolean(body?.sendVisitorProtocol);
+    const turnstileToken = (body?.turnstileToken as string | undefined) ?? "";
+
+    const remoteIp =
+      req.headers.get("CF-Connecting-IP") ||
+      req.headers.get("x-real-ip") ||
+      req.headers.get("x-forwarded-for")?.split(",")?.[0]?.trim() ||
+      null;
+    const turnstile = await verifyTurnstileToken({
+      token: turnstileToken,
+      remoteIp,
+      action: "kiosk_email_invite",
+    });
+    if (!turnstile.ok) {
+      return NextResponse.json(
+        {
+          error: "Anti-bot check failed.",
+          codes: "codes" in turnstile ? turnstile.codes : undefined,
+        },
+        { status: 400 }
+      );
+    }
 
     if (!email || !email.includes("@")) {
       return NextResponse.json(

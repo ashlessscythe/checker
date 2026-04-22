@@ -112,8 +112,10 @@ npm install
   Visitor pre-check (email token) settings:
   ```
   PRECHECK_TOKEN_SECRET="somethingsupersecret"
-  NEXT_PUBLIC_APP_BASE_URL="http://127.0.0.1:3000"
+  NEXT_PUBLIC_APP_BASE_URL="http://localhost:3000"
   ```
+
+  Use `http://localhost:3000` (not `127.0.0.1`) in the browser for local dev with Turnstile; they are different origins. If you still set `NEXT_PUBLIC_APP_BASE_URL` to `http://127.0.0.1:…`, this repo normalizes that to `localhost` in **development only** when building email links and server-side fetches to your own API.
 
   Email delivery (Resend) settings (used for visitor pre-check emails and admin test email):
   ```
@@ -126,13 +128,36 @@ npm install
   NEXT_PUBLIC_VISITOR_DISPLAY_TIMEZONE="America/Denver"
   ```
 
+  Cloudflare Turnstile (anti-bot protection for visitor email + pre-check forms):
+  ```
+  TURNSTILE_SECRET_KEY="keygoeshere"
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY="keygoeshere"
+  # optional: "invisible" (default) or "interactive" (checkbox)
+  NEXT_PUBLIC_TURNSTILE_MODE="invisible"
+  ```
+
+  **Local dev console (often looks scary, usually harmless):**
+
+  - **401** on `challenges.cloudflare.com/.../pat/...` — Turnstile probing **Private Access Tokens**; common when no PAT is available (especially on localhost). Ignore if tokens verify and forms work.
+  - **“Blocked a frame … protocols / domains / ports must match”** — The challenge UI lives on **`https://challenges.cloudflare.com`**; your app is **`https://localhost:3000`** or **`https://127.0.0.1:3000`**. Those are **different sites** under the browser’s same-origin rules, so Chrome may log this when Turnstile’s scripts touch frame boundaries. **HTTPS does not remove that** (the domains still differ). It is **not** proof that Turnstile failed; confirm with a real submit and `POST /api/turnstile/verify` returning **200**.
+
+  To run the dev server over HTTPS (optional, for parity with production TLS):
+
+  ```
+  npm run dev:https
+  ```
+
+  Then open `https://localhost:3000` (accept the self-signed cert once) and set `NEXT_PUBLIC_APP_BASE_URL="https://localhost:3000"`.
+
+  Allow both `localhost` and `127.0.0.1` in the Turnstile widget if you switch hosts; prefer **`localhost`** in the address bar for local dev.
+
 4. Run the development server:
 
 ```
 npm run dev
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the app in action!
+5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the app in action! (Or `npm run dev:https` and use `https://localhost:3000` as above.)
 
 ### 🌐 Deployment
 
