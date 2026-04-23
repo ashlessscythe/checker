@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
+import { getVendorLobbyEnabledFromDb } from "@/lib/kiosk-lobby-settings-server";
 import {
   allocateUniqueVendorSixDigitCode,
   transactVendorCheckin,
@@ -45,6 +46,12 @@ async function loadVendorReason(
 export async function POST(req: Request) {
   try {
     const adminAPI = requireAdminAPI();
+    if (!(await getVendorLobbyEnabledFromDb(adminAPI))) {
+      return NextResponse.json(
+        { error: "Vendor check-in is disabled." },
+        { status: 403 }
+      );
+    }
     const body = await req.json().catch(() => ({}));
 
     const firstName = String(body?.firstName ?? "").trim();

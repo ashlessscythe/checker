@@ -5,6 +5,8 @@ import { db } from "@/lib/instantdb";
 import { tx, id } from "@instantdb/react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { Switch } from "./ui/Switch";
+import AdminCollapsible from "./admin-collapsible";
 import {
   Select,
   SelectContent,
@@ -16,6 +18,10 @@ import toast from "react-hot-toast";
 import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
 import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
 import VendorAdminSection from "@/components/vendor-admin-section";
+import {
+  KIOSK_LOBBY_SETTINGS_KEY,
+  type KioskLobbySettingsRow,
+} from "@/lib/kiosk-lobby-settings";
 
 /** Pending rows older than this after submit are highlighted (admin has not acted). */
 const STALE_PENDING_MS = 24 * 60 * 60 * 1000;
@@ -138,6 +144,9 @@ export default function VisitorAdmin() {
     visitorApprovalNotifyRecipients: {
       $: {},
     },
+    kioskLobbySettings: {
+      $: { where: { key: KIOSK_LOBBY_SETTINGS_KEY } },
+    },
   });
 
   const {
@@ -177,6 +186,59 @@ export default function VisitorAdmin() {
   const [notifyName, setNotifyName] = useState("");
   const [notifyEmail, setNotifyEmail] = useState("");
   const [isSavingNotifyRecipient, setIsSavingNotifyRecipient] = useState(false);
+
+  const [adminSec, setAdminSec] = useState({
+    lobby: true,
+    vendors: false,
+    invite: false,
+    options: false,
+    notify: false,
+    approvals: false,
+    approved: false,
+  });
+  const [savingLobbyFlags, setSavingLobbyFlags] = useState(false);
+
+  const kioskLobbyRow = (data?.kioskLobbySettings?.[0] ??
+    undefined) as KioskLobbySettingsRow | undefined;
+  const vendorLobbyEnabled = kioskLobbyRow?.vendorCheckInEnabled !== false;
+  const guestLobbyEnabled = kioskLobbyRow?.visitorGuestCheckInEnabled !== false;
+
+  const persistKioskLobby = async (patch: {
+    vendorCheckInEnabled?: boolean;
+    visitorGuestCheckInEnabled?: boolean;
+  }) => {
+    setSavingLobbyFlags(true);
+    try {
+      const now = Date.now();
+      const nextVendor = patch.vendorCheckInEnabled ?? vendorLobbyEnabled;
+      const nextGuest = patch.visitorGuestCheckInEnabled ?? guestLobbyEnabled;
+      if (!kioskLobbyRow) {
+        const newId = id();
+        await db.transact([
+          tx.kioskLobbySettings[newId].update({
+            key: KIOSK_LOBBY_SETTINGS_KEY,
+            vendorCheckInEnabled: nextVendor,
+            visitorGuestCheckInEnabled: nextGuest,
+            updatedAt: now,
+          }),
+        ]);
+      } else {
+        await db.transact([
+          tx.kioskLobbySettings[kioskLobbyRow.id].update({
+            vendorCheckInEnabled: nextVendor,
+            visitorGuestCheckInEnabled: nextGuest,
+            updatedAt: now,
+          }),
+        ]);
+      }
+      toast.success("Lobby settings saved.");
+    } catch (err: unknown) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Failed to save settings.");
+    } finally {
+      setSavingLobbyFlags(false);
+    }
+  };
 
   const options = (data?.visitOptions || []) as Array<{
     id: string;
@@ -651,13 +713,72 @@ export default function VisitorAdmin() {
   }
 
   return (
-    <div className="space-y-8">
-      <VendorAdminSection />
+    <div className="space-y-4">
+      <AdminCollapsible
+        title="Lobby kiosk (main page)"
+        open={adminSec.lobby}
+        onToggle={() => setAdminSec((s) => ({ ...s, lobby: !s.lobby }))}
+      >
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+          Turn the lobby buttons on or off. When off, guests still see a short message
+          instead of the form. Admin invite and approvals below are not affected.
+        </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 py-3 dark:border-gray-600 dark:bg-gray-800">
+            <div>
+              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Visitor / guest self-registration
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                Green &quot;Visitor? Register here&quot; on the main page
+              </div>
+            </div>
+            <Switch
+              isChecked={guestLobbyEnabled}
+              onChange={() =>
+                persistKioskLobby({
+                  visitorGuestCheckInEnabled: !guestLobbyEnabled,
+                })
+              }
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 py-3 dark:border-gray-600 dark:bg-gray-800">
+            <div>
+              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Vendor check-in / checkout
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                Blue vendor button on the main page
+              </div>
+            </div>
+            <Switch
+              isChecked={vendorLobbyEnabled}
+              onChange={() =>
+                persistKioskLobby({
+                  vendorCheckInEnabled: !vendorLobbyEnabled,
+                })
+              }
+            />
+          </div>
+        </div>
+        {savingLobbyFlags ? (
+          <p className="mt-2 text-xs text-gray-500">Saving…</p>
+        ) : null}
+      </AdminCollapsible>
 
-      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
-        <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
-          Send Visitor Pre-Check Invite
-        </h2>
+      <AdminCollapsible
+        title="Vendor companies and visit reasons"
+        open={adminSec.vendors}
+        onToggle={() => setAdminSec((s) => ({ ...s, vendors: !s.vendors }))}
+      >
+        <VendorAdminSection />
+      </AdminCollapsible>
+
+      <AdminCollapsible
+        title="Send Visitor Pre-Check Invite"
+        open={adminSec.invite}
+        onToggle={() => setAdminSec((s) => ({ ...s, invite: !s.invite }))}
+      >
         <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
           Manually send a visitor pre-check email to any address. The visitor will
           complete their details and receive a code usable at the kiosk.
@@ -741,12 +862,13 @@ export default function VisitorAdmin() {
           When checked, the saved protocol is attached to invite/pending emails and the
           visitor must acknowledge read and receipt during pre-check.
         </p>
-      </div>
+      </AdminCollapsible>
 
-      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
-        <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
-          Visitor Options (Who / Why / Company)
-        </h2>
+      <AdminCollapsible
+        title="Visitor options (Who / Why / Company)"
+        open={adminSec.options}
+        onToggle={() => setAdminSec((s) => ({ ...s, options: !s.options }))}
+      >
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
           Manage the dropdown options for who visitors are seeing, why they&apos;re visiting,
           and which company they represent. These appear on the pre-check form.
@@ -909,12 +1031,13 @@ export default function VisitorAdmin() {
             </ul>
           </div>
         </div>
-      </div>
+      </AdminCollapsible>
 
-      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
-        <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
-          Internal approval notifications
-        </h2>
+      <AdminCollapsible
+        title="Internal approval notifications"
+        open={adminSec.notify}
+        onToggle={() => setAdminSec((s) => ({ ...s, notify: !s.notify }))}
+      >
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
           Recipients listed below receive a summary email when a visitor pre-check is{" "}
           <strong>approved</strong> (after the visitor receives kiosk check-in credentials).
@@ -982,12 +1105,13 @@ export default function VisitorAdmin() {
             ))}
           </ul>
         )}
-      </div>
+      </AdminCollapsible>
 
-      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
-        <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
-          Visitor Pre-Check Approvals
-        </h2>
+      <AdminCollapsible
+        title="Visitor pre-check approvals"
+        open={adminSec.approvals}
+        onToggle={() => setAdminSec((s) => ({ ...s, approvals: !s.approvals }))}
+      >
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
           Approve or reject visitor requests. On approval, the visitor gets a QR + PDF by
           email and their badge will be recognized at the kiosk. Requests still pending more
@@ -1425,12 +1549,13 @@ export default function VisitorAdmin() {
             </div>
           </div>
         ) : null}
-      </div>
+      </AdminCollapsible>
 
-      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
-        <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
-          Pre-checked visitors (approved)
-        </h2>
+      <AdminCollapsible
+        title="Pre-checked visitors (approved)"
+        open={adminSec.approved}
+        onToggle={() => setAdminSec((s) => ({ ...s, approved: !s.approved }))}
+      >
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
           Visitors who were approved through pre-check have kiosk accounts and barcodes.
           Remove a row to delete their pre-check record and kiosk user so they can no
@@ -1569,7 +1694,7 @@ export default function VisitorAdmin() {
             </div>
           </div>
         ) : null}
-      </div>
+      </AdminCollapsible>
     </div>
   );
 }

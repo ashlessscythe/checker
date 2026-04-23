@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
+import { getVendorLobbyEnabledFromDb } from "@/lib/kiosk-lobby-settings-server";
 import {
   isUserCheckedInFromPunches,
   normName,
@@ -20,6 +21,12 @@ type UserWithPunches = {
 export async function POST(req: Request) {
   try {
     const adminAPI = requireAdminAPI();
+    if (!(await getVendorLobbyEnabledFromDb(adminAPI))) {
+      return NextResponse.json(
+        { error: "Vendor check-in is disabled." },
+        { status: 403 }
+      );
+    }
     const body = await req.json().catch(() => ({}));
     const mode = body?.mode as string | undefined;
 

@@ -13,6 +13,10 @@ import {
 } from "@/components/ui/select";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
+import {
+  KIOSK_LOBBY_SETTINGS_KEY,
+  isVendorCheckInEnabled,
+} from "@/lib/kiosk-lobby-settings";
 
 const OTHER = "__other__";
 
@@ -45,7 +49,12 @@ type Step =
   | "checkoutForgot"
   | "showCode";
 
-export default function VendorKioskModal() {
+type VendorKioskModalProps = {
+  /** When the kiosk modal is open (any step except closed), main barcode focus should stay off. */
+  onOpenChange?: (open: boolean) => void;
+};
+
+export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps) {
   const [step, setStep] = useState<Step>("closed");
   const [showCode, setShowCode] = useState("");
   const [timeLeft, setTimeLeft] = useState(VENDOR_MODAL_TIMEOUT_SECONDS);
@@ -55,7 +64,12 @@ export default function VendorKioskModal() {
       $: { where: { isActive: true } },
       reasons: {},
     },
+    kioskLobbySettings: {
+      $: { where: { key: KIOSK_LOBBY_SETTINGS_KEY } },
+    },
   });
+
+  const vendorLobbyEnabled = isVendorCheckInEnabled(data?.kioskLobbySettings);
 
   const vendors = useMemo(() => {
     const list = (data?.vendors || []) as VendorRow[];
@@ -78,6 +92,10 @@ export default function VendorKioskModal() {
     setCoFirst("");
     setCoLast("");
   }, []);
+
+  useEffect(() => {
+    onOpenChange?.(step !== "closed");
+  }, [step, onOpenChange]);
 
   useEffect(() => {
     if (step === "closed") return;
@@ -300,6 +318,13 @@ export default function VendorKioskModal() {
   };
 
   if (step === "closed") {
+    if (!vendorLobbyEnabled) {
+      return (
+        <div className="w-full max-w-md rounded-lg border border-gray-200 bg-gray-100 px-4 py-3 text-center text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+          Vendor check-in is turned off. Ask staff if you need help.
+        </div>
+      );
+    }
     return (
       <Button
         type="button"

@@ -13,6 +13,10 @@ import {
 } from "./ui/select";
 import toast from "react-hot-toast";
 import { db } from "@/lib/instantdb";
+import {
+  KIOSK_LOBBY_SETTINGS_KEY,
+  isVisitorGuestCheckInEnabled,
+} from "@/lib/kiosk-lobby-settings";
 
 const EMAIL_MODAL_TIMEOUT_SECONDS = 30;
 const CHOOSE_MODAL_TIMEOUT_SECONDS = 60;
@@ -82,6 +86,15 @@ export default function VisitorPrecheckEmailPrompt() {
       $: {},
     },
   });
+
+  const { data: lobbyData } = db.useQuery({
+    kioskLobbySettings: {
+      $: { where: { key: KIOSK_LOBBY_SETTINGS_KEY } },
+    },
+  });
+  const guestLobbyEnabled = isVisitorGuestCheckInEnabled(
+    lobbyData?.kioskLobbySettings
+  );
 
   const { whoOptions, whyOptions, companyOptions } = useMemo(() => {
     const options = (optionsData?.visitOptions || []) as VisitOption[];
@@ -382,6 +395,13 @@ export default function VisitorPrecheckEmailPrompt() {
   };
 
   if (phase === "closed") {
+    if (!guestLobbyEnabled) {
+      return (
+        <div className="w-full max-w-md rounded-lg border border-gray-200 bg-gray-100 px-4 py-3 text-center text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+          Visitor self-registration is turned off. Ask staff if you need help.
+        </div>
+      );
+    }
     return (
       <Button
         onClick={() => setPhase("choose")}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { id, tx } from "@instantdb/admin";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
+import { getVisitorGuestLobbyEnabledFromDb } from "@/lib/kiosk-lobby-settings-server";
 import { signPrecheckToken } from "@/lib/visitor-precheck-token";
 import { notifyHostForPrecheckRequestIfConfigured } from "@/lib/visitor-precheck-notify-host";
 
@@ -15,6 +16,12 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function POST(req: Request) {
   try {
     const adminAPI = requireAdminAPI();
+    if (!(await getVisitorGuestLobbyEnabledFromDb(adminAPI))) {
+      return NextResponse.json(
+        { error: "Visitor self-registration is disabled." },
+        { status: 403 }
+      );
+    }
     const body = await req.json();
 
     const email = (body?.email as string | undefined)?.trim().toLowerCase();

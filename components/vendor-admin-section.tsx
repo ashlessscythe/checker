@@ -150,24 +150,15 @@ export default function VendorAdminSection() {
 
   if (isLoading) {
     return (
-      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
-        <p className="text-sm text-gray-600 dark:text-gray-300">Loading vendors…</p>
-      </div>
+      <p className="text-sm text-gray-600 dark:text-gray-300">Loading vendors…</p>
     );
   }
   if (error) {
-    return (
-      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
-        <p className="text-sm text-red-600">Error: {error.message}</p>
-      </div>
-    );
+    return <p className="text-sm text-red-600">Error: {error.message}</p>;
   }
 
   return (
-    <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
-      <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
-        Vendor companies and visit reasons
-      </h2>
+    <>
       <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
         Companies appear in the lobby <strong>Vendor check-in / checkout</strong>{" "}
         dropdown. Each company has its own list of reasons; the kiosk also offers an{" "}
@@ -305,6 +296,6 @@ export default function VendorAdminSection() {
           })}
         </ul>
       )}
-    </div>
+    </>
   );
 }

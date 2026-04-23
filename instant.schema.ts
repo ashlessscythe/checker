@@ -239,6 +239,15 @@ const _schema = i.schema({
       checkedOutAt: i.number().indexed(),
       createdAt: i.number(),
     }),
+    /**
+     * Singleton lobby flags (key `default`). When missing, app treats both as enabled.
+     */
+    kioskLobbySettings: i.entity({
+      key: i.string().unique().indexed(),
+      vendorCheckInEnabled: i.boolean(),
+      visitorGuestCheckInEnabled: i.boolean(),
+      updatedAt: i.number(),
+    }),
   },
   links: {
     userDepartment: {

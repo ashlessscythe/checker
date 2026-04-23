@@ -1,6 +1,6 @@
 // app/page.tsx
 "use client";
-import React, { useMemo, useState, Suspense } from "react";
+import React, { useMemo, useState, useCallback, Suspense } from "react";
 import CheckInOutForm from "@/components/checkinoutform";
 import { AuthModal } from "@/components/authmodal";
 import { useAuth, AuthProvider } from "@/hooks/authContext";
@@ -32,10 +32,17 @@ function HomeContent() {
 
   const [showChecklist, setShowChecklist] = useState(false);
   const [showCheckins, setShowCheckins] = useState(false);
+  const [isVendorKioskOpen, setIsVendorKioskOpen] = useState(false);
+
+  const onVendorKioskOpenChange = useCallback((open: boolean) => {
+    setIsVendorKioskOpen(open);
+  }, []);
 
   const shouldFocusCheckInOut = useMemo(() => {
-    return !isAuthModalOpen && !isAuthenticated;
-  }, [isAuthModalOpen, isAuthenticated]);
+    return (
+      !isAuthModalOpen && !isAuthenticated && !isVendorKioskOpen
+    );
+  }, [isAuthModalOpen, isAuthenticated, isVendorKioskOpen]);
 
   // User can see checklist and history if they're either authorized or an admin
   const canViewChecklist = isAuthorized || isAdmin;
@@ -52,7 +59,7 @@ function HomeContent() {
               <VisitorPrecheckEmailPrompt />
             </div>
             <div className="flex min-w-0 flex-1 justify-center">
-              <VendorKioskModal />
+              <VendorKioskModal onOpenChange={onVendorKioskOpenChange} />
             </div>
           </div>
         </div>
