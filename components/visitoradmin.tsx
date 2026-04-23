@@ -15,6 +15,7 @@ import {
 import toast from "react-hot-toast";
 import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
 import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
+import VendorAdminSection from "@/components/vendor-admin-section";
 
 /** Pending rows older than this after submit are highlighted (admin has not acted). */
 const STALE_PENDING_MS = 24 * 60 * 60 * 1000;
@@ -651,6 +652,8 @@ export default function VisitorAdmin() {
 
   return (
     <div className="space-y-8">
+      <VendorAdminSection />
+
       <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
         <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white">
           Send Visitor Pre-Check Invite

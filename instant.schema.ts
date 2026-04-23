@@ -208,6 +208,37 @@ const _schema = i.schema({
       sortOrder: i.number(),
       createdAt: i.number(),
     }),
+    /** Service companies for vendor kiosk (dropdown on site). */
+    vendors: i.entity({
+      name: i.string(),
+      sortOrder: i.number(),
+      isActive: i.boolean(),
+      createdAt: i.number(),
+    }),
+    /** Visit reasons configured per vendor (kiosk shows "Other" in UI without a row). */
+    vendorReasons: i.entity({
+      label: i.string(),
+      sortOrder: i.number(),
+      isActive: i.boolean(),
+      createdAt: i.number(),
+    }),
+    /**
+     * One row per vendor site visit; links to temp `users` (VENDOR dept) for punches / fire drill.
+     * `sixDigitCode` is unique and shown to the vendor for checkout.
+     */
+    vendorCheckins: i.entity({
+      sixDigitCode: i.string().unique().indexed(),
+      companyDisplayName: i.string(),
+      /** `vendors` entity id when chosen from list; empty when company is "Other". */
+      vendorListId: i.string(),
+      reasonDisplay: i.string(),
+      firstName: i.string(),
+      lastName: i.string(),
+      firstNameNorm: i.string().indexed(),
+      lastNameNorm: i.string().indexed(),
+      checkedOutAt: i.number().indexed(),
+      createdAt: i.number(),
+    }),
   },
   links: {
     userDepartment: {
@@ -292,6 +323,30 @@ const _schema = i.schema({
         on: "fireDrillReportSends",
         has: "one",
         label: "session",
+      },
+    },
+    vendorReasonVendorLink: {
+      forward: {
+        on: "vendorReasons",
+        has: "one",
+        label: "vendor",
+      },
+      reverse: {
+        on: "vendors",
+        has: "many",
+        label: "reasons",
+      },
+    },
+    vendorCheckinUserLink: {
+      forward: {
+        on: "vendorCheckins",
+        has: "one",
+        label: "user",
+      },
+      reverse: {
+        on: "users",
+        has: "many",
+        label: "vendorCheckins",
       },
     },
   },
