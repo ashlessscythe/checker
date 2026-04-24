@@ -321,7 +321,7 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
     if (!vendorLobbyEnabled) {
       return (
         <div className="w-full max-w-md rounded-lg border border-gray-200 bg-gray-100 px-4 py-3 text-center text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
-          Vendor check-in is turned off. Ask staff if you need help.
+          Vendor check-in is turned off. Ask that one guy if you need help.
         </div>
       );
     }
