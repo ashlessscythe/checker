@@ -40,7 +40,6 @@ const kioskPrecheckStrings = getPrecheckStrings("en-US");
 
 export default function VisitorPrecheckEmailPrompt() {
   const [phase, setPhase] = useState<Phase>("closed");
-  const [email, setEmail] = useState("");
   const [isSubmittingEmail, setIsSubmittingEmail] = useState(false);
   const [emailTimeLeft, setEmailTimeLeft] = useState(
     EMAIL_MODAL_TIMEOUT_SECONDS
@@ -49,6 +48,7 @@ export default function VisitorPrecheckEmailPrompt() {
     CHOOSE_MODAL_TIMEOUT_SECONDS
   );
 
+  const [email, setEmail] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [visitorFirstName, setVisitorFirstName] = useState("");
   const [visitorLastName, setVisitorLastName] = useState("");
@@ -68,7 +68,7 @@ export default function VisitorPrecheckEmailPrompt() {
   const [kioskProtocolRequired, setKioskProtocolRequired] = useState(false);
   const [protocolAcknowledged, setProtocolAcknowledged] = useState(false);
   const [protocolViewTicket, setProtocolViewTicket] = useState<string | null>(null);
-  /** Kiosk protocol link: idle (no protocol), loading, ready (href), or error */
+  /** Kiosk protocol link: idle (no protocol), loading, ready (href)  or error **/
   const [protocolDocLinkState, setProtocolDocLinkState] = useState<
     "idle" | "loading" | "ready" | "error"
   >("idle");
