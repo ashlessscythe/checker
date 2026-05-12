@@ -1,15 +1,22 @@
 // components/AdminPage.tsx
 "use client";
 
-import { useMemo, useState } from "react";
-import { tx } from "@instantdb/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { id, tx } from "@instantdb/react";
 import { db } from "../lib/instantdb";
 import toast, { Toaster } from "react-hot-toast";
+import Papa from "papaparse";
 import { useAutoNavigate } from "../hooks/useAutoNavigate";
 import { useAuth } from "../hooks/authContext";
 import { useDebounce } from "../hooks/useDebounce";
+import AdminCollapsible from "./admin-collapsible";
+import { USER_IMPORT_CSV_HEADERS } from "@/lib/user-import-csv-columns";
+import {
+  generateValidBarcode,
+  verifyBarcode,
+} from "@/utils/barcodeVerification";
 
-type EditField = "name" | "email" | "barcode";
+type EditField = "name" | "email" | "barcode" | "department";
 
 type TriState = "any" | "yes" | "no";
 type SortKey = "email" | "name" | "barcode";
@@ -43,8 +50,26 @@ function isValidEmail(s: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
+const USERS_CSV_SECTION_STORAGE_KEY = "checker-admin-users-csv-section";
+const USERS_LIST_SECTION_STORAGE_KEY = "checker-admin-users-list-section";
+const USERS_ADD_SECTION_STORAGE_KEY = "checker-admin-users-add-section";
+
+type ImportApiResult = {
+  ok?: boolean;
+  dryRun?: boolean;
+  createdCount?: number;
+  updatedCount?: number;
+  skippedCount?: number;
+  departmentsCreatedCount?: number;
+  rowErrors?: { line: number; message: string }[];
+  error?: string;
+};
+
 export default function AdminPage() {
-  const { data, isLoading, error } = db.useQuery({ users: {} });
+  const { data, isLoading, error } = db.useQuery({
+    users: {},
+    departments: {},
+  });
   const { user: authUser } = useAuth();
   const [editField, setEditField] = useState<{
     userId: string;
@@ -56,6 +81,107 @@ export default function AdminPage() {
   const [adminFilter, setAdminFilter] = useState<TriState>("any");
   const [authFilter, setAuthFilter] = useState<TriState>("any");
   const [sortKey, setSortKey] = useState<SortKey>("email");
+
+  const [csvSectionOpen, setCsvSectionOpen] = useState(false);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
+  const [importCsvText, setImportCsvText] = useState<string | null>(null);
+  const [importFileLabel, setImportFileLabel] = useState<string | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importOverwrite, setImportOverwrite] = useState(false);
+  const [importGenerateBarcode, setImportGenerateBarcode] = useState(true);
+  const [importCreateDept, setImportCreateDept] = useState(false);
+  const [lastImportPreview, setLastImportPreview] =
+    useState<ImportApiResult | null>(null);
+
+  const [usersListOpen, setUsersListOpen] = useState(true);
+  const [addSectionOpen, setAddSectionOpen] = useState(false);
+  const [newDeptName, setNewDeptName] = useState("");
+  const [newDeptCode, setNewDeptCode] = useState("");
+  const [creatingDept, setCreatingDept] = useState(false);
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserBarcode, setNewUserBarcode] = useState("");
+  const [newUserDeptId, setNewUserDeptId] = useState("");
+  const [newUserIsAdmin, setNewUserIsAdmin] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [deptListEditId, setDeptListEditId] = useState<string | null>(null);
+  const [deptListDraftName, setDeptListDraftName] = useState("");
+  const [deptListDraftCode, setDeptListDraftCode] = useState("");
+  const [savingDeptList, setSavingDeptList] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(USERS_CSV_SECTION_STORAGE_KEY);
+      if (raw === "true") setCsvSectionOpen(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(USERS_LIST_SECTION_STORAGE_KEY);
+      if (raw === "false") setUsersListOpen(false);
+      else setUsersListOpen(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(USERS_ADD_SECTION_STORAGE_KEY) === "true") {
+        setAddSectionOpen(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleCsvSection = () => {
+    setCsvSectionOpen((open) => {
+      const next = !open;
+      try {
+        localStorage.setItem(
+          USERS_CSV_SECTION_STORAGE_KEY,
+          next ? "true" : "false"
+        );
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  const toggleUsersListSection = () => {
+    setUsersListOpen((open) => {
+      const next = !open;
+      try {
+        localStorage.setItem(
+          USERS_LIST_SECTION_STORAGE_KEY,
+          next ? "true" : "false"
+        );
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  const toggleAddSection = () => {
+    setAddSectionOpen((open) => {
+      const next = !open;
+      try {
+        localStorage.setItem(
+          USERS_ADD_SECTION_STORAGE_KEY,
+          next ? "true" : "false"
+        );
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   useAutoNavigate("/", 300000);
 
@@ -87,6 +213,140 @@ export default function AdminPage() {
   }, [allUsers, debouncedSearch, adminFilter, authFilter, sortKey]);
 
   const currentAppUserId = authUser?.id ?? null;
+
+  const deptNameByUserDeptId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const d of data?.departments ?? []) {
+      map.set(d.id, d.name ?? "");
+    }
+    return map;
+  }, [data?.departments]);
+
+  const departmentsSorted = useMemo(() => {
+    return [...(data?.departments ?? [])].sort((a, b) =>
+      (a.name ?? "").localeCompare(b.name ?? "", undefined, {
+        sensitivity: "base",
+      })
+    );
+  }, [data?.departments]);
+
+  const exportUsersCsv = () => {
+    try {
+      const sorted = [...allUsers].sort((a, b) =>
+        (a.email ?? "").localeCompare(b.email ?? "", undefined, {
+          sensitivity: "base",
+        })
+      );
+      const rows = sorted.map((u) => ({
+        name: u.name ?? "",
+        email: u.email ?? "",
+        barcode: u.barcode ?? "",
+        is_admin: u.isAdmin ? "true" : "false",
+        department_name: deptNameByUserDeptId.get(u.deptId) ?? "",
+      }));
+      const csv = Papa.unparse(rows, {
+        columns: [...USER_IMPORT_CSV_HEADERS],
+        quotes: true,
+        header: true,
+      });
+      const blob = new Blob([`\ufeff${csv}`], {
+        type: "text/csv;charset=utf-8;",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `users-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("CSV downloaded.");
+    } catch (e) {
+      console.error(e);
+      toast.error("Could not build CSV export.");
+    }
+  };
+
+  const clearImportFile = () => {
+    setImportCsvText(null);
+    setImportFileLabel(null);
+    setLastImportPreview(null);
+    if (importFileInputRef.current) importFileInputRef.current.value = "";
+  };
+
+  const postUserImport = async (body: Record<string, unknown>) => {
+    const res = await fetch("/api/admin/users/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    let json: ImportApiResult = {};
+    try {
+      json = (await res.json()) as ImportApiResult;
+    } catch {
+      /* ignore */
+    }
+    if (!res.ok) {
+      throw new Error(json.error || `Import failed (${res.status})`);
+    }
+    return json;
+  };
+
+  const runImportDryRun = async () => {
+    if (!importCsvText?.trim()) {
+      toast.error("Choose a CSV file first (read in your browser).");
+      return;
+    }
+    setImportBusy(true);
+    setLastImportPreview(null);
+    try {
+      const result = await postUserImport({
+        csvText: importCsvText,
+        dryRun: true,
+        overwrite: importOverwrite,
+        generateBarcodeIfBlank: importGenerateBarcode,
+        createDepartmentIfMissing: importCreateDept,
+      });
+      setLastImportPreview(result);
+      toast.success("Preview ready — review counts and errors below.");
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Preview failed.");
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const runImportApply = async () => {
+    if (!importCsvText?.trim()) {
+      toast.error("Choose a CSV file first.");
+      return;
+    }
+    const ok = window.confirm(
+      "Apply this import to the database? Existing users are only updated when Overwrite is on."
+    );
+    if (!ok) return;
+    setImportBusy(true);
+    try {
+      const result = await postUserImport({
+        csvText: importCsvText,
+        dryRun: false,
+        overwrite: importOverwrite,
+        generateBarcodeIfBlank: importGenerateBarcode,
+        createDepartmentIfMissing: importCreateDept,
+      });
+      setLastImportPreview(result);
+      toast.success(
+        `Import finished: created ${result.createdCount ?? 0}, updated ${result.updatedCount ?? 0}, skipped ${result.skippedCount ?? 0}.`
+      );
+      clearImportFile();
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Import failed.");
+    } finally {
+      setImportBusy(false);
+    }
+  };
 
   const beginEdit = (userId: string, field: EditField, current: string) => {
     setEditField({ userId, field });
@@ -160,6 +420,239 @@ export default function AdminPage() {
     } catch (e) {
       console.error(e);
       toast.error("Failed to update barcode.");
+    }
+  };
+
+  const handleDepartmentSave = async (userId: string) => {
+    if (!draft) {
+      toast.error("Select a department.");
+      return;
+    }
+    try {
+      await db.transact([tx.users[userId].update({ deptId: draft })]);
+      toast.success("Department updated.");
+      cancelEdit();
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to update department.");
+    }
+  };
+
+  async function allocateUniqueBarcodeForNewUser(): Promise<string> {
+    for (let attempt = 0; attempt < 80; attempt++) {
+      const candidate = generateValidBarcode();
+      const { data: existing } = await db.queryOnce({
+        users: { $: { where: { barcode: candidate }, limit: 1 } },
+      });
+      if (!existing?.users?.length) return candidate;
+    }
+    throw new Error("Could not generate a unique kiosk barcode.");
+  }
+
+  const createDepartment = async () => {
+    const name = newDeptName.trim();
+    const departmentId = newDeptCode.trim();
+    if (!name) {
+      toast.error("Department display name is required.");
+      return;
+    }
+    if (!departmentId) {
+      toast.error("Department code is required (short id, e.g. ENG).");
+      return;
+    }
+    const dup = (data?.departments ?? []).some(
+      (d) => String(d.departmentId ?? "").trim() === departmentId
+    );
+    if (dup) {
+      toast.error("That department code is already in use.");
+      return;
+    }
+    setCreatingDept(true);
+    try {
+      const newId = id();
+      await db.transact([
+        tx.departments[newId].update({ name, departmentId }),
+      ]);
+      toast.success("Department created.");
+      setNewDeptName("");
+      setNewDeptCode("");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to create department.");
+    } finally {
+      setCreatingDept(false);
+    }
+  };
+
+  const createUser = async () => {
+    const name = newUserName.trim();
+    const email = normalizeEmail(newUserEmail);
+    if (!name) {
+      toast.error("Name is required.");
+      return;
+    }
+    if (!isValidEmail(email)) {
+      toast.error("Enter a valid email.");
+      return;
+    }
+    if (!newUserDeptId) {
+      toast.error("Select a department for this user.");
+      return;
+    }
+    const barcodeInput = newUserBarcode.trim();
+    let barcode = barcodeInput;
+    if (barcode) {
+      if (!verifyBarcode(barcode)) {
+        toast.error(
+          "Barcode must be a valid 20-character kiosk code, or leave blank to auto-generate."
+        );
+        return;
+      }
+      try {
+        const { data: existing } = await db.queryOnce({
+          users: { $: { where: { barcode }, limit: 1 } },
+        });
+        if (existing?.users?.length) {
+          toast.error("That barcode is already assigned.");
+          return;
+        }
+      } catch (e) {
+        console.error(e);
+        toast.error("Could not verify barcode.");
+        return;
+      }
+    } else {
+      try {
+        barcode = await allocateUniqueBarcodeForNewUser();
+      } catch (e) {
+        console.error(e);
+        toast.error(
+          e instanceof Error ? e.message : "Could not assign a barcode."
+        );
+        return;
+      }
+    }
+    try {
+      const { data: existingEmail } = await db.queryOnce({
+        users: { $: { where: { email }, limit: 1 } },
+      });
+      if (existingEmail?.users?.length) {
+        toast.error("That email is already registered.");
+        return;
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Could not verify email.");
+      return;
+    }
+    const now = Date.now();
+    setCreatingUser(true);
+    try {
+      const newId = id();
+      await db.transact([
+        tx.users[newId].update({
+          name,
+          email,
+          barcode,
+          isAdmin: newUserIsAdmin,
+          isAuth: false,
+          lastLoginAt: now,
+          createdAt: now,
+          serverCreatedAt: now,
+          deptId: newUserDeptId,
+          laptopSerial: "",
+          purpose: "",
+        }),
+      ]);
+      toast.success("User created.");
+      setNewUserName("");
+      setNewUserEmail("");
+      setNewUserBarcode("");
+      setNewUserDeptId("");
+      setNewUserIsAdmin(false);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to create user.");
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  const beginDeptListEdit = (dept: {
+    id: string;
+    name?: string;
+    departmentId?: string;
+  }) => {
+    setDeptListEditId(dept.id);
+    setDeptListDraftName(dept.name ?? "");
+    setDeptListDraftCode(String(dept.departmentId ?? ""));
+  };
+
+  const cancelDeptListEdit = () => {
+    setDeptListEditId(null);
+    setDeptListDraftName("");
+    setDeptListDraftCode("");
+  };
+
+  const saveDeptListEdit = async () => {
+    if (!deptListEditId) return;
+    const name = deptListDraftName.trim();
+    const departmentId = deptListDraftCode.trim();
+    if (!name) {
+      toast.error("Department name is required.");
+      return;
+    }
+    if (!departmentId) {
+      toast.error("Department code is required.");
+      return;
+    }
+    const dup = (data?.departments ?? []).some(
+      (d) =>
+        d.id !== deptListEditId &&
+        String(d.departmentId ?? "").trim() === departmentId
+    );
+    if (dup) {
+      toast.error("Another department already uses that code.");
+      return;
+    }
+    setSavingDeptList(true);
+    try {
+      await db.transact([
+        tx.departments[deptListEditId].update({ name, departmentId }),
+      ]);
+      toast.success("Department updated.");
+      cancelDeptListEdit();
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to update department.");
+    } finally {
+      setSavingDeptList(false);
+    }
+  };
+
+  const deleteDepartment = async (dept: {
+    id: string;
+    name?: string;
+    departmentId?: string;
+  }) => {
+    const assigned = allUsers.filter((u) => u.deptId === dept.id).length;
+    if (assigned > 0) {
+      toast.error(
+        `Cannot delete: ${assigned} user(s) are still assigned to this department. Reassign them first.`
+      );
+      return;
+    }
+    const ok = window.confirm(
+      `Delete department "${dept.name ?? dept.id}" (${dept.departmentId})? This cannot be undone.`
+    );
+    if (!ok) return;
+    try {
+      await db.transact([tx.departments[dept.id].delete()]);
+      toast.success("Department deleted.");
+      if (deptListEditId === dept.id) cancelDeptListEdit();
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to delete department.");
     }
   };
 
@@ -237,7 +730,423 @@ export default function AdminPage() {
         (sometimes called a badge ID or passcode).
       </p>
 
-      <div className="mb-5 space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-5">
+      <AdminCollapsible
+        title="Add department or user"
+        open={addSectionOpen}
+        onToggle={toggleAddSection}
+      >
+        <div className="space-y-6">
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+              New department
+            </h3>
+            <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+              Display name appears in the app; department code is the stable id
+              used for CSV import matching (e.g. ENG).
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="admin-new-dept-name"
+                  className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300"
+                >
+                  Display name
+                </label>
+                <input
+                  id="admin-new-dept-name"
+                  type="text"
+                  value={newDeptName}
+                  onChange={(e) => setNewDeptName(e.target.value)}
+                  placeholder="Engineering"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="admin-new-dept-code"
+                  className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300"
+                >
+                  Department code
+                </label>
+                <input
+                  id="admin-new-dept-code"
+                  type="text"
+                  value={newDeptCode}
+                  onChange={(e) => setNewDeptCode(e.target.value)}
+                  placeholder="ENG"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={creatingDept}
+              onClick={createDepartment}
+              className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {creatingDept ? "Creating…" : "Create department"}
+            </button>
+          </div>
+
+          <div className="border-t border-gray-200 pt-6 dark:border-gray-600">
+            <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+              New user
+            </h3>
+            <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+              Kiosk authorization starts off; use the user card to grant access.
+              Leave barcode blank to auto-generate a valid 20-character code.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label
+                  htmlFor="admin-new-user-name"
+                  className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300"
+                >
+                  Name
+                </label>
+                <input
+                  id="admin-new-user-name"
+                  type="text"
+                  value={newUserName}
+                  onChange={(e) => setNewUserName(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label
+                  htmlFor="admin-new-user-email"
+                  className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300"
+                >
+                  Email
+                </label>
+                <input
+                  id="admin-new-user-email"
+                  type="email"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label
+                  htmlFor="admin-new-user-barcode"
+                  className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300"
+                >
+                  Kiosk barcode (optional)
+                </label>
+                <input
+                  id="admin-new-user-barcode"
+                  type="text"
+                  value={newUserBarcode}
+                  onChange={(e) => setNewUserBarcode(e.target.value)}
+                  placeholder="Leave blank to auto-generate"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="admin-new-user-dept"
+                  className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300"
+                >
+                  Department
+                </label>
+                <select
+                  id="admin-new-user-dept"
+                  value={newUserDeptId}
+                  onChange={(e) => setNewUserDeptId(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                >
+                  <option value="">Select department…</option>
+                  {departmentsSorted.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.departmentId})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={newUserIsAdmin}
+                    onChange={(e) => setNewUserIsAdmin(e.target.checked)}
+                  />
+                  Admin user
+                </label>
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={creatingUser}
+              onClick={createUser}
+              className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {creatingUser ? "Creating…" : "Create user"}
+            </button>
+          </div>
+
+          <div className="border-t border-gray-200 pt-6 dark:border-gray-600">
+            <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Departments (edit or remove)
+            </h3>
+            <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+              Delete is only allowed when no users reference that department.
+            </p>
+            {departmentsSorted.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No departments yet — create one above.
+              </p>
+            ) : (
+              <ul className="max-h-64 space-y-2 overflow-y-auto">
+                {departmentsSorted.map((d) => (
+                  <li
+                    key={d.id}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-3 dark:border-gray-600 dark:bg-gray-900/60"
+                  >
+                    {deptListEditId === d.id ? (
+                      <div className="flex flex-col gap-2">
+                        <input
+                          type="text"
+                          value={deptListDraftName}
+                          onChange={(e) => setDeptListDraftName(e.target.value)}
+                          className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                          placeholder="Display name"
+                        />
+                        <input
+                          type="text"
+                          value={deptListDraftCode}
+                          onChange={(e) => setDeptListDraftCode(e.target.value)}
+                          className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 font-mono text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                          placeholder="Department code"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={savingDeptList}
+                            onClick={saveDeptListEdit}
+                            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {savingDeptList ? "Saving…" : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelDeptListEdit}
+                            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600 dark:text-gray-200"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {d.name}
+                          </span>
+                          <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                            ({d.departmentId})
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => beginDeptListEdit(d)}
+                            className="rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteDepartment(d)}
+                            className="rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-800 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-200"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </AdminCollapsible>
+
+      <AdminCollapsible
+        title="Import / export users (CSV)"
+        open={csvSectionOpen}
+        onToggle={toggleCsvSection}
+      >
+        <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+          Export uses the same columns as bulk import (
+          {USER_IMPORT_CSV_HEADERS.join(", ")}). The file is built in your
+          browser; import reads the CSV locally then sends it to the server as
+          JSON (no multipart upload), which avoids many deploy-time upload
+          restrictions.
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <button
+            type="button"
+            disabled={allUsers.length === 0}
+            onClick={exportUsersCsv}
+            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Download all users as CSV
+          </button>
+          <a
+            href="/api/admin/users/import/template"
+            download
+            className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800"
+          >
+            Download import template
+          </a>
+        </div>
+
+        <div className="mt-6 rounded-lg border border-gray-200 bg-white/80 p-4 dark:border-gray-600 dark:bg-gray-900/40">
+          <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+            Import from CSV
+          </h3>
+          <input
+            ref={importFileInputRef}
+            type="file"
+            accept=".csv,text/csv,text/plain"
+            className="mb-3 block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-blue-800 hover:file:bg-blue-100 dark:text-gray-300 dark:file:bg-blue-950/50 dark:file:text-blue-200"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) {
+                clearImportFile();
+                return;
+              }
+              try {
+                const text = await file.text();
+                setImportCsvText(text);
+                setImportFileLabel(file.name);
+                setLastImportPreview(null);
+                toast.success(`Loaded ${file.name} (${text.length} characters).`);
+              } catch (err) {
+                console.error(err);
+                toast.error(
+                  "Could not read that file. Try a UTF-8 .csv export."
+                );
+                clearImportFile();
+              }
+            }}
+          />
+          {importFileLabel ? (
+            <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+              Ready: {importFileLabel}
+            </p>
+          ) : null}
+
+          <div className="mb-4 space-y-2 text-sm text-gray-800 dark:text-gray-200">
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                checked={importOverwrite}
+                onChange={(e) => setImportOverwrite(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                <strong>Overwrite</strong> existing users matched by email
+                (otherwise those rows are skipped).
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                checked={importGenerateBarcode}
+                onChange={(e) => setImportGenerateBarcode(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                <strong>Generate barcode</strong> when the cell is blank.
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                checked={importCreateDept}
+                onChange={(e) => setImportCreateDept(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                <strong>Create department</strong> if{" "}
+                <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">
+                  department_name
+                </code>{" "}
+                does not match any existing department.
+              </span>
+            </label>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              disabled={importBusy || !importCsvText?.trim()}
+              onClick={runImportDryRun}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800"
+            >
+              {importBusy ? "Working…" : "Preview import (dry run)"}
+            </button>
+            <button
+              type="button"
+              disabled={importBusy || !importCsvText?.trim()}
+              onClick={runImportApply}
+              className="rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Apply import
+            </button>
+            <button
+              type="button"
+              disabled={!importCsvText}
+              onClick={clearImportFile}
+              className="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-600 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-400"
+            >
+              Clear file
+            </button>
+          </div>
+
+          {lastImportPreview ? (
+            <div className="mt-4 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-950/40">
+              <p className="font-medium text-gray-900 dark:text-gray-100">
+                Last result
+                {lastImportPreview.dryRun ? " (dry run)" : ""}
+              </p>
+              <ul className="mt-2 list-inside list-disc space-y-1 text-gray-700 dark:text-gray-300">
+                <li>Created: {lastImportPreview.createdCount ?? 0}</li>
+                <li>Updated: {lastImportPreview.updatedCount ?? 0}</li>
+                <li>Skipped: {lastImportPreview.skippedCount ?? 0}</li>
+                <li>
+                  Departments created:{" "}
+                  {lastImportPreview.departmentsCreatedCount ?? 0}
+                </li>
+                <li>
+                  Row errors: {(lastImportPreview.rowErrors ?? []).length}
+                </li>
+              </ul>
+              {(lastImportPreview.rowErrors ?? []).length > 0 ? (
+                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-white p-2 text-xs text-red-800 dark:bg-gray-900 dark:text-red-300">
+                  {lastImportPreview.rowErrors
+                    ?.map((r) => `Line ${r.line}: ${r.message}`)
+                    .join("\n")}
+                </pre>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </AdminCollapsible>
+
+      <AdminCollapsible
+        title="Users: browse & cards"
+        open={usersListOpen}
+        onToggle={toggleUsersListSection}
+      >
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+          Search, filters, and sort apply to the cards below. Section state is
+          remembered on this device.
+        </p>
+        <div className="mb-5 space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-5">
         <div>
           <label
             htmlFor="admin-users-search"
@@ -506,6 +1415,86 @@ export default function AdminPage() {
                   )}
                 </div>
 
+                {/* Department */}
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Department
+                  </div>
+                  {editing === "department" ? (
+                    <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <select
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        autoFocus
+                      >
+                        {departmentsSorted.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name} ({d.departmentId})
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                          onClick={() => handleDepartmentSave(user.id)}
+                        >
+                          Save department
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                          onClick={cancelEdit}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-gray-800 dark:text-gray-200">
+                        {(() => {
+                          const dept = departmentsSorted.find(
+                            (d) => d.id === user.deptId
+                          );
+                          if (dept) {
+                            return (
+                              <>
+                                <span className="font-medium">{dept.name}</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {" "}
+                                  ({dept.departmentId})
+                                </span>
+                              </>
+                            );
+                          }
+                          return (
+                            <span className="text-amber-700 dark:text-amber-300">
+                              Unknown — id {user.deptId || "—"}
+                            </span>
+                          );
+                        })()}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={departmentsSorted.length === 0}
+                        className="rounded-md bg-sky-50 px-2.5 py-1 text-sm font-medium text-sky-900 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-950/40 dark:text-sky-200 dark:hover:bg-sky-900/40"
+                        onClick={() => {
+                          const fallback = departmentsSorted[0]?.id ?? "";
+                          const current =
+                            departmentsSorted.some((d) => d.id === user.deptId)
+                              ? (user.deptId as string)
+                              : fallback;
+                          beginEdit(user.id, "department", current);
+                        }}
+                      >
+                        Change department
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Status */}
                 <div className="flex flex-wrap gap-6">
                   <div>
@@ -588,6 +1577,7 @@ export default function AdminPage() {
         })}
       </ul>
       )}
+      </AdminCollapsible>
     </div>
   );
 }
