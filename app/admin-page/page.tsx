@@ -15,10 +15,18 @@ import toast, { Toaster } from "react-hot-toast";
 type AdminTab = "users" | "backups" | "visitors" | "email" | "firedrill";
 
 function AdminContent() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>("users");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [isSending, setIsSending] = useState(false);
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4 py-6 dark:bg-gray-900">
+        <p className="text-lg text-gray-600 dark:text-gray-300">Loading…</p>
+      </div>
+    );
+  }
 
   if (!isAdmin) {
     return <NotAuthorizedPage />;
@@ -145,7 +153,7 @@ function AdminContent() {
         )}
 
         {activeTab === "backups" && (
-          <div className="-mx-4 -mb-4 sm:mx-0 sm:mb-0">
+          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
             <BackupPage />
           </div>
         )}

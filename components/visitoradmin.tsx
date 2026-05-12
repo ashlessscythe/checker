@@ -32,6 +32,30 @@ function isStalePendingSubmission(submittedAt: number) {
     : false;
 }
 
+const VISITOR_ADMIN_SECTIONS_STORAGE_KEY = "checker-admin-visitor-sections";
+
+type VisitorAdminSectionKey =
+  | "lobby"
+  | "vendors"
+  | "invite"
+  | "options"
+  | "notify"
+  | "approvals"
+  | "approved";
+
+const defaultVisitorAdminSections = (): Record<
+  VisitorAdminSectionKey,
+  boolean
+> => ({
+  lobby: false,
+  vendors: false,
+  invite: false,
+  options: false,
+  notify: false,
+  approvals: false,
+  approved: false,
+});
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** Relative phrase e.g. "approved 3 days ago" (24h-based day buckets). */
@@ -187,15 +211,40 @@ export default function VisitorAdmin() {
   const [notifyEmail, setNotifyEmail] = useState("");
   const [isSavingNotifyRecipient, setIsSavingNotifyRecipient] = useState(false);
 
-  const [adminSec, setAdminSec] = useState({
-    lobby: true,
-    vendors: false,
-    invite: false,
-    options: false,
-    notify: false,
-    approvals: false,
-    approved: false,
-  });
+  const [adminSec, setAdminSec] = useState(defaultVisitorAdminSections);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(VISITOR_ADMIN_SECTIONS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<
+        Record<VisitorAdminSectionKey, boolean>
+      >;
+      const base = defaultVisitorAdminSections();
+      (Object.keys(base) as VisitorAdminSectionKey[]).forEach((k) => {
+        if (typeof parsed[k] === "boolean") base[k] = parsed[k];
+      });
+      setAdminSec(base);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleAdminSec = (key: VisitorAdminSectionKey) => {
+    setAdminSec((s) => {
+      const next = { ...s, [key]: !s[key] };
+      try {
+        localStorage.setItem(
+          VISITOR_ADMIN_SECTIONS_STORAGE_KEY,
+          JSON.stringify(next)
+        );
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
   const [savingLobbyFlags, setSavingLobbyFlags] = useState(false);
 
   const kioskLobbyRow = (data?.kioskLobbySettings?.[0] ??
@@ -717,7 +766,7 @@ export default function VisitorAdmin() {
       <AdminCollapsible
         title="Lobby kiosk (main page)"
         open={adminSec.lobby}
-        onToggle={() => setAdminSec((s) => ({ ...s, lobby: !s.lobby }))}
+        onToggle={() => toggleAdminSec("lobby")}
       >
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
           Turn the lobby buttons on or off. When off, guests still see a short message
@@ -769,7 +818,7 @@ export default function VisitorAdmin() {
       <AdminCollapsible
         title="Vendor companies and visit reasons"
         open={adminSec.vendors}
-        onToggle={() => setAdminSec((s) => ({ ...s, vendors: !s.vendors }))}
+        onToggle={() => toggleAdminSec("vendors")}
       >
         <VendorAdminSection />
       </AdminCollapsible>
@@ -777,7 +826,7 @@ export default function VisitorAdmin() {
       <AdminCollapsible
         title="Send Visitor Pre-Check Invite"
         open={adminSec.invite}
-        onToggle={() => setAdminSec((s) => ({ ...s, invite: !s.invite }))}
+        onToggle={() => toggleAdminSec("invite")}
       >
         <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
           Manually send a visitor pre-check email to any address. The visitor will
@@ -867,7 +916,7 @@ export default function VisitorAdmin() {
       <AdminCollapsible
         title="Visitor options (Who / Why / Company)"
         open={adminSec.options}
-        onToggle={() => setAdminSec((s) => ({ ...s, options: !s.options }))}
+        onToggle={() => toggleAdminSec("options")}
       >
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
           Manage the dropdown options for who visitors are seeing, why they&apos;re visiting,
@@ -1036,7 +1085,7 @@ export default function VisitorAdmin() {
       <AdminCollapsible
         title="Internal approval notifications"
         open={adminSec.notify}
-        onToggle={() => setAdminSec((s) => ({ ...s, notify: !s.notify }))}
+        onToggle={() => toggleAdminSec("notify")}
       >
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
           Recipients listed below receive a summary email when a visitor pre-check is{" "}
@@ -1110,7 +1159,7 @@ export default function VisitorAdmin() {
       <AdminCollapsible
         title="Visitor pre-check approvals"
         open={adminSec.approvals}
-        onToggle={() => setAdminSec((s) => ({ ...s, approvals: !s.approvals }))}
+        onToggle={() => toggleAdminSec("approvals")}
       >
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
           Approve or reject visitor requests. On approval, the visitor gets a QR + PDF by
@@ -1554,7 +1603,7 @@ export default function VisitorAdmin() {
       <AdminCollapsible
         title="Pre-checked visitors (approved)"
         open={adminSec.approved}
-        onToggle={() => setAdminSec((s) => ({ ...s, approved: !s.approved }))}
+        onToggle={() => toggleAdminSec("approved")}
       >
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
           Visitors who were approved through pre-check have kiosk accounts and barcodes.

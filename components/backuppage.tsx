@@ -1,10 +1,11 @@
 // components/backuppage.tsx
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { tx, id } from "@instantdb/react";
 import { db } from "@/lib/instantdb";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import { useAuth } from "@/hooks/authContext";
+import AdminCollapsible from "./admin-collapsible";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import {
@@ -113,18 +114,77 @@ const SAMPLE_DATA = {
       },
     ],
   },
+  backups: {
+    timestamp: Date.now(),
+    timestampLocal: convertToMST(Date.now()),
+    table: "backups",
+    note: "Backup metadata fields",
+    data: [
+      {
+        label: "Example backup",
+        timestamp: Date.now(),
+      },
+    ],
+  },
 };
+
+const BACKUP_SECTIONS_STORAGE_KEY = "checker-admin-backup-sections";
+
+type BackupSectionKey = "export" | "restore" | "trim" | "punchReport";
+
+const defaultBackupSections = (): Record<BackupSectionKey, boolean> => ({
+  export: false,
+  restore: false,
+  trim: false,
+  punchReport: false,
+});
 
 export default function BackupPage() {
   const { isAdmin } = useAuth();
+  const trimPunchSelectRef = useRef<HTMLSelectElement>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [selectedTable, setSelectedTable] = useState(TABLES[0].value);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [exportTable, setExportTable] = useState(TABLES[0].value);
+  const [restoreTable, setRestoreTable] = useState(TABLES[0].value);
+  const [backupSec, setBackupSec] = useState<
+    Record<BackupSectionKey, boolean>
+  >(() => ({ ...defaultBackupSections() }));
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(BACKUP_SECTIONS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<
+        Record<BackupSectionKey, boolean>
+      >;
+      const base = { ...defaultBackupSections() };
+      (Object.keys(base) as BackupSectionKey[]).forEach((k) => {
+        if (typeof parsed[k] === "boolean") base[k] = parsed[k];
+      });
+      setBackupSec(base);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleBackupSec = (key: BackupSectionKey) => {
+    setBackupSec((s) => {
+      const next = { ...s, [key]: !s[key] };
+      try {
+        localStorage.setItem(
+          BACKUP_SECTIONS_STORAGE_KEY,
+          JSON.stringify(next)
+        );
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
   const [showTrimConfirm, setShowTrimConfirm] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isTrimming, setIsTrimming] = useState(false);
   const [deletionProgress, setDeletionProgress] = useState<string>("");
@@ -486,7 +546,7 @@ export default function BackupPage() {
         end.setHours(23, 59, 59, 999);
 
         // Filter data based on date range
-        const filteredData = data[selectedTable].filter((item) => {
+        const filteredData = data[exportTable].filter((item) => {
           const itemDate = new Date(item.timestamp);
           return itemDate >= start && itemDate <= end;
         });
@@ -497,9 +557,9 @@ export default function BackupPage() {
         exportData = {
           timestamp: Date.now(),
           timestampLocal: convertToMST(Date.now()),
-          table: selectedTable,
+          table: exportTable,
           note:
-            selectedTable === "users"
+            exportTable === "users"
               ? "Includes punches for viewing only"
               : "Direct table fields",
           dateRange: {
@@ -511,14 +571,14 @@ export default function BackupPage() {
         };
       } else {
         // Add local timestamps while preserving original timestamps
-        const dataWithLocalTime = data[selectedTable].map(addLocalTimestamps);
+        const dataWithLocalTime = data[exportTable].map(addLocalTimestamps);
 
         exportData = {
           timestamp: Date.now(),
           timestampLocal: convertToMST(Date.now()),
-          table: selectedTable,
+          table: exportTable,
           note:
-            selectedTable === "users"
+            exportTable === "users"
               ? "Includes punches for viewing only"
               : "Direct table fields",
           data: dataWithLocalTime,
@@ -535,15 +595,15 @@ export default function BackupPage() {
       link.href = url;
       const filename =
         startDate && endDate
-          ? `${selectedTable}-${startDate}-to-${endDate}.json`
-          : `${selectedTable}-${new Date().toISOString()}.json`;
+          ? `${exportTable}-${startDate}-to-${endDate}.json`
+          : `${exportTable}-${new Date().toISOString()}.json`;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast.success(`${selectedTable} data exported successfully`);
+      toast.success(`${exportTable} data exported successfully`);
     } catch (error) {
       console.error("Error exporting data:", error);
       toast.error("Failed to export data");
@@ -567,9 +627,9 @@ export default function BackupPage() {
         throw new Error("Invalid backup file format");
       }
 
-      if (restoreData.table !== selectedTable) {
+      if (restoreData.table !== restoreTable) {
         throw new Error(
-          `File contains ${restoreData.table} data but ${selectedTable} was selected`
+          `File contains ${restoreData.table} data but ${restoreTable} was selected`
         );
       }
 
@@ -587,7 +647,7 @@ export default function BackupPage() {
         delete itemData.lastLoginLocal;
 
         // Ensure required fields exist for users table to satisfy current schema
-        if (selectedTable === "users") {
+        if (restoreTable === "users") {
           const now = Date.now();
           if (itemData.createdAt == null) itemData.createdAt = now;
           if (itemData.serverCreatedAt == null) itemData.serverCreatedAt = now;
@@ -601,13 +661,13 @@ export default function BackupPage() {
             itemData.email = `restored_${tx_id}@example.invalid`;
         }
 
-        return tx[selectedTable][tx_id].update(itemData);
+        return tx[restoreTable][tx_id].update(itemData);
       });
 
       // Execute all transactions
       await db.transact(transactions);
 
-      toast.success(`${selectedTable} data restored successfully`);
+      toast.success(`${restoreTable} data restored successfully`);
       setShowRestoreConfirm(false);
       setRestoreFile(null);
     } catch (error) {
@@ -619,18 +679,22 @@ export default function BackupPage() {
   };
 
   const handleDownloadSample = () => {
-    const sample = SAMPLE_DATA[selectedTable];
+    const sample = SAMPLE_DATA[exportTable];
+    if (!sample) {
+      toast.error("No sample template for this table");
+      return;
+    }
     const jsonString = JSON.stringify(sample, null, 2);
     const blob = new Blob([jsonString], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `sample-${selectedTable}.json`;
+    link.download = `sample-${exportTable}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast.success(`Sample ${selectedTable} template downloaded`);
+    toast.success(`Sample ${exportTable} template downloaded`);
   };
 
   const handleDownloadPunchReport = async () => {
@@ -713,322 +777,337 @@ export default function BackupPage() {
   };
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 bg-gray-100 dark:bg-gray-900 rounded-lg">
-      <Toaster position="top-right" />
-      <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-gray-800 dark:text-white">
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 sm:text-3xl">
         Database Backup & Restore
       </h1>
 
-      <div className="grid grid-cols-1 gap-6">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">Select Table</h2>
-          <div className="space-y-4 mb-4">
-            <Select value={selectedTable} onValueChange={setSelectedTable}>
-              <SelectTrigger className="text-foreground bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-md rounded-sm">
+      <AdminCollapsible
+        title="Export data"
+        open={backupSec.export}
+        onToggle={() => toggleBackupSec("export")}
+      >
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+          Download JSON for a table. Exports include linked data for viewing where
+          applicable. Restore only uses direct table fields.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Table
+            </label>
+            <Select value={exportTable} onValueChange={setExportTable}>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select table" />
               </SelectTrigger>
-              <SelectContent className="text-foreground bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-md rounded-sm">
+              <SelectContent className="text-foreground bg-white dark:bg-gray-800 border border-border shadow-md rounded-md">
                 {TABLES.map((table) => (
-                  <SelectItem
-                    key={table.value}
-                    value={table.value}
-                    className="hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer px-2 py-1 rounded-md"
-                  >
+                  <SelectItem key={table.value} value={table.value}>
                     {table.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Note: Downloads include linked data for viewing. Restore only
-              handles direct table fields.
-            </p>
           </div>
-        </div>
-
-        {selectedTable === "punches" && (
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4">Trim Old Punches</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Delete punch records older than the specified number of days.
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Days to Keep
-                </label>
-                <Input
-                  type="number"
-                  min="7"
-                  value={daysToKeep}
-                  onChange={(e) => setDaysToKeep(parseInt(e.target.value) || 7)}
-                  className="w-full"
-                />
-              </div>
-
-              {!showTrimConfirm ? (
-                <Button
-                  onClick={() => setShowTrimConfirm(true)}
-                  className="w-full bg-orange-600 hover:bg-orange-700"
-                >
-                  Trim Old Punches
-                </Button>
-              ) : (
-                <div className="flex space-x-2">
-                  <Button
-                    onClick={handleTrimPunches}
-                    disabled={isTrimming}
-                    className="w-1/2 bg-orange-600 hover:bg-orange-700"
-                  >
-                    {isTrimming ? "Trimming..." : "Confirm Trim"}
-                  </Button>
-                  <Button
-                    onClick={() => setShowTrimConfirm(false)}
-                    disabled={isTrimming}
-                    className="w-1/2"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              )}
-
-              {/* Progress display */}
-              {isTrimming && deletionProgress && (
-                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800 font-medium">Progress:</p>
-                  <p className="text-sm text-blue-600">{deletionProgress}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Debug section */}
-            <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <h3 className="text-lg font-medium mb-3">Debug Info</h3>
-              <div className="text-sm space-y-2">
-                <p>Total punches loaded: {data.punches?.length || 0}</p>
-                <p>
-                  Oldest punch:{" "}
-                  {data.punches?.length > 0
-                    ? new Date(
-                        Math.min(
-                          ...data.punches.map(
-                            (p) => p.serverCreatedAt || p.timestamp
-                          )
-                        )
-                      ).toLocaleString()
-                    : "None"}
-                </p>
-                <p>
-                  Newest punch:{" "}
-                  {data.punches?.length > 0
-                    ? new Date(
-                        Math.max(
-                          ...data.punches.map(
-                            (p) => p.serverCreatedAt || p.timestamp
-                          )
-                        )
-                      ).toLocaleString()
-                    : "None"}
-                </p>
-                <p>
-                  Cutoff date:{" "}
-                  {new Date(
-                    Date.now() - daysToKeep * 24 * 60 * 60 * 1000
-                  ).toLocaleString()}
-                </p>
-              </div>
-
-              {/* Manual refresh */}
-              <div className="mt-4">
-                <Button
-                  onClick={refreshData}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white mb-2"
-                >
-                  Refresh Page
-                </Button>
-              </div>
-
-              {/* Test delete single punch */}
-              <div className="mt-4">
-                <h4 className="text-md font-medium mb-2">
-                  Test Delete Single Punch
-                </h4>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                  Select a punch to test deletion:
-                </p>
-                <select
-                  className="w-full p-2 border rounded mb-2"
-                  onChange={(e) => {
-                    const punchId = e.target.value;
-                    if (punchId) {
-                      console.log("Selected punch for test delete:", punchId);
-                    }
-                  }}
-                >
-                  <option value="">Select a punch...</option>
-                  {data.punches?.slice(0, 10).map((punch) => (
-                    <option key={punch.id} value={punch.id}>
-                      {punch.id} -{" "}
-                      {new Date(
-                        punch.serverCreatedAt || punch.timestamp
-                      ).toLocaleString()}{" "}
-                      - {punch.type}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  onClick={async () => {
-                    const select = document.querySelector("select");
-                    const punchId = select?.value;
-                    if (!punchId) {
-                      toast.error("Please select a punch first");
-                      return;
-                    }
-
-                    try {
-                      console.log("Testing delete of punch:", punchId);
-                      const result = await db.transact([
-                        tx.punches[punchId].delete(),
-                      ]);
-                      console.log("Test delete result:", result);
-                      toast.success("Test delete successful!");
-
-                      // Wait a moment and check if data changed
-                      setTimeout(() => {
-                        console.log(
-                          "Data after deletion:",
-                          data.punches?.length
-                        );
-                        console.log(
-                          "Punch still exists:",
-                          data.punches?.find((p) => p.id === punchId)
-                        );
-                      }, 1000);
-                    } catch (error) {
-                      console.error("Test delete failed:", error);
-                      toast.error(`Test delete failed: ${error.message}`);
-                    }
-                  }}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white"
-                >
-                  Test Delete Selected Punch
-                </Button>
-              </div>
-            </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Start date (optional)
+            </label>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full"
+            />
           </div>
-        )}
-
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">Export Data</h2>
-          <p className="text-gray-600 mb-4">
-            Download data from the selected table. Optionally filter by date
-            range.
-          </p>
-          <div className="space-y-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Start Date (Optional)
-              </label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                End Date (Optional)
-              </label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full"
-              />
-            </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              End date (optional)
+            </label>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full"
+            />
           </div>
-          <div className="flex space-x-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
             <Button
               onClick={handleExport}
               disabled={isExporting}
               className="flex-1"
             >
-              {isExporting ? "Exporting..." : "Export Data"}
+              {isExporting ? "Exporting..." : "Export data"}
             </Button>
             <Button
               onClick={handleDownloadSample}
               variant="outline"
               className="flex-1"
             >
-              Download Sample
+              Download sample
             </Button>
           </div>
         </div>
+      </AdminCollapsible>
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">Restore Data</h2>
-          <p className="text-gray-600 mb-4">
-            Restore data from a backup file. Only direct table fields will be
-            restored.
-          </p>
-          <div className="space-y-4">
+      <AdminCollapsible
+        title="Restore data"
+        open={backupSec.restore}
+        onToggle={() => toggleBackupSec("restore")}
+      >
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+          Choose the table you are restoring into, then pick a backup JSON. The file&apos;s
+          table field must match your selection. Only direct table fields are written.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Table
+            </label>
+            <Select value={restoreTable} onValueChange={setRestoreTable}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select table" />
+              </SelectTrigger>
+              <SelectContent className="text-foreground bg-white dark:bg-gray-800 border border-border shadow-md rounded-md">
+                {TABLES.map((table) => (
+                  <SelectItem key={table.value} value={table.value}>
+                    {table.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Input
+            type="file"
+            accept=".json"
+            onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+            className="w-full"
+          />
+          {!showRestoreConfirm ? (
+            <Button
+              onClick={() => setShowRestoreConfirm(true)}
+              disabled={!restoreFile}
+              className="w-full bg-yellow-600 hover:bg-yellow-700"
+            >
+              Restore data
+            </Button>
+          ) : (
+            <div className="space-y-2">
+              <p className="font-medium text-yellow-700 dark:text-yellow-500">
+                Restore from {restoreFile?.name}? This may overwrite existing data.
+              </p>
+              <div className="flex space-x-2">
+                <Button
+                  onClick={handleRestore}
+                  disabled={isRestoring}
+                  className="w-1/2 bg-yellow-600 hover:bg-yellow-700"
+                >
+                  {isRestoring ? "Restoring..." : "Confirm restore"}
+                </Button>
+                <Button
+                  onClick={() => setShowRestoreConfirm(false)}
+                  disabled={isRestoring}
+                  className="w-1/2"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </AdminCollapsible>
+
+      <AdminCollapsible
+        title="Trim old punches"
+        open={backupSec.trim}
+        onToggle={() => toggleBackupSec("trim")}
+      >
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+          Delete punch records older than the number of days you keep. Only the punches
+          table is affected.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Days to keep
+            </label>
             <Input
-              type="file"
-              accept=".json"
-              onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+              type="number"
+              min={7}
+              value={daysToKeep}
+              onChange={(e) => setDaysToKeep(parseInt(e.target.value) || 7)}
               className="w-full"
             />
-
-            {!showRestoreConfirm ? (
-              <Button
-                onClick={() => setShowRestoreConfirm(true)}
-                disabled={!restoreFile}
-                className="w-full bg-yellow-600 hover:bg-yellow-700"
-              >
-                Restore Data
-              </Button>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-yellow-600 font-medium">
-                  Are you sure you want to restore data from {restoreFile?.name}
-                  ? This may overwrite existing data.
-                </p>
-                <div className="flex space-x-2">
-                  <Button
-                    onClick={handleRestore}
-                    disabled={isRestoring}
-                    className="w-1/2 bg-yellow-600 hover:bg-yellow-700"
-                  >
-                    {isRestoring ? "Restoring..." : "Confirm Restore"}
-                  </Button>
-                  <Button
-                    onClick={() => setShowRestoreConfirm(false)}
-                    disabled={isRestoring}
-                    className="w-1/2"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
+
+          {!showTrimConfirm ? (
+            <Button
+              onClick={() => setShowTrimConfirm(true)}
+              className="w-full bg-orange-600 hover:bg-orange-700"
+            >
+              Trim old punches
+            </Button>
+          ) : (
+            <div className="flex space-x-2">
+              <Button
+                onClick={handleTrimPunches}
+                disabled={isTrimming}
+                className="w-1/2 bg-orange-600 hover:bg-orange-700"
+              >
+                {isTrimming ? "Trimming..." : "Confirm trim"}
+              </Button>
+              <Button
+                onClick={() => setShowTrimConfirm(false)}
+                disabled={isTrimming}
+                className="w-1/2"
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+
+          {isTrimming && deletionProgress ? (
+            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/40">
+              <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                Progress:
+              </p>
+              <p className="text-sm text-blue-600 dark:text-blue-300">
+                {deletionProgress}
+              </p>
+            </div>
+          ) : null}
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">Punch Report</h2>
-          <p className="text-gray-600 mb-4">
-            Download a report of punches from the last {reportDays} days for all
-            users.
-          </p>
-          <div className="space-y-2 mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <div className="mt-6 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800/80">
+          <h3 className="mb-3 text-lg font-medium text-gray-900 dark:text-gray-100">
+            Debug info
+          </h3>
+          <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+            <p>Total punches loaded: {data.punches?.length || 0}</p>
+            <p>
+              Oldest punch:{" "}
+              {data.punches?.length > 0
+                ? new Date(
+                    Math.min(
+                      ...data.punches.map(
+                        (p) => p.serverCreatedAt || p.timestamp
+                      )
+                    )
+                  ).toLocaleString()
+                : "None"}
+            </p>
+            <p>
+              Newest punch:{" "}
+              {data.punches?.length > 0
+                ? new Date(
+                    Math.max(
+                      ...data.punches.map(
+                        (p) => p.serverCreatedAt || p.timestamp
+                      )
+                    )
+                  ).toLocaleString()
+                : "None"}
+            </p>
+            <p>
+              Cutoff date:{" "}
+              {new Date(
+                Date.now() - daysToKeep * 24 * 60 * 60 * 1000
+              ).toLocaleString()}
+            </p>
+          </div>
+
+          <div className="mt-4">
+            <Button
+              onClick={refreshData}
+              className="mb-2 w-full bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Refresh page
+            </Button>
+          </div>
+
+          <div className="mt-4">
+            <h4 className="mb-2 text-base font-medium text-gray-900 dark:text-gray-100">
+              Test delete single punch
+            </h4>
+            <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
+              Select a punch to test deletion:
+            </p>
+            <select
+              ref={trimPunchSelectRef}
+              className="mb-2 w-full rounded border border-gray-200 bg-white p-2 dark:border-gray-600 dark:bg-gray-900"
+              onChange={(e) => {
+                const punchId = e.target.value;
+                if (punchId) {
+                  console.log("Selected punch for test delete:", punchId);
+                }
+              }}
+            >
+              <option value="">Select a punch...</option>
+              {data.punches?.slice(0, 10).map((punch) => (
+                <option key={punch.id} value={punch.id}>
+                  {punch.id} -{" "}
+                  {new Date(
+                    punch.serverCreatedAt || punch.timestamp
+                  ).toLocaleString()}{" "}
+                  - {punch.type}
+                </option>
+              ))}
+            </select>
+            <Button
+              onClick={async () => {
+                const punchId = trimPunchSelectRef.current?.value;
+                if (!punchId) {
+                  toast.error("Please select a punch first");
+                  return;
+                }
+
+                try {
+                  console.log("Testing delete of punch:", punchId);
+                  const result = await db.transact([
+                    tx.punches[punchId].delete(),
+                  ]);
+                  console.log("Test delete result:", result);
+                  toast.success("Test delete successful!");
+
+                  setTimeout(() => {
+                    console.log(
+                      "Data after deletion:",
+                      data.punches?.length
+                    );
+                    console.log(
+                      "Punch still exists:",
+                      data.punches?.find((p) => p.id === punchId)
+                    );
+                  }, 1000);
+                } catch (error) {
+                  console.error("Test delete failed:", error);
+                  toast.error(`Test delete failed: ${error.message}`);
+                }
+              }}
+              className="w-full bg-red-600 text-white hover:bg-red-700"
+            >
+              Test delete selected punch
+            </Button>
+          </div>
+        </div>
+      </AdminCollapsible>
+
+      <AdminCollapsible
+        title="Punch report"
+        open={backupSec.punchReport}
+        onToggle={() => toggleBackupSec("punchReport")}
+      >
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+          Download a CSV of punches from the last {reportDays} days for all users.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Days to include
             </label>
             <Input
               type="number"
-              min="3"
+              min={3}
               value={reportDays}
               onChange={(e) =>
                 setReportDays(Math.max(3, parseInt(e.target.value) || 3))
@@ -1041,10 +1120,10 @@ export default function BackupPage() {
             disabled={isExporting}
             className="w-full bg-purple-600 hover:bg-purple-700"
           >
-            {isExporting ? "Generating Report..." : "Download Punch Report"}
+            {isExporting ? "Generating report..." : "Download punch report"}
           </Button>
         </div>
-      </div>
+      </AdminCollapsible>
     </div>
   );
 }
