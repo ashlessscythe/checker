@@ -12,6 +12,7 @@ export function verifyBarcode(barcode: string): boolean {
   // Check if barcode contains only valid characters (alphanumeric excluding similar looking chars)
   // Excluded: 0/O, 1/I/l, 2/Z, 5/S, 8/B
   const validChars = "346789ACDEFGHJKLMNPQRTUVWXY";
+  // const validChars = "ABC";
   if (!new RegExp(`^[${validChars}]+$`).test(barcode)) {
     return false;
   }

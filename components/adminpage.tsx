@@ -11,10 +11,18 @@ import { useAuth } from "../hooks/authContext";
 import { useDebounce } from "../hooks/useDebounce";
 import AdminCollapsible from "./admin-collapsible";
 import { USER_IMPORT_CSV_HEADERS } from "@/lib/user-import-csv-columns";
+import { generateValidBarcode } from "@/utils/barcodeVerification";
 import {
-  generateValidBarcode,
-  verifyBarcode,
-} from "@/utils/barcodeVerification";
+  departmentDeleteBlockedReason,
+  normalizeAdminEmail,
+  isValidAdminEmail,
+  userDeleteBlockedReason,
+  validateAdminCreateUserFields,
+  validateAdminDepartmentUpdateFields,
+  validateAdminNewDepartmentFields,
+  validateOptionalKioskBarcode,
+  validateUserDepartmentPick,
+} from "@/lib/admin-form-validation";
 
 type EditField = "name" | "email" | "barcode" | "department";
 
@@ -40,14 +48,6 @@ function filterToggleClass(active: boolean) {
   return active
     ? "bg-blue-600 text-white dark:bg-blue-500"
     : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600";
-}
-
-function normalizeEmail(raw: string) {
-  return raw.trim().toLowerCase();
-}
-
-function isValidEmail(s: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
 const USERS_CSV_SECTION_STORAGE_KEY = "checker-admin-users-csv-section";
@@ -375,8 +375,8 @@ export default function AdminPage() {
   };
 
   const handleEmailSave = async (userId: string) => {
-    const normalized = normalizeEmail(draft);
-    if (!isValidEmail(normalized)) {
+    const normalized = normalizeAdminEmail(draft);
+    if (!isValidAdminEmail(normalized)) {
       toast.error("Enter a valid email address.");
       return;
     }
@@ -424,8 +424,9 @@ export default function AdminPage() {
   };
 
   const handleDepartmentSave = async (userId: string) => {
-    if (!draft) {
-      toast.error("Select a department.");
+    const deptErr = validateUserDepartmentPick(draft);
+    if (deptErr) {
+      toast.error(deptErr);
       return;
     }
     try {
@@ -452,19 +453,16 @@ export default function AdminPage() {
   const createDepartment = async () => {
     const name = newDeptName.trim();
     const departmentId = newDeptCode.trim();
-    if (!name) {
-      toast.error("Department display name is required.");
-      return;
-    }
-    if (!departmentId) {
-      toast.error("Department code is required (short id, e.g. ENG).");
-      return;
-    }
-    const dup = (data?.departments ?? []).some(
-      (d) => String(d.departmentId ?? "").trim() === departmentId
+    const existingCodes = (data?.departments ?? []).map((d) =>
+      String(d.departmentId ?? "").trim()
     );
-    if (dup) {
-      toast.error("That department code is already in use.");
+    const deptErr = validateAdminNewDepartmentFields({
+      nameTrimmed: name,
+      departmentIdTrimmed: departmentId,
+      existingDepartmentCodes: existingCodes,
+    });
+    if (deptErr) {
+      toast.error(deptErr);
       return;
     }
     setCreatingDept(true);
@@ -486,28 +484,24 @@ export default function AdminPage() {
 
   const createUser = async () => {
     const name = newUserName.trim();
-    const email = normalizeEmail(newUserEmail);
-    if (!name) {
-      toast.error("Name is required.");
-      return;
-    }
-    if (!isValidEmail(email)) {
-      toast.error("Enter a valid email.");
-      return;
-    }
-    if (!newUserDeptId) {
-      toast.error("Select a department for this user.");
+    const email = normalizeAdminEmail(newUserEmail);
+    const syncErr = validateAdminCreateUserFields({
+      nameTrimmed: name,
+      emailNormalized: email,
+      deptId: newUserDeptId,
+    });
+    if (syncErr) {
+      toast.error(syncErr);
       return;
     }
     const barcodeInput = newUserBarcode.trim();
     let barcode = barcodeInput;
+    const barcodeFmtErr = validateOptionalKioskBarcode(barcode);
+    if (barcodeFmtErr) {
+      toast.error(barcodeFmtErr);
+      return;
+    }
     if (barcode) {
-      if (!verifyBarcode(barcode)) {
-        toast.error(
-          "Barcode must be a valid 20-character kiosk code, or leave blank to auto-generate."
-        );
-        return;
-      }
       try {
         const { data: existing } = await db.queryOnce({
           users: { $: { where: { barcode }, limit: 1 } },
@@ -598,21 +592,14 @@ export default function AdminPage() {
     if (!deptListEditId) return;
     const name = deptListDraftName.trim();
     const departmentId = deptListDraftCode.trim();
-    if (!name) {
-      toast.error("Department name is required.");
-      return;
-    }
-    if (!departmentId) {
-      toast.error("Department code is required.");
-      return;
-    }
-    const dup = (data?.departments ?? []).some(
-      (d) =>
-        d.id !== deptListEditId &&
-        String(d.departmentId ?? "").trim() === departmentId
-    );
-    if (dup) {
-      toast.error("Another department already uses that code.");
+    const updateErr = validateAdminDepartmentUpdateFields({
+      nameTrimmed: name,
+      departmentIdTrimmed: departmentId,
+      editingDeptId: deptListEditId,
+      otherDepartments: data?.departments ?? [],
+    });
+    if (updateErr) {
+      toast.error(updateErr);
       return;
     }
     setSavingDeptList(true);
@@ -636,10 +623,9 @@ export default function AdminPage() {
     departmentId?: string;
   }) => {
     const assigned = allUsers.filter((u) => u.deptId === dept.id).length;
-    if (assigned > 0) {
-      toast.error(
-        `Cannot delete: ${assigned} user(s) are still assigned to this department. Reassign them first.`
-      );
+    const block = departmentDeleteBlockedReason(assigned);
+    if (block) {
+      toast.error(block);
       return;
     }
     const ok = window.confirm(
@@ -685,8 +671,12 @@ export default function AdminPage() {
   };
 
   const deleteUser = async (userId: string, label: string) => {
-    if (userId === currentAppUserId) {
-      toast.error("You cannot delete your own account from here.");
+    const block = userDeleteBlockedReason({
+      userIdToDelete: userId,
+      currentAppUserId: currentAppUserId ?? "",
+    });
+    if (block) {
+      toast.error(block);
       return;
     }
     const ok = window.confirm(

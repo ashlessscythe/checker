@@ -11,3 +11,4 @@ script/
 # Next.js auto-generated TypeScript env (next dev / next build recreate it)
 next-env.d.ts
 certificates/
+coverage/

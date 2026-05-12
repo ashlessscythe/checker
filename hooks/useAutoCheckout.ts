@@ -1,11 +1,7 @@
 // hooks/useAutoCheckout.ts
 import { useState, useEffect } from "react";
-import {
-  checkInTypes,
-  CheckActionType,
-  performCheckinOut,
-  getMostReliablePunch,
-} from "../utils/checkInOut";
+import { CheckActionType, performCheckinOut } from "../utils/checkInOut";
+import { userQualifiesForStaleAutoCheckout } from "../lib/auto-checkout-logic";
 
 const CHECKOUT_INTERVAL =
   parseInt(process.env.NEXT_PUBLIC_CLEANUP_INTERVAL_MINUTES, 10) * 60 * 1000 ||
@@ -35,26 +31,14 @@ export function useAutoCheckout({ data }) {
 
       // Filter users first
       const usersToCheckout = userData.users.filter((user) => {
-        // Get all punches for this user
         const userPunches = userData.punches.filter(
           (punch) => punch.userId === user.id
         );
-
-        if (!userPunches.length) return false; // No punches, skip this user
-
-        // Get the most reliable last punch
-        const lastPunch = getMostReliablePunch(userPunches);
-        if (!lastPunch) return false;
-
-        // Check if the last punch is a check-in (regular or admin)
-        const isCheckedIn = checkInTypes.has(lastPunch.type);
-
-        // Calculate time since last punch
-        const timeSinceLastPunch =
-          currentTime - new Date(lastPunch.timestamp).getTime();
-
-        // Return true if user is checked in and has exceeded MAX_CHECKIN_DURATION
-        return isCheckedIn && timeSinceLastPunch > MAX_CHECKIN_DURATION;
+        return userQualifiesForStaleAutoCheckout(
+          userPunches,
+          currentTime,
+          MAX_CHECKIN_DURATION
+        );
       });
 
       console.log(`Found ${usersToCheckout.length} users to auto-checkout`);
