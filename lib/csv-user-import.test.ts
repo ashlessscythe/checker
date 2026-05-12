@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import Papa from "papaparse";
 import {
   buildUserImportTransactions,
   normalizeDeptName,
@@ -14,11 +15,20 @@ describe("normalizeDeptName", () => {
     expect(normalizeDeptName("  Engineering  ")).toBe("engineering");
     expect(normalizeDeptName("Straße")).toBe("straße");
   });
+
+  it("treats nullish as empty", () => {
+    expect(normalizeDeptName(null)).toBe("");
+    expect(normalizeDeptName(undefined)).toBe("");
+  });
 });
 
 describe("normalizeEmail", () => {
   it("trims and lowercases", () => {
     expect(normalizeEmail("  Jane@EXAMPLE.com ")).toBe("jane@example.com");
+  });
+
+  it("treats nullish as empty", () => {
+    expect(normalizeEmail(null)).toBe("");
   });
 });
 
@@ -35,6 +45,11 @@ describe("parseBoolCell", () => {
     ["maybe", false],
   ])("parseBoolCell(%j) -> %s", (raw, expected) => {
     expect(parseBoolCell(raw)).toBe(expected);
+  });
+
+  it("treats nullish as false", () => {
+    expect(parseBoolCell(null)).toBe(false);
+    expect(parseBoolCell(undefined)).toBe(false);
   });
 });
 
@@ -109,6 +124,29 @@ Bob,bob.import@test.co,,false,Engineering`;
     expect(r.transactions.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("does not throw when a department row has a null display name", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.42);
+    const csv = `${USER_IMPORT_CSV_HEADERS.join(",")}
+Jane,jane.nulldept@test.co,,false,Engineering`;
+    const r = buildUserImportTransactions({
+      csvText: csv,
+      dryRun: true,
+      overwrite: false,
+      generateBarcodeIfBlank: true,
+      createDepartmentIfMissing: false,
+      departments: [
+        dept,
+        {
+          id: "d-bad",
+          name: null as unknown as string,
+          departmentId: "BAD",
+        },
+      ],
+      existingUsers: [],
+    });
+    expect(r.departmentCatalogError).toBe(null);
+  });
+
   it("skips existing email when overwrite is false", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.42);
     const csv = `${USER_IMPORT_CSV_HEADERS.join(",")}
@@ -145,5 +183,16 @@ Jane Up,jane.update@test.co,,true,Engineering`;
     });
     expect(r.updatedCount).toBe(1);
     expect(r.transactions.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("Papa.parse transformHeader (prod Excel edge cases)", () => {
+  it("coerces nullish header tokens without throwing", () => {
+    const transformHeader = (h: unknown) => String(h ?? "").trim();
+    expect(transformHeader(null)).toBe("");
+    expect(transformHeader(undefined)).toBe("");
+    const r = Papa.parse("a,b\nc,d", { header: true, transformHeader });
+    expect(r.errors).toHaveLength(0);
+    expect(r.data?.[0]).toEqual({ a: "c", b: "d" });
   });
 });

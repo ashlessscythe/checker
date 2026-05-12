@@ -17,17 +17,19 @@ const MAX_CSV_BYTES = 1_000_000;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Normalizer for department names (CSV + DB). */
-export function normalizeDeptName(s: string): string {
-  return s.trim().toLocaleLowerCase("en");
+export function normalizeDeptName(s: string | null | undefined): string {
+  return String(s ?? "").trim().toLocaleLowerCase("en");
 }
 
-export function normalizeEmail(s: string): string {
-  return s.trim().toLowerCase();
+export function normalizeEmail(s: string | null | undefined): string {
+  return String(s ?? "").trim().toLowerCase();
 }
 
 function rowGet(row: Record<string, unknown>, key: string): string {
+  if (row == null || typeof row !== "object") return "";
   for (const [k, v] of Object.entries(row)) {
-    if (k.trim().toLowerCase() === key.toLowerCase()) {
+    const header = String(k ?? "").trim().toLowerCase();
+    if (header === key.toLowerCase()) {
       if (v == null) return "";
       return String(v).trim();
     }
@@ -35,8 +37,8 @@ function rowGet(row: Record<string, unknown>, key: string): string {
   return "";
 }
 
-export function parseBoolCell(raw: string): boolean {
-  const v = raw.trim().toLowerCase();
+export function parseBoolCell(raw: string | null | undefined): boolean {
+  const v = String(raw ?? "").trim().toLowerCase();
   return v === "true" || v === "1" || v === "yes" || v === "y";
 }
 
@@ -129,8 +131,11 @@ function allocateUniqueDepartmentCode(
   throw new Error("Could not allocate a unique department code.");
 }
 
-export function validateCsvSize(csvText: string): string | null {
-  const bytes = new TextEncoder().encode(csvText).length;
+export function validateCsvSize(
+  csvText: string | null | undefined
+): string | null {
+  const text = csvText == null ? "" : String(csvText);
+  const bytes = new TextEncoder().encode(text).length;
   if (bytes > MAX_CSV_BYTES) {
     return `CSV exceeds maximum size (${MAX_CSV_BYTES} bytes).`;
   }
@@ -157,11 +162,11 @@ function nextUniqueGeneratedBarcode(used: Set<string>): string {
  * or a new kiosk-style 20-char barcode when `generateIfBlank` is true.
  */
 function resolveImportBarcode(params: {
-  rawFromCsv: string;
+  rawFromCsv: string | null | undefined;
   generateIfBlank: boolean;
   used: Set<string>;
 }): string {
-  const trimmed = params.rawFromCsv.trim();
+  const trimmed = String(params.rawFromCsv ?? "").trim();
   if (trimmed) return trimmed;
   if (!params.generateIfBlank) return "";
   return nextUniqueGeneratedBarcode(params.used);
@@ -202,10 +207,13 @@ export function buildUserImportTransactions(params: {
     };
   }
 
-  const parsed = Papa.parse<Record<string, unknown>>(csvText, {
+  const safeCsv = csvText == null ? "" : String(csvText);
+
+  const parsed = Papa.parse<Record<string, unknown>>(safeCsv, {
     header: true,
     skipEmptyLines: "greedy",
-    transformHeader: (h) => h.trim(),
+    // Excel / some exporters emit empty trailing columns; Papa can pass null/undefined here.
+    transformHeader: (h) => String(h ?? "").trim(),
   });
 
   if (parsed.errors?.length) {
@@ -235,6 +243,7 @@ export function buildUserImportTransactions(params: {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
+    if (row == null || typeof row !== "object") continue;
     const line = i + 2; // 1-based; line 1 is header
     const emailRaw = rowGet(row, "email");
     const email = normalizeEmail(emailRaw);
@@ -263,7 +272,7 @@ export function buildUserImportTransactions(params: {
   }
   for (const [mapKey, { row }] of Array.from(byEmail.entries())) {
     if (mapKey.startsWith("__invalid_")) continue;
-    const b = rowGet(row, "barcode").trim();
+    const b = rowGet(row, "barcode");
     if (b) usedBarcodes.add(b);
   }
 
@@ -273,7 +282,7 @@ export function buildUserImportTransactions(params: {
   const displayNameByNormKey = new Map<string, string>();
   for (const [mapKey, { row }] of Array.from(byEmail.entries())) {
     if (mapKey.startsWith("__invalid_")) continue;
-    const dn = rowGet(row, "department_name").trim();
+    const dn = rowGet(row, "department_name");
     if (!dn) continue;
     displayNameByNormKey.set(normalizeDeptName(dn), dn);
   }
