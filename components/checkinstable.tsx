@@ -10,6 +10,7 @@ import { AppSchema } from "@/instant.schema";
 interface User {
   id: string;
   name: string;
+  deptId?: string;
 }
 
 interface Punch {
@@ -19,6 +20,12 @@ interface Punch {
   timestamp: number;
   serverCreatedAt: number;
   device?: string;
+}
+
+interface Department {
+  id: string;
+  name?: string;
+  departmentId?: string;
 }
 
 export default function CheckInsTable() {
@@ -44,6 +51,11 @@ export default function CheckInsTable() {
   // Query to fetch users and punches from the last 24 hours
   const { data, isLoading, error, pageInfo } = db.useQuery({
     users: {
+      $: {
+        where: {},
+      },
+    },
+    departments: {
       $: {
         where: {},
       },
@@ -81,6 +93,20 @@ export default function CheckInsTable() {
   if (error) {
     console.error("Query Error:", error);
   }
+
+  const deptNameByUserId = useMemo(() => {
+    const users = (data?.users ?? []) as User[];
+    const departments = (data?.departments ?? []) as Department[];
+    const deptById = new Map(departments.map((d) => [d.id, d]));
+
+    const map = new Map<string, string>();
+    for (const u of users) {
+      const dept = u.deptId ? deptById.get(u.deptId) : null;
+      const name = String(dept?.name ?? dept?.departmentId ?? "").trim();
+      map.set(u.id, name);
+    }
+    return map;
+  }, [data?.users, data?.departments]);
 
   // Filter punches based on user filters
   const filteredPunches = useMemo(() => {
@@ -156,10 +182,15 @@ export default function CheckInsTable() {
     const sortedPunches = [...localPunches].sort((a, b) => {
       let aValue, bValue;
 
-      if (field === "users.name" && data?.users) {
+      if ((field === "users.name" || field === "users.dept") && data?.users) {
         const users = data.users as User[];
-        aValue = users.find((u) => u.id === a.userId)?.name || "";
-        bValue = users.find((u) => u.id === b.userId)?.name || "";
+        if (field === "users.name") {
+          aValue = users.find((u) => u.id === a.userId)?.name || "";
+          bValue = users.find((u) => u.id === b.userId)?.name || "";
+        } else {
+          aValue = deptNameByUserId.get(a.userId) ?? "";
+          bValue = deptNameByUserId.get(b.userId) ?? "";
+        }
       } else {
         aValue = a[field as keyof Punch];
         bValue = b[field as keyof Punch];
@@ -273,6 +304,14 @@ export default function CheckInsTable() {
                   </th>
                   <th
                     className="cursor-pointer border-b px-3 py-2 text-left text-gray-900 dark:border-gray-600 dark:text-white sm:px-4"
+                    onClick={() => handleSort("users.dept")}
+                  >
+                    Dept{" "}
+                    {sortField === "users.dept" &&
+                      (sortOrder === "asc" ? "▲" : "▼")}
+                  </th>
+                  <th
+                    className="cursor-pointer border-b px-3 py-2 text-left text-gray-900 dark:border-gray-600 dark:text-white sm:px-4"
                     onClick={() => handleSort("type")}
                   >
                     Type{" "}
@@ -297,13 +336,21 @@ export default function CheckInsTable() {
               </thead>
               <tbody>
                 {paginatedPunches.map((punch) => (
+                  (() => {
+                    const user = (data.users as User[]).find(
+                      (u) => u.id === punch.userId,
+                    );
+                    const deptName = deptNameByUserId.get(punch.userId) ?? "";
+                    return (
                   <tr
                     key={punch.id}
                     className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
                     <td className="border px-3 py-2 text-gray-900 dark:text-white sm:px-4">
-                      {(data.users as User[]).find((u) => u.id === punch.userId)
-                        ?.name || "Unknown User"}
+                      {user?.name || "Unknown User"}
+                    </td>
+                    <td className="border px-3 py-2 text-gray-900 dark:text-white sm:px-4">
+                      {deptName || "—"}
                     </td>
                     <td className="border px-3 py-2 text-gray-900 dark:text-white sm:px-4">
                       {punch.type}
@@ -315,6 +362,8 @@ export default function CheckInsTable() {
                       {punch.device || "—"}
                     </td>
                   </tr>
+                    );
+                  })()
                 ))}
               </tbody>
             </table>
