@@ -224,7 +224,7 @@ const _schema = i.schema({
     }),
     /**
      * One row per vendor site visit; links to temp `users` (VENDOR dept) for punches / fire drill.
-     * `sixDigitCode` is unique and shown to the vendor for checkout.
+     * `sixDigitCode` is the unique numeric checkout code shown to the vendor (3 digits).
      */
     vendorCheckins: i.entity({
       sixDigitCode: i.string().unique().indexed(),

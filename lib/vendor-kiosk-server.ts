@@ -1,5 +1,6 @@
 import { id, tx } from "@instantdb/admin";
 import { ensureVendorDepartmentId } from "@/lib/vendor-department";
+import { randomVendorCheckoutCode } from "@/lib/vendor-checkout-code";
 
 /** Keep in sync with `CheckActionType` / `checkInTypes` in `utils/checkInOut.ts` (server-safe copy). */
 const CHECK_IN_TYPES = new Set([
@@ -16,17 +17,11 @@ export function normName(s: string): string {
   return s.trim().toLowerCase();
 }
 
-/** Random 6-digit string "100000".."999999". */
-export function randomSixDigitCode(): string {
-  const n = 100000 + Math.floor(Math.random() * 900000);
-  return String(n);
-}
-
 export async function allocateUniqueVendorSixDigitCode(
   adminAPI: AdminAPI
 ): Promise<string> {
   for (let attempt = 0; attempt < 30; attempt++) {
-    const code = randomSixDigitCode();
+    const code = randomVendorCheckoutCode();
     const { vendorCheckins } = (await adminAPI.query({
       vendorCheckins: {
         $: { where: { sixDigitCode: code } },

@@ -6,6 +6,22 @@ import {
   syntheticVendorBarcode,
   syntheticVendorEmail,
 } from "./vendor-kiosk-server";
+import {
+  randomVendorCheckoutCode,
+  VENDOR_CHECKOUT_CODE_LENGTH,
+} from "./vendor-checkout-code";
+
+describe("randomVendorCheckoutCode", () => {
+  it("returns a numeric string of the configured length", () => {
+    for (let i = 0; i < 50; i++) {
+      const code = randomVendorCheckoutCode();
+      expect(code).toMatch(/^\d+$/);
+      expect(code.length).toBe(VENDOR_CHECKOUT_CODE_LENGTH);
+      expect(Number(code)).toBeGreaterThanOrEqual(10 ** (VENDOR_CHECKOUT_CODE_LENGTH - 1));
+      expect(Number(code)).toBeLessThan(10 ** VENDOR_CHECKOUT_CODE_LENGTH);
+    }
+  });
+});
 
 describe("normName", () => {
   it("trims and lowercases", () => {

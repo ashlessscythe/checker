@@ -17,6 +17,7 @@ import {
   KIOSK_LOBBY_SETTINGS_KEY,
   isVendorCheckInEnabled,
 } from "@/lib/kiosk-lobby-settings";
+import { VENDOR_CHECKOUT_CODE_LENGTH } from "@/lib/vendor-checkout-code";
 
 const OTHER = "__other__";
 
@@ -225,17 +226,10 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
     e.preventDefault();
     if (busy) return;
     const digits = checkoutCode.replace(/\D/g, "");
-    if (digits.length !== 6) {
-      toast.error("Enter your 6-digit number (six digits).");
-      return;
-    }
-    const companyMode = checkoutCompanySel === OTHER ? "other" : "vendor";
-    if (companyMode === "vendor" && !checkoutCompanySel) {
-      toast.error("Please choose your company.");
-      return;
-    }
-    if (companyMode === "other" && !checkoutCompanyOther.trim()) {
-      toast.error("Please type the company name.");
+    if (digits.length !== VENDOR_CHECKOUT_CODE_LENGTH) {
+      toast.error(
+        `Enter your ${VENDOR_CHECKOUT_CODE_LENGTH}-digit number (${VENDOR_CHECKOUT_CODE_LENGTH} digits).`
+      );
       return;
     }
 
@@ -247,11 +241,6 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
         body: JSON.stringify({
           mode: "code",
           sixDigitCode: digits,
-          companyMode,
-          vendorId:
-            companyMode === "vendor" ? checkoutCompanySel : undefined,
-          companyOther:
-            companyMode === "other" ? checkoutCompanyOther.trim() : undefined,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -328,9 +317,8 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
     return (
       <Button
         type="button"
-        variant="outline"
         onClick={() => setStep("menu")}
-        className="w-full max-w-md border-blue-600 py-3 text-base font-medium text-blue-800 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-200 dark:hover:bg-blue-950/40"
+        className="w-full max-w-md rounded-lg bg-blue-600 px-4 py-3 text-base font-semibold text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg active:scale-[0.99] dark:bg-blue-600 dark:hover:bg-blue-500"
       >
         Vendor check-in / checkout
       </Button>
@@ -539,7 +527,7 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
         {step === "checkoutChoice" && (
           <div className="space-y-3">
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              If you have the 6-digit number you received at check-in, use the
+              If you have the {VENDOR_CHECKOUT_CODE_LENGTH}-digit number you received at check-in, use the
               first option. If you do not have it, use the second option.
             </p>
             <Button
@@ -547,7 +535,7 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
               className="w-full"
               onClick={() => setStep("checkoutCode")}
             >
-              I have my 6-digit number
+              I have my {VENDOR_CHECKOUT_CODE_LENGTH}-digit number
             </Button>
             <Button
               type="button"
@@ -570,49 +558,22 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
 
         {step === "checkoutCode" && (
           <form onSubmit={submitCheckoutCode} className="space-y-3">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Enter the {VENDOR_CHECKOUT_CODE_LENGTH}-digit number you received at
+              check-in.
+            </p>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                Company
-              </label>
-              <Select
-                value={checkoutCompanySel || undefined}
-                onValueChange={setCheckoutCompanySel}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose company" />
-                </SelectTrigger>
-                <SelectContent className={cn(VENDOR_SELECT_CONTENT_CLASS)}>
-                  {vendors.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.name}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value={OTHER}>Other (type name)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {checkoutCompanySel === OTHER ? (
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                  Company name
-                </label>
-                <Input
-                  value={checkoutCompanyOther}
-                  onChange={(e) => setCheckoutCompanyOther(e.target.value)}
-                />
-              </div>
-            ) : null}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                6-digit number
+                {VENDOR_CHECKOUT_CODE_LENGTH}-digit number
               </label>
               <Input
                 inputMode="numeric"
                 pattern="[0-9]*"
-                maxLength={8}
+                maxLength={VENDOR_CHECKOUT_CODE_LENGTH}
                 value={checkoutCode}
                 onChange={(e) => setCheckoutCode(e.target.value)}
-                placeholder="Six digits"
+                placeholder={`${VENDOR_CHECKOUT_CODE_LENGTH} digits`}
+                autoFocus
               />
             </div>
             <div className="flex gap-2">

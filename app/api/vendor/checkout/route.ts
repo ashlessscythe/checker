@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
 import { getVendorLobbyEnabledFromDb } from "@/lib/kiosk-lobby-settings-server";
+import { VENDOR_CHECKOUT_CODE_LENGTH } from "@/lib/vendor-checkout-code";
 import {
   isUserCheckedInFromPunches,
   normName,
@@ -32,32 +33,11 @@ export async function POST(req: Request) {
 
     if (mode === "code") {
       const raw = String(body?.sixDigitCode ?? "").replace(/\D/g, "");
-      if (raw.length !== 6) {
+      if (raw.length !== VENDOR_CHECKOUT_CODE_LENGTH) {
         return NextResponse.json(
-          { error: "Enter your 6-digit checkout number (digits only)." },
-          { status: 400 }
-        );
-      }
-
-      const companyMode = body?.companyMode as string | undefined;
-      const vendorId = String(body?.vendorId ?? "").trim();
-      const companyOther = String(body?.companyOther ?? "").trim();
-
-      if (companyMode !== "vendor" && companyMode !== "other") {
-        return NextResponse.json(
-          { error: "Please choose your company." },
-          { status: 400 }
-        );
-      }
-      if (companyMode === "vendor" && !vendorId) {
-        return NextResponse.json(
-          { error: "Please choose your company." },
-          { status: 400 }
-        );
-      }
-      if (companyMode === "other" && !companyOther) {
-        return NextResponse.json(
-          { error: "Please enter the company name." },
+          {
+            error: `Enter your ${VENDOR_CHECKOUT_CODE_LENGTH}-digit checkout number (digits only).`,
+          },
           { status: 400 }
         );
       }
@@ -83,21 +63,6 @@ export async function POST(req: Request) {
           {
             error:
               "That number was not found, or this visit is already checked out. Check the number and try again.",
-          },
-          { status: 400 }
-        );
-      }
-
-      const companyOk =
-        companyMode === "vendor"
-          ? row.vendorListId === vendorId
-          : !row.vendorListId &&
-            normName(row.companyDisplayName) === normName(companyOther);
-      if (!companyOk) {
-        return NextResponse.json(
-          {
-            error:
-              "That number does not match the company you selected. Check the company and the number.",
           },
           { status: 400 }
         );
