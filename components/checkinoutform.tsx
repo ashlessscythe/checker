@@ -45,6 +45,26 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
     user: string | null;
   }>({ type: null, user: null });
   const inputRef = useAutoFocus(shouldFocus && !isModalOpen);
+  const keyboardEnabledRef = useRef(false);
+  const [keyboardEnabled, setKeyboardEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!shouldFocus || isModalOpen) {
+      keyboardEnabledRef.current = false;
+      setKeyboardEnabled(false);
+    }
+  }, [shouldFocus, isModalOpen]);
+
+  const enableKeyboard = useCallback(() => {
+    if (keyboardEnabledRef.current) return;
+    keyboardEnabledRef.current = true;
+    setKeyboardEnabled(true);
+    const el = inputRef.current;
+    if (el) {
+      el.readOnly = false;
+      el.focus();
+    }
+  }, [inputRef]);
 
   // Define types for our data
   interface Punch {
@@ -418,9 +438,13 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
               Badge/ID Scanner
             </label>
             <input
+              id="barcode-input"
               ref={inputRef}
               type="password"
               value={barcode}
+              readOnly={!keyboardEnabled}
+              inputMode={keyboardEnabled ? "text" : "none"}
+              onPointerDown={enableKeyboard}
               onChange={(e) => setBarcode(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleCheckInOut()}
               onKeyDown={(e) => e.key === "Escape" && setBarcode("")}
