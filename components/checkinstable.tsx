@@ -7,10 +7,16 @@ import { Button } from "./ui/button";
 
 import { AppSchema } from "@/instant.schema";
 
+interface VendorCheckin {
+  id: string;
+  companyDisplayName?: string;
+}
+
 interface User {
   id: string;
   name: string;
   deptId?: string;
+  vendorCheckins?: VendorCheckin | VendorCheckin[];
 }
 
 interface Punch {
@@ -54,6 +60,7 @@ export default function CheckInsTable() {
       $: {
         where: {},
       },
+      vendorCheckins: {},
     },
     departments: {
       $: {
@@ -102,8 +109,21 @@ export default function CheckInsTable() {
     const map = new Map<string, string>();
     for (const u of users) {
       const dept = u.deptId ? deptById.get(u.deptId) : null;
-      const name = String(dept?.name ?? dept?.departmentId ?? "").trim();
-      map.set(u.id, name);
+      const deptName = String(dept?.name ?? dept?.departmentId ?? "").trim();
+
+      const vendorCheckins = u.vendorCheckins;
+      const vendorCheckin = Array.isArray(vendorCheckins)
+        ? vendorCheckins[0]
+        : vendorCheckins;
+      const companyName = String(
+        vendorCheckin?.companyDisplayName ?? "",
+      ).trim();
+
+      if (companyName) {
+        map.set(u.id, deptName ? `${deptName} (${companyName})` : companyName);
+      } else {
+        map.set(u.id, deptName);
+      }
     }
     return map;
   }, [data?.users, data?.departments]);
