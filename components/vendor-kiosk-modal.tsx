@@ -18,6 +18,15 @@ import {
   isVendorCheckInEnabled,
 } from "@/lib/kiosk-lobby-settings";
 import { VENDOR_CHECKOUT_CODE_LENGTH } from "@/lib/vendor-checkout-code";
+import {
+  recentlyAddedVendorIds,
+  sortVendorsForKioskDropdown,
+} from "@/lib/vendor-kiosk-company-sort";
+import {
+  mergeRecentVendorIds,
+  readRecentVendorIdsFromStorage,
+  recordRecentVendorIdInStorage,
+} from "@/lib/vendor-kiosk-recent-storage";
 
 const OTHER = "__other__";
 
@@ -33,6 +42,7 @@ type VendorRow = {
   name: string;
   sortOrder: number;
   isActive: boolean;
+  createdAt?: number;
   reasons?: Array<{
     id: string;
     label: string;
@@ -70,12 +80,38 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
     },
   });
 
+  const [recentVendorIds, setRecentVendorIds] = useState<string[]>(() =>
+    readRecentVendorIdsFromStorage()
+  );
+
   const vendorLobbyEnabled = isVendorCheckInEnabled(data?.kioskLobbySettings);
+
+  useEffect(() => {
+    if (step === "closed") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/vendor/recent-companies");
+        const json = (await res.json().catch(() => ({}))) as {
+          vendorIds?: string[];
+        };
+        if (cancelled || !res.ok) return;
+        const serverIds = Array.isArray(json.vendorIds) ? json.vendorIds : [];
+        setRecentVendorIds((local) => mergeRecentVendorIds(local, serverIds));
+      } catch {
+        /* keep localStorage order */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step]);
 
   const vendors = useMemo(() => {
     const list = (data?.vendors || []) as VendorRow[];
-    return [...list].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-  }, [data?.vendors]);
+    const recentAdded = recentlyAddedVendorIds(list);
+    return sortVendorsForKioskDropdown(list, recentVendorIds, recentAdded);
+  }, [data?.vendors, recentVendorIds]);
 
   const reset = useCallback(() => {
     setStep("closed");
@@ -211,6 +247,9 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
       if (!res.ok) {
         toast.error(json?.error || "Check-in failed.");
         return;
+      }
+      if (companyMode === "vendor" && companySel) {
+        setRecentVendorIds(recordRecentVendorIdInStorage(companySel));
       }
       setShowCode(String(json.sixDigitCode ?? ""));
       setStep("showCode");
