@@ -15,6 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import {
+  buildVendorPunchReportCsv,
+  buildVendorPunchReportRows,
+  groupPunchesByUserId,
+  vendorPunchReportCutoffMs,
+} from "@/lib/vendor-punch-report";
 
 const TABLES = [
   { value: "users", label: "Users" },
@@ -204,7 +210,6 @@ export default function BackupPage() {
   const { data, isLoading, error } = db.useQuery({
     users: {
       $: {},
-      punches: {}, // Include punches for viewing/export only
     },
     departments: {
       $: {},
@@ -217,6 +222,9 @@ export default function BackupPage() {
     },
     backups: {
       $: {},
+    },
+    vendorCheckins: {
+      user: {},
     },
   });
 
@@ -776,6 +784,41 @@ export default function BackupPage() {
     }
   };
 
+  const handleDownloadVendorPunchReport = async () => {
+    try {
+      setIsExporting(true);
+
+      const cutoffMs = vendorPunchReportCutoffMs(reportDays);
+      const punchesByUserId = groupPunchesByUserId(data.punches ?? []);
+      const rows = buildVendorPunchReportRows({
+        checkins: data.vendorCheckins ?? [],
+        punchesByUserId,
+        cutoffMs,
+        formatTimestamp: convertToMST,
+      });
+      const csvContent = buildVendorPunchReportCsv(rows);
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `vendor_punch_report_${
+        new Date().toISOString().split("T")[0]
+      }.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success(
+        `Vendor punch report downloaded (${rows.length} visits)`
+      );
+    } catch (error) {
+      console.error("Error generating vendor punch report:", error);
+      toast.error("Failed to generate vendor punch report");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 sm:text-3xl">
@@ -1098,7 +1141,9 @@ export default function BackupPage() {
         onToggle={() => toggleBackupSec("punchReport")}
       >
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
-          Download a CSV of punches from the last {reportDays} days for all users.
+          Download CSV reports for the last {reportDays} days. The punch report
+          includes all users; the vendor report includes kiosk vendor visits only
+          (company, reason, names, check-in/out times, and elapsed time).
         </p>
         <div className="space-y-4">
           <div>
@@ -1122,6 +1167,24 @@ export default function BackupPage() {
           >
             {isExporting ? "Generating report..." : "Download punch report"}
           </Button>
+          <div className="border-t border-gray-200 pt-4 dark:border-gray-600">
+            <h3 className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+              Vendor punches
+            </h3>
+            <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+              One row per vendor kiosk visit with company, visit reason, name,
+              MST timestamps, elapsed time, and on-site status.
+            </p>
+            <Button
+              onClick={handleDownloadVendorPunchReport}
+              disabled={isExporting}
+              className="w-full bg-indigo-600 hover:bg-indigo-700"
+            >
+              {isExporting
+                ? "Generating report..."
+                : "Download vendor punch report"}
+            </Button>
+          </div>
         </div>
       </AdminCollapsible>
     </div>
