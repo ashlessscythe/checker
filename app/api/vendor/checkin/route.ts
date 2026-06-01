@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
 import { getVendorLobbyEnabledFromDb } from "@/lib/kiosk-lobby-settings-server";
 import {
+  findVendorListMatchByTypedName,
+  vendorInListSelectFromDropdownMessage,
+} from "@/lib/vendor-company-list-match";
+import {
   allocateUniqueVendorSixDigitCode,
   transactVendorCheckin,
 } from "@/lib/vendor-kiosk-server";
@@ -9,6 +13,15 @@ import {
 export const runtime = "nodejs";
 
 type AdminAPI = ReturnType<typeof requireAdminAPI>;
+
+async function loadActiveVendors(adminAPI: AdminAPI) {
+  const data = (await adminAPI.query({
+    vendors: { $: { where: { isActive: true } } },
+  })) as {
+    vendors?: Array<{ id: string; name: string; isActive: boolean }>;
+  };
+  return data.vendors ?? [];
+}
 
 async function loadVendor(adminAPI: AdminAPI, vendorId: string) {
   const data = (await adminAPI.query({
@@ -100,6 +113,18 @@ export async function POST(req: Request) {
       if (!companyOther) {
         return NextResponse.json(
           { error: "Please enter the company name." },
+          { status: 400 }
+        );
+      }
+      const listMatch = findVendorListMatchByTypedName(
+        await loadActiveVendors(adminAPI),
+        companyOther
+      );
+      if (listMatch) {
+        return NextResponse.json(
+          {
+            error: vendorInListSelectFromDropdownMessage(listMatch.name),
+          },
           { status: 400 }
         );
       }

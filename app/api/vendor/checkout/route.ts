@@ -3,6 +3,10 @@ import { requireAdminAPI } from "@/lib/instantdb-admin";
 import { getVendorLobbyEnabledFromDb } from "@/lib/kiosk-lobby-settings-server";
 import { VENDOR_CHECKOUT_CODE_LENGTH } from "@/lib/vendor-checkout-code";
 import {
+  findVendorListMatchByTypedName,
+  vendorInListSelectFromDropdownMessage,
+} from "@/lib/vendor-company-list-match";
+import {
   isUserCheckedInFromPunches,
   normName,
   transactVendorCheckout,
@@ -126,6 +130,32 @@ export async function POST(req: Request) {
           { error: "Please choose your company." },
           { status: 400 }
         );
+      }
+
+      if (companyMode === "other") {
+        if (!companyOther) {
+          return NextResponse.json(
+            { error: "Please enter the company name." },
+            { status: 400 }
+          );
+        }
+        const vendorData = (await adminAPI.query({
+          vendors: { $: { where: { isActive: true } } },
+        })) as {
+          vendors?: Array<{ id: string; name: string; isActive: boolean }>;
+        };
+        const listMatch = findVendorListMatchByTypedName(
+          vendorData.vendors ?? [],
+          companyOther
+        );
+        if (listMatch) {
+          return NextResponse.json(
+            {
+              error: vendorInListSelectFromDropdownMessage(listMatch.name),
+            },
+            { status: 400 }
+          );
+        }
       }
 
       const fn = normName(firstName);

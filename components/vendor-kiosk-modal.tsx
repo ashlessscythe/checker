@@ -23,6 +23,10 @@ import {
   sortVendorsForKioskDropdown,
 } from "@/lib/vendor-kiosk-company-sort";
 import {
+  findVendorListMatchByTypedName,
+  vendorInListSelectFromDropdownMessage,
+} from "@/lib/vendor-company-list-match";
+import {
   mergeRecentVendorIds,
   readRecentVendorIdsFromStorage,
   recordRecentVendorIdInStorage,
@@ -200,6 +204,13 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
       toast.error("Please type the company name.");
       return;
     }
+    if (companyMode === "other") {
+      const listMatch = findVendorListMatchByTypedName(vendors, companyOther);
+      if (listMatch) {
+        toast.error(vendorInListSelectFromDropdownMessage(listMatch.name));
+        return;
+      }
+    }
 
     let reasonMode: "reason" | "other" = "other";
     let vendorReasonId = "";
@@ -313,6 +324,16 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
     if (companyMode === "other" && !checkoutCompanyOther.trim()) {
       toast.error("Please type the company name.");
       return;
+    }
+    if (companyMode === "other") {
+      const listMatch = findVendorListMatchByTypedName(
+        vendors,
+        checkoutCompanyOther
+      );
+      if (listMatch) {
+        toast.error(vendorInListSelectFromDropdownMessage(listMatch.name));
+        return;
+      }
     }
 
     setBusy(true);
