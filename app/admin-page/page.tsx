@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "@/hooks/authContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import toast, { Toaster } from "react-hot-toast";
+import ScrollToTopButton from "@/components/scroll-to-top-button";
 
 type AdminTab = "users" | "backups" | "visitors" | "email" | "firedrill";
 
@@ -223,6 +224,7 @@ function AdminContent() {
           </div>
         )}
       </div>
+      <ScrollToTopButton minPageViewportHeights={3} showAfterViewportHeights={1} />
     </div>
   );
 }
