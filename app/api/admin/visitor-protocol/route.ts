@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { id, tx } from "@instantdb/admin";
+import { formatAdminApiError } from "@/lib/admin-api-error";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
 
 const PROTOCOL_KEY = "default";
@@ -33,9 +34,9 @@ export async function GET() {
         updatedAt: protocol.updatedAt,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message || "Failed to load visitor protocol." },
+      { error: formatAdminApiError(error) },
       { status: 500 }
     );
   }
@@ -93,9 +94,9 @@ export async function POST(req: Request) {
     ]);
 
     return NextResponse.json({ ok: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message || "Failed to save visitor protocol." },
+      { error: formatAdminApiError(error) },
       { status: 500 }
     );
   }

@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { db } from "@/lib/instantdb";
 import { tx, id } from "@instantdb/react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Switch } from "./ui/Switch";
 import AdminCollapsible from "./admin-collapsible";
+import ToggleSection from "./toggle-section";
+import { getStaleCheckinHoursForDisplay } from "@/lib/stale-checkin-duration";
 import {
   Select,
   SelectContent,
@@ -30,6 +32,29 @@ function isStalePendingSubmission(submittedAt: number) {
   return typeof submittedAt === "number" && submittedAt > 0
     ? Date.now() - submittedAt > STALE_PENDING_MS
     : false;
+}
+
+function LobbyInnerSection({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800">
+      <ToggleSection title={title} isOpen={open} onToggle={onToggle} />
+      {open ? (
+        <div className="space-y-3 border-t border-gray-200 px-3 py-3 dark:border-gray-600">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 const VISITOR_ADMIN_SECTIONS_STORAGE_KEY = "checker-admin-visitor-sections";
@@ -246,6 +271,14 @@ export default function VisitorAdmin() {
   };
 
   const [savingLobbyFlags, setSavingLobbyFlags] = useState(false);
+  const [lobbyKioskTogglesOpen, setLobbyKioskTogglesOpen] = useState(true);
+  const [vendorCheckinsOpen, setVendorCheckinsOpen] = useState(true);
+  const [vendorMaintSummary, setVendorMaintSummary] = useState<string | null>(
+    null
+  );
+  const [vendorMaintBusy, setVendorMaintBusy] = useState(false);
+
+  const staleCheckinHours = getStaleCheckinHoursForDisplay();
 
   const kioskLobbyRow = (data?.kioskLobbySettings?.[0] ??
     undefined) as KioskLobbySettingsRow | undefined;
@@ -286,6 +319,59 @@ export default function VisitorAdmin() {
       toast.error(err instanceof Error ? err.message : "Failed to save settings.");
     } finally {
       setSavingLobbyFlags(false);
+    }
+  };
+
+  const runVendorMaintAction = async (
+    action: "reset-codes" | "clear-stale",
+    confirmLabel: (count: number) => string,
+    successLabel: (count: number) => string
+  ) => {
+    const path =
+      action === "reset-codes"
+        ? "/api/admin/vendor/reset-checkout-codes"
+        : "/api/admin/vendor/clear-stale-checkins";
+    const countKey = action === "reset-codes" ? "released" : "checkedOut";
+
+    setVendorMaintBusy(true);
+    setVendorMaintSummary(null);
+    try {
+      const previewRes = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun: true }),
+      });
+      const preview = await previewRes.json().catch(() => ({}));
+      if (!previewRes.ok) {
+        throw new Error(preview?.error || "Could not preview this action.");
+      }
+      const count = Number(preview[countKey] ?? 0);
+      if (count === 0) {
+        const noneMsg = successLabel(0);
+        setVendorMaintSummary(noneMsg);
+        toast.success(noneMsg);
+        return;
+      }
+      if (!window.confirm(confirmLabel(count))) return;
+
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error || "Action failed.");
+      }
+      const done = Number(json[countKey] ?? 0);
+      setVendorMaintSummary(successLabel(done));
+      toast.success(successLabel(done));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Action failed.";
+      setVendorMaintSummary(message);
+      toast.error(message);
+    } finally {
+      setVendorMaintBusy(false);
     }
   };
 
@@ -773,42 +859,108 @@ export default function VisitorAdmin() {
           instead of the form. Admin invite and approvals below are not affected.
         </p>
         <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 py-3 dark:border-gray-600 dark:bg-gray-800">
-            <div>
-              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                Visitor / guest self-registration
+          <LobbyInnerSection
+            title="Kiosk toggles"
+            open={lobbyKioskTogglesOpen}
+            onToggle={() => setLobbyKioskTogglesOpen((o) => !o)}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  Visitor / guest self-registration
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Green &quot;Visitor? Register here&quot; on the main page
+                </div>
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                Green &quot;Visitor? Register here&quot; on the main page
-              </div>
+              <Switch
+                isChecked={guestLobbyEnabled}
+                onChange={() =>
+                  persistKioskLobby({
+                    visitorGuestCheckInEnabled: !guestLobbyEnabled,
+                  })
+                }
+              />
             </div>
-            <Switch
-              isChecked={guestLobbyEnabled}
-              onChange={() =>
-                persistKioskLobby({
-                  visitorGuestCheckInEnabled: !guestLobbyEnabled,
-                })
-              }
-            />
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 py-3 dark:border-gray-600 dark:bg-gray-800">
-            <div>
-              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                Vendor check-in / checkout
+          </LobbyInnerSection>
+
+          <LobbyInnerSection
+            title="Vendor check-ins"
+            open={vendorCheckinsOpen}
+            onToggle={() => setVendorCheckinsOpen((o) => !o)}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  Vendor kiosk enabled
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Blue vendor button on the main page
+                </div>
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                Blue vendor button on the main page
-              </div>
+              <Switch
+                isChecked={vendorLobbyEnabled}
+                onChange={() =>
+                  persistKioskLobby({
+                    vendorCheckInEnabled: !vendorLobbyEnabled,
+                  })
+                }
+              />
             </div>
-            <Switch
-              isChecked={vendorLobbyEnabled}
-              onChange={() =>
-                persistKioskLobby({
-                  vendorCheckInEnabled: !vendorLobbyEnabled,
-                })
-              }
-            />
-          </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Checkout codes are 3 digits and stay reserved on completed visits until
+              released. With ~900 possible codes, run release periodically if new
+              check-ins fail to get a code.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={vendorMaintBusy}
+                onClick={() =>
+                  runVendorMaintAction(
+                    "reset-codes",
+                    (n) =>
+                      `Release checkout codes on ${n} completed visit(s)? Open visits keep their codes; released codes no longer work at the kiosk.`,
+                    (n) =>
+                      n === 0
+                        ? "No checkout codes to release on completed visits."
+                        : `Released ${n} checkout code(s) from completed visits.`
+                  )
+                }
+              >
+                Release checkout codes
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={vendorMaintBusy}
+                onClick={() =>
+                  runVendorMaintAction(
+                    "clear-stale",
+                    (n) =>
+                      `Check out ${n} stale vendor visit(s) (still checked in after ${staleCheckinHours} hours)?`,
+                    (n) =>
+                      n === 0
+                        ? `No vendor visits checked in longer than ${staleCheckinHours} hours.`
+                        : `Checked out ${n} stale vendor visit(s).`
+                  )
+                }
+              >
+                Clear stale check-ins
+              </Button>
+            </div>
+            {vendorMaintSummary ? (
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                {vendorMaintSummary}
+              </p>
+            ) : null}
+            {vendorMaintBusy ? (
+              <p className="text-xs text-gray-500">Working…</p>
+            ) : null}
+          </LobbyInnerSection>
         </div>
         {savingLobbyFlags ? (
           <p className="mt-2 text-xs text-gray-500">Saving…</p>

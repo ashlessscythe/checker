@@ -2,15 +2,12 @@
 import { useState, useEffect } from "react";
 import { CheckActionType, performCheckinOut } from "../utils/checkInOut";
 import { userQualifiesForStaleAutoCheckout } from "../lib/auto-checkout-logic";
+import { getStaleCheckinMaxDurationMs } from "../lib/stale-checkin-duration";
 
 const CHECKOUT_INTERVAL =
   parseInt(process.env.NEXT_PUBLIC_CLEANUP_INTERVAL_MINUTES, 10) * 60 * 1000 ||
   10 * 60 * 1000; // 10 min in milliseconds
-const MAX_CHECKIN_DURATION =
-  parseInt(process.env.NEXT_PUBLIC_STALE_CHECKIN_CLEANUP_HOURS, 10) *
-    60 *
-    60 *
-    1000 || 16 * 60 * 60 * 1000; // 16 hours in milliseconds
+const MAX_CHECKIN_DURATION = getStaleCheckinMaxDurationMs();
 
 export function useAutoCheckout({ data }) {
   const [userData, setUserData] = useState(data);
