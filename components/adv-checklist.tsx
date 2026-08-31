@@ -26,15 +26,15 @@ interface User {
   id: string;
   name: string;
   email: string;
-  barcode: string;
+  barcode?: string;
   isAdmin: boolean;
   isAuth: boolean;
-  lastLoginAt: number;
+  lastLoginAt?: number;
   createdAt: number;
-  deptId: string;
-  serverCreatedAt: number;
-  laptopSerial: string;
-  purpose: string;
+  deptId?: string;
+  serverCreatedAt?: number;
+  laptopSerial?: string;
+  purpose?: string;
 }
 
 interface UserWithStatus extends User {
