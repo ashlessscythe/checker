@@ -16,15 +16,15 @@ const _schema = i.schema({
     users: i.entity({
       name: i.string(),
       email: i.string(),
-      barcode: i.string(),
+      barcode: i.string().optional(),
       isAdmin: i.boolean(),
       isAuth: i.boolean(),
-      lastLoginAt: i.number(),
+      lastLoginAt: i.number().optional(),
       createdAt: i.number(),
-      deptId: i.string(),
-      serverCreatedAt: i.number(), // Adding serverCreatedAt for sorting
-      laptopSerial: i.string(), // For visitors with laptops
-      purpose: i.string(), // For visitor purpose
+      deptId: i.string().optional(),
+      serverCreatedAt: i.number().optional(),
+      laptopSerial: i.string().optional(),
+      purpose: i.string().optional(),
     }),
     punches: i.entity({
       type: i.string(),
@@ -32,8 +32,8 @@ const _schema = i.schema({
       serverCreatedAt: i.number(),
       isAdminGenerated: i.boolean(),
       isSystemGenerated: i.boolean(),
-      userId: i.string().indexed(), // Add direct reference to user
-      device: i.string(), // Device identifier (short code like last 4 hex chars)
+      userId: i.string().indexed(),
+      device: i.string().optional(),
     }),
     departments: i.entity({
       name: i.string(),
@@ -47,7 +47,7 @@ const _schema = i.schema({
       drillId: i.string(),
       userId: i.string(),
       timestamp: i.number(),
-      status: i.string(), // 'checked' or 'unchecked'
+      status: i.string().optional(), // 'checked' or 'unchecked'
       accountedBy: i.string(),
     }),
     firedrills: i.entity({
@@ -136,7 +136,7 @@ const _schema = i.schema({
       category: i.string(), // 'who' | 'why' | 'company'
       label: i.string(),
       /** When category is "who", optional email to notify that host for pre-check approvals. */
-      hostEmail: i.string(),
+      hostEmail: i.string().optional(),
       isActive: i.boolean(),
       sortOrder: i.number(),
       createdAt: i.number(),
@@ -186,8 +186,8 @@ const _schema = i.schema({
       // Kiosk barcode is generated at approval time
       visitorBarcode: i.string(),
       visitorUserId: i.string(), // created when approved
-      protocolRequired: i.boolean(),
-      protocolAcknowledgedAt: i.number(),
+      protocolRequired: i.boolean().optional(),
+      protocolAcknowledgedAt: i.number().optional(),
 
       createdAt: i.number(),
       lastUpdatedAt: i.number(),
@@ -247,6 +247,19 @@ const _schema = i.schema({
       vendorCheckInEnabled: i.boolean(),
       visitorGuestCheckInEnabled: i.boolean(),
       updatedAt: i.number(),
+    }),
+    /**
+     * Hashed public API keys. Clients must not read this entity (see instant.perms.ts).
+     * The plaintext secret is shown once at creation and never stored.
+     */
+    apiKeys: i.entity({
+      name: i.string(),
+      keyHash: i.string().unique().indexed(),
+      keyPrefix: i.string(),
+      createdAt: i.number().indexed(),
+      createdByEmail: i.string(),
+      lastUsedAt: i.number(),
+      revokedAt: i.number(),
     }),
   },
   links: {

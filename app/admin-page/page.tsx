@@ -6,6 +6,7 @@ import AdminPage from "@/components/adminpage";
 import BackupPage from "@/components/backuppage";
 import VisitorAdmin from "@/components/visitoradmin";
 import FireDrillAdmin from "../../components/firedrill-admin";
+import ApiAdmin from "@/components/api-admin";
 import NotAuthorizedPage from "@/components/notauthorizedpage";
 import { AuthProvider, useAuth } from "@/hooks/authContext";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import toast, { Toaster } from "react-hot-toast";
 import ScrollToTopButton from "@/components/scroll-to-top-button";
 
-type AdminTab = "users" | "backups" | "visitors" | "email" | "firedrill";
+type AdminTab = "users" | "backups" | "visitors" | "email" | "firedrill" | "api";
 
 function AdminContent() {
   const { isAdmin, isLoading: authLoading } = useAuth();
@@ -145,6 +146,17 @@ function AdminContent() {
           >
             FireDrill
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("api")}
+            className={`rounded-md px-3 py-2 text-sm font-medium ${
+              activeTab === "api"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+            }`}
+          >
+            API
+          </button>
         </div>
 
         {activeTab === "users" && (
@@ -221,6 +233,12 @@ function AdminContent() {
         {activeTab === "firedrill" && (
           <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
             <FireDrillAdmin />
+          </div>
+        )}
+
+        {activeTab === "api" && (
+          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900 sm:p-6">
+            <ApiAdmin />
           </div>
         )}
       </div>

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: tsc, tests, build
+    runs-on: ubuntu-latest
+    env:
+      # Instant app id is required at import time for `next build`.
+      # Dummy value is enough for CI compile; do not use production secrets.
+      NEXT_PUBLIC_INSTANT_APP_ID: 00000000-0000-0000-0000-000000000000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

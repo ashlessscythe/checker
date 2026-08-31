@@ -5,6 +5,7 @@
     "build": "next build",
     "start": "next start",
     "prod": "npm-run-all build start",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
