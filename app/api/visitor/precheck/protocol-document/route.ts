@@ -82,7 +82,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: loaded.error }, { status: loaded.status });
     }
 
-    // Uint8Array: newer @types/node Buffer is not assignable to BodyInit.
     return new NextResponse(new Uint8Array(loaded.buf), {
       status: 200,
       headers: {
