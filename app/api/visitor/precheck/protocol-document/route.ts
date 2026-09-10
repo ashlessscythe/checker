@@ -82,7 +82,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: loaded.error }, { status: loaded.status });
     }
 
-    return new NextResponse(loaded.buf, {
+    return new NextResponse(new Uint8Array(loaded.buf), {
       status: 200,
       headers: {
         "Content-Type": loaded.mimeType,
