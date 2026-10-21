@@ -214,7 +214,7 @@ export default function VendorKioskModal({ onOpenChange }: VendorKioskModalProps
 
     let reasonMode: "reason" | "other" = "other";
     let vendorReasonId = "";
-    let ro = reasonOther.trim();
+    const ro = reasonOther.trim();
 
     if (companyMode === "vendor") {
       if (!reasonSel) {
