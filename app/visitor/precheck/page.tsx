@@ -13,7 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-// @ts-ignore - react-qr-code types are declared manually
 import QRCode from "react-qr-code";
 import toast, { Toaster } from "react-hot-toast";
 import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";

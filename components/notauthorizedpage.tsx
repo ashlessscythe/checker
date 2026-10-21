@@ -5,7 +5,9 @@ export default function NotAuthorizedPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
       <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-4">Access Denied</h1>
-      <p className="text-2xl text-gray-600 dark:text-gray-300 mb-8">"Ah ah ah! You didn't say the magic word!"</p>
+      <p className="text-2xl text-gray-600 dark:text-gray-300 mb-8">
+        &quot;Ah ah ah! You didn&apos;t say the magic word!&quot;
+      </p>
       <div className="mb-8">
         <img src="/dinosaur.gif" alt="Dinosaur saying no" className="rounded-lg shadow-lg" />
       </div>
