@@ -4,6 +4,7 @@ import {
   buildUserImportTransactions,
   validateCsvSize,
 } from "@/lib/csv-user-import";
+import { requireSignedInAdmin } from "@/lib/require-signed-in-admin";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,8 @@ const TX_CHUNK_SIZE = 50;
 
 export async function POST(req: Request) {
   try {
+    const admin = await requireSignedInAdmin(req);
+    if (admin.ok === false) return admin.response;
     const adminAPI = requireAdminAPI();
     const body = await req.json().catch(() => null);
     const csvText =

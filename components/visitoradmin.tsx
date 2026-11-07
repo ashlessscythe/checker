@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { db } from "@/lib/instantdb";
+import { adminAuthHeaders } from "@/lib/admin-auth-headers";
 import { tx, id } from "@instantdb/react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -336,9 +337,10 @@ export default function VisitorAdmin() {
     setVendorMaintBusy(true);
     setVendorMaintSummary(null);
     try {
+      const authHeaders = await adminAuthHeaders();
       const previewRes = await fetch(path, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...authHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({ dryRun: true }),
       });
       const preview = await previewRes.json().catch(() => ({}));
@@ -356,7 +358,7 @@ export default function VisitorAdmin() {
 
       const res = await fetch(path, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...authHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({ dryRun: false }),
       });
       const json = await res.json().catch(() => ({}));
@@ -464,7 +466,9 @@ export default function VisitorAdmin() {
   useEffect(() => {
     const loadProtocol = async () => {
       try {
-        const res = await fetch("/api/admin/visitor-protocol");
+        const res = await fetch("/api/admin/visitor-protocol", {
+          headers: await adminAuthHeaders(),
+        });
         if (!res.ok) return;
         const payload = await res.json();
         setSavedProtocol(payload?.protocol || null);
@@ -559,7 +563,7 @@ export default function VisitorAdmin() {
         });
         const res = await fetch("/api/visitor/precheck/invite", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { ...(await adminAuthHeaders()), "Content-Type": "application/json" },
           body: JSON.stringify({
             email: req.email,
             name: nameForInvite,
@@ -679,9 +683,7 @@ export default function VisitorAdmin() {
     try {
       const res = await fetch("/api/visitor/precheck/invite", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { ...(await adminAuthHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({
           email: inviteEmail,
           name: inviteName,
@@ -811,7 +813,7 @@ export default function VisitorAdmin() {
     try {
       const res = await fetch("/api/admin/visitor-protocol", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...(await adminAuthHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify(protocolUpload),
       });
       if (!res.ok) {
@@ -1648,7 +1650,7 @@ export default function VisitorAdmin() {
                         "/api/visitor/precheck/send-approval-email",
                         {
                           method: "POST",
-                          headers: { "Content-Type": "application/json" },
+                          headers: { ...(await adminAuthHeaders()), "Content-Type": "application/json" },
                           body: JSON.stringify({
                             email: req.email,
                             barcode,
@@ -1667,7 +1669,7 @@ export default function VisitorAdmin() {
                         "/api/visitor/precheck/send-approval-internal-notify",
                         {
                           method: "POST",
-                          headers: { "Content-Type": "application/json" },
+                          headers: { ...(await adminAuthHeaders()), "Content-Type": "application/json" },
                           body: JSON.stringify({
                             visitorName: approvedVisitorName,
                             visitorEmail: req.email,
@@ -1708,7 +1710,7 @@ export default function VisitorAdmin() {
                         "/api/visitor/precheck/send-rejection-email",
                         {
                           method: "POST",
-                          headers: { "Content-Type": "application/json" },
+                          headers: { ...(await adminAuthHeaders()), "Content-Type": "application/json" },
                           body: JSON.stringify({
                             email: req.email,
                             rejectionMessage: messageDraft || "",

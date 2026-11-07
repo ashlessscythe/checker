@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { db } from "@/lib/instantdb";
+import { adminAuthHeaders } from "@/lib/admin-auth-headers";
 import { id, tx } from "@instantdb/react";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
@@ -213,7 +214,7 @@ export default function FireDrillAdmin() {
       setIsSending(true);
       const res = await fetch("/api/admin/fire-drill/send-report", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...(await adminAuthHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: selectedSessionId,
           to,

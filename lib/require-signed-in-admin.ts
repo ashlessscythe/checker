@@ -10,7 +10,7 @@ function isTruthyAdmin(value: unknown): boolean {
   return value !== false && value !== "false" && Boolean(value);
 }
 
-async function findAppUserByEmail(
+export async function findAppUserByEmail(
   adminAPI: ReturnType<typeof requireAdminAPI>,
   email: string
 ): Promise<{ id: string; email?: string; isAdmin?: boolean } | null> {

@@ -1,8 +1,8 @@
 import crypto from "crypto";
+import { getPrecheckSecret } from "@/lib/precheck-secret";
+import { safeEqual } from "@/lib/safe-equal";
 
-function ticketSecret() {
-  return process.env.PRECHECK_TOKEN_SECRET || "dev-precheck-secret";
-}
+const ticketSecret = () => getPrecheckSecret();
 
 const PURPOSE = "protocol_document_view";
 
@@ -26,7 +26,7 @@ export function verifyProtocolViewTicket(ticket: string): boolean {
     .createHmac("sha256", ticketSecret())
     .update(b64)
     .digest("base64url");
-  if (expectedSig !== sig) return false;
+  if (!safeEqual(expectedSig, sig)) return false;
   try {
     const parsed = JSON.parse(Buffer.from(b64, "base64url").toString("utf8")) as {
       p?: string;

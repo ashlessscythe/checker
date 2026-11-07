@@ -371,6 +371,20 @@ const _schema = i.schema({
         label: "vendorCheckins",
       },
     },
+    // Links the Instant auth user to the app `users` row so perms can check isAdmin.
+    // Created server-side only (app/api/auth/link-user, scripts/link-auth-users.ts).
+    appUserAuthLink: {
+      forward: {
+        on: "users",
+        has: "one",
+        label: "$user",
+      },
+      reverse: {
+        on: "$users",
+        has: "one",
+        label: "appUser",
+      },
+    },
   },
   rooms: {},
 });

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
-import { db } from "@/lib/instantdb";
+import { adminAuthHeaders } from "@/lib/admin-auth-headers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -18,14 +18,6 @@ type ApiKeyRow = {
 };
 
 type QueryTarget = "users" | "punches";
-
-async function adminAuthHeaders(): Promise<HeadersInit> {
-  const user = await db.getAuth();
-  if (!user?.refresh_token) {
-    throw new Error("Not signed in.");
-  }
-  return { Authorization: `Bearer ${user.refresh_token}` };
-}
 
 function formatTs(ms: number | null): string {
   if (!ms) return "—";

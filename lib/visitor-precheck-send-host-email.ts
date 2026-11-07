@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
+import { escapeHtml } from "@/lib/escape-html";
 import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
 import { signHostPrecheckReviewToken } from "@/lib/visitor-precheck-host-token";
 import { waitForHostNotifyEmailRateLimit } from "@/lib/visitor-precheck-host-notify-rate-limit";
@@ -82,17 +83,17 @@ export async function sendHostPrecheckNotificationEmail(
                 </p>
 
                 <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 16px 0;">
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visitor:</strong> ${visitorDisplayName}</p>
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visitor email:</strong> ${v.email}</p>
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Company:</strong> ${(v.visitorCompanyName || "").trim() || "—"}</p>
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visiting (host):</strong> ${v.who}</p>
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Reason:</strong> ${v.reason}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visitor:</strong> ${escapeHtml(visitorDisplayName)}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visitor email:</strong> ${escapeHtml(v.email)}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Company:</strong> ${escapeHtml((v.visitorCompanyName || "").trim()) || "—"}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visiting (host):</strong> ${escapeHtml(v.who)}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Reason:</strong> ${escapeHtml(v.reason)}</p>
                   <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>When:</strong> ${whenDisplay}</p>
                   <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Submitted:</strong> ${submitted}</p>
                   <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Request origin:</strong> ${sourceLabel}</p>
                   ${
                     v.otherDetails?.trim()
-                      ? `<p style="font-size: 13px; margin: 10px 0 0; color: #6b7280;"><strong>Details:</strong> ${v.otherDetails}</p>`
+                      ? `<p style="font-size: 13px; margin: 10px 0 0; color: #6b7280;"><strong>Details:</strong> ${escapeHtml(v.otherDetails)}</p>`
                       : ""
                   }
                 </div>

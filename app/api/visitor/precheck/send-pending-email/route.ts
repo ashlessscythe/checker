@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { escapeHtml } from "@/lib/escape-html";
 import { visitorPrecheckDisplayName } from "@/lib/visitor-precheck-display";
 import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
+import { assertPrecheckLinkActive } from "@/lib/visitor-precheck-link-validation";
 
 export const runtime = "nodejs";
 
@@ -72,6 +74,17 @@ export async function POST(req: Request) {
       );
     }
 
+    const gate = await assertPrecheckLinkActive(token);
+    if (gate.ok === false) {
+      return NextResponse.json({ error: gate.error }, { status: gate.status });
+    }
+    if (gate.payload.email.trim().toLowerCase() !== email) {
+      return NextResponse.json(
+        { error: "Token does not match this email address." },
+        { status: 403 }
+      );
+    }
+
     const editUrl = `${appBaseUrl}/visitor/precheck?token=${encodeURIComponent(
       token
     )}`;
@@ -104,19 +117,19 @@ export async function POST(req: Request) {
                   We received your visitor request
                 </h1>
                 <p style="font-size: 14px; margin: 0 0 16px; color: #374151;">
-                  Hi <strong>${visitorDisplayName}</strong>,<br/>
+                  Hi <strong>${escapeHtml(visitorDisplayName)}</strong>,<br/>
                   ${introBySource} Staff approval is still required before you can check in at the kiosk.
                 </p>
 
                 <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 16px 0;">
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visitor:</strong> ${visitorDisplayName}</p>
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Company:</strong> ${visitorCompanyName || "—"}</p>
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visiting:</strong> ${who}</p>
-                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Reason:</strong> ${reason}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visitor:</strong> ${escapeHtml(visitorDisplayName)}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Company:</strong> ${escapeHtml(visitorCompanyName) || "—"}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Visiting:</strong> ${escapeHtml(who)}</p>
+                  <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>Reason:</strong> ${escapeHtml(reason)}</p>
                   <p style="font-size: 14px; margin: 0 0 6px; color: #374151;"><strong>When:</strong> ${whenDisplay}</p>
                   ${
                     details?.trim()
-                      ? `<p style="font-size: 13px; margin: 10px 0 0; color: #6b7280;"><strong>Details:</strong> ${details}</p>`
+                      ? `<p style="font-size: 13px; margin: 10px 0 0; color: #6b7280;"><strong>Details:</strong> ${escapeHtml(details)}</p>`
                       : ""
                   }
                 </div>

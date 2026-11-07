@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { id, tx } from "@instantdb/react";
 import { db } from "../lib/instantdb";
+import { adminAuthHeaders } from "@/lib/admin-auth-headers";
 import toast, { Toaster } from "react-hot-toast";
 import Papa from "papaparse";
 import { useAutoNavigate } from "../hooks/useAutoNavigate";
@@ -277,7 +278,7 @@ export default function AdminPage() {
   const postUserImport = async (body: Record<string, unknown>) => {
     const res = await fetch("/api/admin/users/import", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...(await adminAuthHeaders()), "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     let json: ImportApiResult = {};

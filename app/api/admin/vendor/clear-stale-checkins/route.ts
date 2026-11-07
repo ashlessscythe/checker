@@ -3,11 +3,14 @@ import { formatAdminApiError } from "@/lib/admin-api-error";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
 import { clearStaleVendorCheckins } from "@/lib/vendor-admin-maintenance";
 import { getStaleCheckinHoursForDisplay } from "@/lib/stale-checkin-duration";
+import { requireSignedInAdmin } from "@/lib/require-signed-in-admin";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    const admin = await requireSignedInAdmin(req);
+    if (admin.ok === false) return admin.response;
     const adminAPI = requireAdminAPI();
     const body = await req.json().catch(() => ({}));
     const dryRun = Boolean(body?.dryRun);

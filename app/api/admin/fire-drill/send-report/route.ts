@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { id, tx } from "@instantdb/admin";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
+import { requireSignedInAdmin } from "@/lib/require-signed-in-admin";
 
 const resendApiKey = process.env.RESEND_API_KEY;
 const resendFromEmail = process.env.RESEND_FROM_EMAIL;
@@ -116,6 +117,9 @@ function buildHtmlTable(rows: Array<Record<string, unknown>>): string {
 }
 
 export async function POST(req: Request) {
+  const admin = await requireSignedInAdmin(req);
+  if (admin.ok === false) return admin.response;
+
   if (!resend || !resendApiKey || !resendFromEmail) {
     return NextResponse.json(
       { error: "Resend is not configured on the server." },

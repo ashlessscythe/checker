@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from "@/hooks/authContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import toast, { Toaster } from "react-hot-toast";
+import { adminAuthHeaders } from "@/lib/admin-auth-headers";
 import ScrollToTopButton from "@/components/scroll-to-top-button";
 
 type AdminTab = "users" | "backups" | "visitors" | "email" | "firedrill" | "api";
@@ -45,6 +46,7 @@ function AdminContent() {
       const res = await fetch("/api/admin/send-generic-email", {
         method: "POST",
         headers: {
+          ...(await adminAuthHeaders()),
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

@@ -1,10 +1,10 @@
 import crypto from "crypto";
+import { getPrecheckSecret } from "@/lib/precheck-secret";
+import { safeEqual } from "@/lib/safe-equal";
 
 export type PrecheckTokenSource = "admin" | "kiosk_email" | "kiosk_register";
 
-function getSecret() {
-  return process.env.PRECHECK_TOKEN_SECRET || "dev-precheck-secret";
-}
+const getSecret = () => getPrecheckSecret();
 
 export function signPrecheckToken({
   email,
@@ -48,7 +48,7 @@ export function verifyPrecheckToken(token: string): null | {
     .createHmac("sha256", getSecret())
     .update(payloadB64)
     .digest("base64url");
-  if (expectedSig !== sig) return null;
+  if (!safeEqual(expectedSig, sig)) return null;
 
   let parsed: {
     email?: string;

@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "seed:punches": "tsx --env-file=.env.local scripts/seed-punches.ts"
+    "seed:punches": "tsx --env-file=.env.local scripts/seed-punches.ts",
+    "link:auth-users": "tsx --env-file=.env scripts/link-auth-users.ts"
   },
   "overrides": {
     "postcss": "8.5.26",
@@ -65,7 +66,7 @@
     "npm-run-all": "^4.1.5",
     "postcss": "8.5.26",
     "tailwindcss": "^3.4.10",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typescript": "^5.3.3",
     "vite": "^8.3.5",
     "vitest": "^4.1.12"

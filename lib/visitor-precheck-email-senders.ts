@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { escapeHtml } from "@/lib/escape-html";
 import QRCode from "qrcode";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { formatVisitorPrecheckWhen } from "@/lib/visitor-precheck-datetime";
@@ -157,7 +158,7 @@ export async function sendVisitorPrecheckApprovalEmail(
                   Your visitor pre-check is approved
                 </h1>
                 <p style="font-size: 14px; margin: 0 0 12px; color: #374151;">
-                  Hi <strong>${visitorName}</strong>,<br/>
+                  Hi <strong>${escapeHtml(visitorName)}</strong>,<br/>
                   You&apos;re scheduled for your visit. Show the code below at the kiosk to check in.
                 </p>
 
@@ -166,30 +167,30 @@ export async function sendVisitorPrecheckApprovalEmail(
                     Visitor Code
                   </div>
                   <div style="font-size: 20px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">
-                    ${barcode}
+                    ${escapeHtml(barcode)}
                   </div>
                   <div style="margin-top: 12px;">
                     <img src="${qrDataUrl}" width="200" height="200" alt="QR code" style="display:block; margin:0 auto;"/>
                   </div>
                 </div>
 
-                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Visitor:</strong> ${visitorName}</p>
-                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Company:</strong> ${visitorCompany || "—"}</p>
-                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Visiting:</strong> ${who}</p>
-                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Reason:</strong> ${reason}</p>
+                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Visitor:</strong> ${escapeHtml(visitorName)}</p>
+                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Company:</strong> ${escapeHtml(visitorCompany) || "—"}</p>
+                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Visiting:</strong> ${escapeHtml(who)}</p>
+                <p style="font-size: 14px; margin: 0 0 8px; color: #374151;"><strong>Reason:</strong> ${escapeHtml(reason)}</p>
                 <p style="font-size: 14px; margin: 0 0 16px; color: #374151;"><strong>When:</strong> ${formatVisitorPrecheckWhen(
                   whenTs
                 )}</p>
 
                 ${
                   details?.trim()
-                    ? `<p style="font-size: 14px; margin: 0 0 16px; color: #374151;"><strong>Details:</strong> ${details}</p>`
+                    ? `<p style="font-size: 14px; margin: 0 0 16px; color: #374151;"><strong>Details:</strong> ${escapeHtml(details)}</p>`
                     : ""
                 }
 
                 ${
                   adminMessage?.trim()
-                    ? `<p style="font-size: 14px; margin: 0 0 16px; color: #374151;"><strong>Admin note:</strong> ${adminMessage}</p>`
+                    ? `<p style="font-size: 14px; margin: 0 0 16px; color: #374151;"><strong>Admin note:</strong> ${escapeHtml(adminMessage)}</p>`
                     : ""
                 }
 
@@ -255,7 +256,7 @@ export async function sendVisitorPrecheckRejectionEmail(
 
     const defaultLetter = `
       <p style="font-size: 14px; margin: 0 0 8px; color: #374151;">
-        Hi <strong>${visitorDisplayName}</strong>,
+        Hi <strong>${escapeHtml(visitorDisplayName)}</strong>,
       </p>
       <p style="font-size: 14px; margin: 0 0 8px; color: #374151;">
         Your visitor pre-check request wasn&apos;t approved.
@@ -266,7 +267,7 @@ export async function sendVisitorPrecheckRejectionEmail(
     `;
 
     const customLetter = rejectionMessage.trim()
-      ? `<p style="font-size: 14px; margin: 0 0 16px; color: #374151;"><strong>Administrator message:</strong> ${rejectionMessage}</p>`
+      ? `<p style="font-size: 14px; margin: 0 0 16px; color: #374151;"><strong>Administrator message:</strong> ${escapeHtml(rejectionMessage)}</p>`
       : "";
 
     const html = `
@@ -280,10 +281,10 @@ export async function sendVisitorPrecheckRejectionEmail(
                 </h1>
                 ${defaultLetter}
                 ${customLetter}
-                <p style="font-size: 12px; color: #6b7280; margin: 0 0 6px;"><strong>Company on file:</strong> ${visitorCompanyName || "—"}</p>
+                <p style="font-size: 12px; color: #6b7280; margin: 0 0 6px;"><strong>Company on file:</strong> ${escapeHtml(visitorCompanyName) || "—"}</p>
                 ${
                   details?.trim()
-                    ? `<p style="font-size: 12px; color: #6b7280; margin: 0;">Your submitted details: ${details}</p>`
+                    ? `<p style="font-size: 12px; color: #6b7280; margin: 0;">Your submitted details: ${escapeHtml(details)}</p>`
                     : ""
                 }
               </td>
@@ -305,14 +306,6 @@ export async function sendVisitorPrecheckRejectionEmail(
     const message = err instanceof Error ? err.message : "Failed to send rejection email.";
     return { ok: false, error: message };
   }
-}
-
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 type NotifyRecipientRow = {

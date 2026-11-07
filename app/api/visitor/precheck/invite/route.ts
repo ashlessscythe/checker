@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
+import { requireSignedInAdmin } from "@/lib/require-signed-in-admin";
+import { createRateLimiter } from "@/lib/public-api-rate-limit";
 import {
   signPrecheckToken,
   type PrecheckTokenSource,
@@ -24,6 +26,10 @@ function parseInviteSource(raw: string | undefined): PrecheckTokenSource {
   return "kiosk_email";
 }
 
+// Public (kiosk) invites send email to arbitrary addresses: cap per recipient and overall.
+const kioskInvitePerEmailLimiter = createRateLimiter(3, 10 * 60_000);
+const kioskInviteGlobalLimiter = createRateLimiter(60, 10 * 60_000);
+
 export async function POST(req: Request) {
   try {
     const adminAPI = requireAdminAPI();
@@ -32,6 +38,24 @@ export async function POST(req: Request) {
     const nameRaw = (body?.name as string | undefined)?.trim();
     const name = nameRaw && nameRaw.length > 0 ? nameRaw : email;
     const source = parseInviteSource(body?.source as string | undefined);
+
+    if (source === "admin") {
+      // Admin-issued invites can attach the visitor protocol: require a signed-in admin.
+      const admin = await requireSignedInAdmin(req);
+      if (admin.ok === false) return admin.response;
+    } else {
+      const now = Date.now();
+      const emailKey = String(email || "").toLowerCase();
+      if (
+        !kioskInviteGlobalLimiter.tryConsume("global", now) ||
+        (emailKey && !kioskInvitePerEmailLimiter.tryConsume(emailKey, now))
+      ) {
+        return NextResponse.json(
+          { error: "Too many invite requests. Please try again in a few minutes." },
+          { status: 429 }
+        );
+      }
+    }
     const sendVisitorProtocol = Boolean(body?.sendVisitorProtocol);
 
     if (!email || !email.includes("@")) {

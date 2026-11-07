@@ -1,12 +1,9 @@
 import crypto from "crypto";
+import { getPrecheckSecret } from "@/lib/precheck-secret";
+import { safeEqual } from "@/lib/safe-equal";
 
-function getSecret() {
-  return (
-    process.env.VISITOR_HOST_REVIEW_SECRET ||
-    process.env.PRECHECK_TOKEN_SECRET ||
-    "dev-precheck-secret"
-  );
-}
+const getSecret = () =>
+  getPrecheckSecret({ preferred: process.env.VISITOR_HOST_REVIEW_SECRET });
 
 export function signHostPrecheckReviewToken(requestId: string): string {
   const payload = JSON.stringify({ rid: requestId, v: 1 });
@@ -26,7 +23,7 @@ export function verifyHostPrecheckReviewToken(token: string): string | null {
     .createHmac("sha256", getSecret())
     .update(payloadB64)
     .digest("base64url");
-  if (expectedSig !== sig) return null;
+  if (!safeEqual(expectedSig, sig)) return null;
 
   let parsed: { rid?: string; v?: number };
   try {

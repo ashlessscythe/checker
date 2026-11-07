@@ -44,6 +44,12 @@ export async function assertPrecheckLinkActive(
     }
   } catch (revokeCheckErr) {
     console.error("assertPrecheckLinkActive: revoked token lookup failed", revokeCheckErr);
+    // Fail closed: a revoked link must not work just because the lookup errored.
+    return {
+      ok: false,
+      status: 503,
+      error: "Unable to verify this pre-check link right now. Please try again.",
+    };
   }
 
   return { ok: true, payload };

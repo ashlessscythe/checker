@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomInt } from "crypto";
 import { serverDb, tx } from "@/lib/instantdb-server";
 import { id } from "@instantdb/react";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
@@ -7,7 +8,7 @@ function generateVisitorBarcode() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let result = "";
   for (let i = 0; i < 12; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(randomInt(chars.length));
   }
   return result;
 }

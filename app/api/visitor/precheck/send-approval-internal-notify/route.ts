@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireSignedInAdmin } from "@/lib/require-signed-in-admin";
 import { requireAdminAPI } from "@/lib/instantdb-admin";
 import { sendVisitorPrecheckApprovalInternalNotify } from "@/lib/visitor-precheck-email-senders";
 
@@ -6,6 +7,8 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    const admin = await requireSignedInAdmin(req);
+    if (admin.ok === false) return admin.response;
     const body = await req.json();
     const adminAPI = requireAdminAPI();
     const result = await sendVisitorPrecheckApprovalInternalNotify(adminAPI, body);

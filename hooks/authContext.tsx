@@ -1,6 +1,7 @@
 // contexts/AuthContext.tsx
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { createContext, useState, useContext, useEffect, useRef } from "react";
 import { db } from "../lib/instantdb";
+import { adminAuthHeaders } from "../lib/admin-auth-headers";
 
 interface AuthState {
   isLoading: boolean;
@@ -59,6 +60,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   });
 
   const currentUser = userData?.users?.[0];
+
+  // Link the auth user to their app `users` row (needed by Instant perms), once per email.
+  const linkedEmailRef = useRef<string | null>(null);
+  useEffect(() => {
+    const email = authUser?.email?.toLowerCase();
+    if (!email || !currentUser || linkedEmailRef.current === email) return;
+    linkedEmailRef.current = email;
+    (async () => {
+      try {
+        await fetch("/api/auth/link-user", {
+          method: "POST",
+          headers: await adminAuthHeaders(),
+        });
+      } catch {
+        linkedEmailRef.current = null;
+      }
+    })();
+  }, [authUser?.email, currentUser]);
 
   useEffect(() => {
     const updateAuthState = async () => {
