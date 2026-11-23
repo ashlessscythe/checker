@@ -134,6 +134,10 @@ npm run dev
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the app in action!
 
+### 🔌 API
+
+A read-only public API for users and punches is documented in [docs/API.md](docs/API.md).
+
 ### 🌐 Deployment
 
 Make sure to set your InstantDB URL in your deployment environment settings.
