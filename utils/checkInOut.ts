@@ -8,8 +8,10 @@ import toast from "react-hot-toast";
 import { getDeviceId } from "./deviceId";
 import {
   CheckActionType,
+  PunchLike,
   determineAutoPunchAction,
   getMostReliablePunch,
+  pickLatestPunch,
 } from "./checkInOutLogic";
 
 export {
@@ -53,6 +55,47 @@ const errorColors = {
 
 type ForceAction = CheckActionType | undefined;
 
+/**
+ * This kiosk's own recent writes, per user. The Instant query snapshot can lag
+ * behind a just-written punch, which made rapid re-scans pick the same direction.
+ * Entries expire so admin edits/trims made elsewhere are not masked for long.
+ */
+const RECENT_PUNCH_TTL_MS = 2 * 60 * 1000;
+const recentLocalPunches = new Map<string, PunchLike & { writtenAt: number }>();
+
+function getRecentLocalPunch(userId: string): PunchLike | null {
+  const entry = recentLocalPunches.get(userId);
+  if (!entry) return null;
+  if (Date.now() - entry.writtenAt > RECENT_PUNCH_TTL_MS) {
+    recentLocalPunches.delete(userId);
+    return null;
+  }
+  return entry;
+}
+
+/** Last punch for a user, accounting for this kiosk's own recent writes. */
+export function getLastPunchForEntity(entity: {
+  id: string;
+  punches?: PunchLike[] | null;
+}): PunchLike | null {
+  return pickLatestPunch(
+    getMostReliablePunch(entity.punches),
+    getRecentLocalPunch(entity.id)
+  );
+}
+
+/** The in/out action a plain scan of this entity would produce right now. */
+export function getAutoActionForEntity(entity: {
+  id: string;
+  punches?: PunchLike[] | null;
+}): CheckActionType {
+  return determineAutoPunchAction(
+    getLastPunchForEntity(entity),
+    Date.now(),
+    RESET_HOURS
+  );
+}
+
 export async function performCheckinOut(entity: any, force?: ForceAction) {
   if (!entity) {
     toast.error("User/Visitor not found");
@@ -63,7 +106,7 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
 
   const isVisitor = entity.purpose !== undefined;
 
-  const lastPunch = getMostReliablePunch(entity.punches);
+  const lastPunch = getLastPunchForEntity(entity);
   console.log(`last punch is ${JSON.stringify(lastPunch)}`);
 
   let actionType: CheckActionType;
@@ -92,11 +135,14 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 1000;
 
+  // Generated once so retries are idempotent: if a timed-out transaction
+  // actually committed, re-sending the same id upserts instead of duplicating.
+  const newPunchId = id();
+  const currentTime = Date.now();
+  const deviceId = getDeviceId();
+
   const attemptTransaction = async (retryCount = 0) => {
     try {
-      const newPunchId = id();
-      const currentTime = Date.now();
-      const deviceId = getDeviceId();
 
       await db.transact([
         tx.punches[newPunchId].update({
@@ -109,6 +155,12 @@ export async function performCheckinOut(entity: any, force?: ForceAction) {
           device: deviceId,
         }),
       ]);
+      recentLocalPunches.set(entity.id, {
+        type: actionType,
+        timestamp: currentTime,
+        serverCreatedAt: currentTime,
+        writtenAt: Date.now(),
+      });
       return true;
     } catch (error) {
       if (

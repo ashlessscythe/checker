@@ -87,6 +87,19 @@ export function getMostReliablePunch(
 }
 
 /**
+ * Newest of the query-derived last punch and this kiosk's own recent write.
+ * Guards against a lagging local query snapshot re-deciding from an older punch.
+ */
+export function pickLatestPunch(
+  queryPunch: PunchLike | null,
+  recentLocal: PunchLike | null | undefined
+): PunchLike | null {
+  if (!recentLocal) return queryPunch;
+  if (!queryPunch) return recentLocal;
+  return recentLocal.timestamp > queryPunch.timestamp ? recentLocal : queryPunch;
+}
+
+/**
  * Next kiosk punch when not forcing admin/system action.
  * If last punch was at least `resetHours` ago, always check in (new "day" / stale session).
  */

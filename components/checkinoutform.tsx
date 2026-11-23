@@ -15,6 +15,7 @@ import {
   performCheckinOut,
   extractUserId,
   getMostReliablePunch,
+  getAutoActionForEntity,
 } from "@/utils/checkInOut";
 import SwipesModal from "./swipes-modal";
 
@@ -222,35 +223,12 @@ export default function CheckInOutForm({ shouldFocus }: CheckInOutFormProps) {
 
     try {
       // Determine action type before performing the action
-      const lastPunch = getMostReliablePunch(user.punches);
-      let actionType: "checkin" | "checkout";
-
-      if (!lastPunch) {
-        actionType = "checkin";
-      } else {
-        const lastPunchTime = new Date(lastPunch.timestamp).getTime();
-        const currentTime = Date.now();
-        const hoursSinceLastPunch =
-          (currentTime - lastPunchTime) / (1000 * 60 * 60);
-        const RESET_HOURS = parseInt(
-          process.env.NEXT_PUBLIC_RESET_HOURS || "14",
-          10
-        );
-
-        if (hoursSinceLastPunch >= RESET_HOURS) {
-          actionType = "checkin";
-        } else {
-          // Check if last punch was a check-out type
-          const checkOutTypes = new Set([
-            "checkout",
-            "admin_checkout",
-            "sys_checkout",
-          ]);
-          actionType = checkOutTypes.has(lastPunch.type)
-            ? "checkin"
-            : "checkout";
-        }
-      }
+      // Same decision performCheckinOut will make (includes this kiosk's own
+      // recent writes), so the flash always matches the punch that is written.
+      const actionType =
+        getAutoActionForEntity(user) === CheckActionType.CheckIn
+          ? "checkin"
+          : "checkout";
 
       // Trigger flash effect based on action type
       triggerFlashEffect(actionType, user.name);

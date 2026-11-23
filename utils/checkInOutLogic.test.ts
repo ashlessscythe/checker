@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CheckActionType,
   determineAutoPunchAction,
+  pickLatestPunch,
   extractUserId,
   getMostReliablePunch,
 } from "./checkInOutLogic";
@@ -97,5 +98,25 @@ describe("extractUserId", () => {
 
   it("extracts earliest matching numeric pattern", () => {
     expect(extractUserId("99100123456")).toBe("100123456");
+  });
+});
+
+describe("pickLatestPunch", () => {
+  const older = { type: "checkin", timestamp: 1000 };
+  const newer = { type: "checkout", timestamp: 2000 };
+
+  it("returns the query punch when there is no local write", () => {
+    expect(pickLatestPunch(older, null)).toBe(older);
+    expect(pickLatestPunch(null, undefined)).toBeNull();
+  });
+
+  it("prefers the local write when the query snapshot is behind", () => {
+    expect(pickLatestPunch(older, newer)).toBe(newer);
+    expect(pickLatestPunch(null, newer)).toBe(newer);
+  });
+
+  it("prefers the query punch when it is newer or equal", () => {
+    expect(pickLatestPunch(newer, older)).toBe(newer);
+    expect(pickLatestPunch(newer, { ...newer })).toBe(newer);
   });
 });
